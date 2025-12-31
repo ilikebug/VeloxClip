@@ -7,30 +7,52 @@ import ServiceManagement
 class AppSettings: ObservableObject {
     static let shared = AppSettings()
     
+    private let dbManager = DatabaseManager.shared
+    
     @Published var historyLimit: Int {
-        didSet { UserDefaults.standard.set(historyLimit, forKey: "historyLimit") }
+        didSet {
+            Task {
+                try? await dbManager.setSetting(key: "historyLimit", value: String(historyLimit))
+            }
+        }
     }
     
     @Published var launchAtLogin: Bool {
         didSet {
-            UserDefaults.standard.set(launchAtLogin, forKey: "launchAtLogin")
+            Task {
+                try? await dbManager.setSetting(key: "launchAtLogin", value: String(launchAtLogin))
+            }
             updateLaunchAtLogin()
         }
     }
     
     @Published var globalShortcut: String {
-        didSet { UserDefaults.standard.set(globalShortcut, forKey: "globalShortcut") }
+        didSet {
+            Task {
+                try? await dbManager.setSetting(key: "globalShortcut", value: globalShortcut)
+            }
+        }
     }
     
     @Published var aiResponseLanguage: String {
-        didSet { UserDefaults.standard.set(aiResponseLanguage, forKey: "aiResponseLanguage") }
+        didSet {
+            Task {
+                try? await dbManager.setSetting(key: "aiResponseLanguage", value: aiResponseLanguage)
+            }
+        }
     }
     
     private init() {
-        self.historyLimit = UserDefaults.standard.object(forKey: "historyLimit") as? Int ?? 100
-        self.launchAtLogin = UserDefaults.standard.bool(forKey: "launchAtLogin")
-        self.globalShortcut = UserDefaults.standard.string(forKey: "globalShortcut") ?? "cmd+shift+v"
-        self.aiResponseLanguage = UserDefaults.standard.string(forKey: "aiResponseLanguage") ?? "Chinese"
+        // Initialize with default values first
+        self.historyLimit = 100
+        self.launchAtLogin = false
+        self.globalShortcut = "cmd+shift+v"
+        self.aiResponseLanguage = "Chinese"
+        
+        // Load settings from database asynchronously
+        Task {
+            await loadSettings()
+        }
         
         // Sync state with system on launch
         if #available(macOS 13.0, *) {
@@ -42,6 +64,45 @@ class AppSettings: ObservableObject {
                 // Let's trust system for now to avoid loops
                 self.launchAtLogin = false
             }
+        }
+    }
+    
+    private func loadSettings() async {
+        // Load historyLimit
+        if let historyLimitStr = await dbManager.getSetting(key: "historyLimit"),
+           let limit = Int(historyLimitStr) {
+            await MainActor.run {
+                self.historyLimit = limit
+            }
+        } else {
+            try? await dbManager.setSetting(key: "historyLimit", value: "100")
+        }
+        
+        // Load launchAtLogin
+        if let launchAtLoginStr = await dbManager.getSetting(key: "launchAtLogin") {
+            await MainActor.run {
+                self.launchAtLogin = launchAtLoginStr == "true"
+            }
+        } else {
+            try? await dbManager.setSetting(key: "launchAtLogin", value: "false")
+        }
+        
+        // Load globalShortcut
+        if let shortcut = await dbManager.getSetting(key: "globalShortcut") {
+            await MainActor.run {
+                self.globalShortcut = shortcut
+            }
+        } else {
+            try? await dbManager.setSetting(key: "globalShortcut", value: "cmd+shift+v")
+        }
+        
+        // Load aiResponseLanguage
+        if let language = await dbManager.getSetting(key: "aiResponseLanguage") {
+            await MainActor.run {
+                self.aiResponseLanguage = language
+            }
+        } else {
+            try? await dbManager.setSetting(key: "aiResponseLanguage", value: "Chinese")
         }
     }
     
