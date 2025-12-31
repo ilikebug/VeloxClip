@@ -74,9 +74,6 @@ struct ErrorAlertModifier: ViewModifier {
                 Button("OK") {
                     errorHandler.clear()
                 }
-                Button("Show Details") {
-                    // Could show detailed error view
-                }
             } message: { error in
                 Text(error.message)
             }

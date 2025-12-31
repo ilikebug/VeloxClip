@@ -46,18 +46,45 @@ class LLMService: ObservableObject {
     
     // MARK: - Embedded Inference
     
-    // Embedded Inference
+    /// Find the first .gguf model file in the specified directory
+    private func findModelFile(in directoryPath: String) -> String? {
+        let fileManager = FileManager.default
+        guard let contents = try? fileManager.contentsOfDirectory(atPath: directoryPath) else {
+            return nil
+        }
+        
+        // Look for .gguf files
+        for file in contents {
+            if file.hasSuffix(".gguf") {
+                let fullPath = (directoryPath as NSString).appendingPathComponent(file)
+                if fileManager.fileExists(atPath: fullPath) {
+                    return fullPath
+                }
+            }
+        }
+        
+        return nil
+    }
     
     private func generateResponseEmbedded(action: AIAction, content: String) async throws -> String {
         // Look in Bundle Resources first (Shipped with App)
         var cliPath = Bundle.main.path(forResource: "llama-cli", ofType: nil)
-        var modelPath = Bundle.main.path(forResource: "qwen2.5-0.5b-instruct-q4_k_m", ofType: "gguf")
+        var modelPath: String?
+        
+        // Search for .gguf model files in Bundle Resources
+        if let resourcePath = Bundle.main.resourcePath {
+            modelPath = findModelFile(in: resourcePath)
+        }
         
         // Fallback to Application Support
         if cliPath == nil || modelPath == nil {
             let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!.appendingPathComponent("Velox/LLM")
-            if cliPath == nil { cliPath = appSupport.appendingPathComponent("llama-cli").path }
-            if modelPath == nil { modelPath = appSupport.appendingPathComponent("qwen2.5-0.5b-instruct-q4_k_m.gguf").path }
+            if cliPath == nil { 
+                cliPath = appSupport.appendingPathComponent("llama-cli").path 
+            }
+            if modelPath == nil {
+                modelPath = findModelFile(in: appSupport.path)
+            }
         }
         
         guard let finalCliPath = cliPath, FileManager.default.fileExists(atPath: finalCliPath) else {

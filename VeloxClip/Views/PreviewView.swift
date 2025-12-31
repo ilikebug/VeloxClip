@@ -344,14 +344,39 @@ struct PreviewView: View {
         let scale = maxDimension / maxSize
         let newSize = NSSize(width: size.width * scale, height: size.height * scale)
         
-        let newImage = NSImage(size: newSize)
-        newImage.lockFocus()
-        image.draw(in: NSRect(origin: .zero, size: newSize),
-                   from: NSRect(origin: .zero, size: size),
-                   operation: .copy,
-                   fraction: 1.0)
-        newImage.unlockFocus()
+        // Use modern API instead of deprecated lockFocus/unlockFocus
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return image
+        }
         
+        // Create a new CGImage with the desired size
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
+        
+        guard let context = CGContext(
+            data: nil,
+            width: Int(newSize.width),
+            height: Int(newSize.height),
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: colorSpace,
+            bitmapInfo: bitmapInfo.rawValue
+        ) else {
+            return image
+        }
+        
+        // Set high quality interpolation
+        context.interpolationQuality = .high
+        
+        // Draw the image scaled to new size
+        context.draw(cgImage, in: CGRect(origin: .zero, size: newSize))
+        
+        guard let resizedCGImage = context.makeImage() else {
+            return image
+        }
+        
+        // Create NSImage from CGImage
+        let newImage = NSImage(cgImage: resizedCGImage, size: newSize)
         return newImage
     }
     

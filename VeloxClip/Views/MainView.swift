@@ -42,17 +42,9 @@ struct MainView: View {
             // Use debounced search text for semantic search to avoid frequent recalculations
             // But if debounced text is empty or different, use current query for immediate feedback
             if trimmedQuery.count >= 2 {
-                // Use debounced text if it matches current query (meaning user stopped typing)
-                // Otherwise use current query for immediate results
-                let semanticQuery: String
-                if !debouncedSearchText.isEmpty && debouncedSearchText == trimmedQuery {
-                    semanticQuery = debouncedSearchText
-                } else {
-                    // For immediate feedback, use current query but mark as non-cached
-                    semanticQuery = trimmedQuery
-                }
-                
-                let semanticMatches = performSemanticSearch(query: semanticQuery)
+                // Always use current query for semantic search to ensure consistency
+                // The performSemanticSearch function will handle caching internally
+                let semanticMatches = performSemanticSearch(query: trimmedQuery)
                 for (itemId, similarity) in semanticMatches {
                     // Avoid duplicates with keyword matches
                     if !keywordMatchIds.contains(itemId) {

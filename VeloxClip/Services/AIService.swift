@@ -77,28 +77,32 @@ class AIService {
             return nil
         }
         
-        // Check cache first
-        var cachedResult: [Double]?
-        cacheQueue.sync {
-            cachedResult = embeddingCache[normalizedText]
-        }
-        
-        if let cached = cachedResult {
-            return cached
-        }
-        
         // Limit text length for embedding (very long texts may not embed well)
         let maxLength = 500
         let textToEmbed = normalizedText.count > maxLength 
             ? String(normalizedText.prefix(maxLength)) 
             : normalizedText
         
+        // Use textToEmbed as cache key to ensure consistency
+        // This ensures that the same truncated text always uses the same cache entry
+        let cacheKey = textToEmbed
+        
+        // Check cache first
+        var cachedResult: [Double]?
+        cacheQueue.sync {
+            cachedResult = embeddingCache[cacheKey]
+        }
+        
+        if let cached = cachedResult {
+            return cached
+        }
+        
         // Generate embedding
         guard let vector = embedding.vector(for: textToEmbed) else {
             return nil
         }
         
-        // Cache the result
+        // Cache the result using textToEmbed as key
         cacheQueue.async(flags: .barrier) { [weak self] in
             guard let self = self else { return }
             
@@ -111,7 +115,7 @@ class AIService {
                 }
             }
             
-            self.embeddingCache[normalizedText] = vector
+            self.embeddingCache[cacheKey] = vector
         }
         
         return vector
