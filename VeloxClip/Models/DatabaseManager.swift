@@ -6,6 +6,7 @@ actor DatabaseManager {
     
     private var db: Connection?
     private let dbPath: URL
+    private var isInitialized = false
     
     // Clipboard items table
     let clipboardItems = Table("clipboard_items")
@@ -35,16 +36,16 @@ actor DatabaseManager {
         
         // Database file path
         dbPath = veloxURL.appendingPathComponent("velox.db")
-        
-        Task {
-            await initializeDatabase()
-        }
     }
     
-    private func initializeDatabase() {
+    // Initialize database on first access (lazy initialization)
+    private func ensureInitialized() async {
+        guard !isInitialized else { return }
+        
         do {
             db = try Connection(dbPath.path)
             createTables()
+            isInitialized = true
         } catch {
             print("Failed to initialize database: \(error)")
             Task { @MainActor in
@@ -86,7 +87,8 @@ actor DatabaseManager {
     
     // MARK: - Clipboard Items Operations
     
-    func insertClipboardItem(_ item: ClipboardItem) throws {
+    func insertClipboardItem(_ item: ClipboardItem) async throws {
+        await ensureInitialized()
         guard let db = db else { throw DatabaseError.connectionFailed }
         
         // Check if item already exists
@@ -115,7 +117,8 @@ actor DatabaseManager {
         try db.run(insert)
     }
     
-    func updateClipboardItem(_ item: ClipboardItem) throws {
+    func updateClipboardItem(_ item: ClipboardItem) async throws {
+        await ensureInitialized()
         guard let db = db else { throw DatabaseError.connectionFailed }
         
         let tagsJSON = try JSONEncoder().encode(item.tags)
@@ -134,19 +137,22 @@ actor DatabaseManager {
         ))
     }
     
-    func deleteClipboardItem(id: UUID) throws {
+    func deleteClipboardItem(id: UUID) async throws {
+        await ensureInitialized()
         guard let db = db else { throw DatabaseError.connectionFailed }
         
         let itemRow = clipboardItems.filter(self.id == id.uuidString)
         try db.run(itemRow.delete())
     }
     
-    func deleteAllClipboardItems() throws {
+    func deleteAllClipboardItems() async throws {
+        await ensureInitialized()
         guard let db = db else { throw DatabaseError.connectionFailed }
         try db.run(clipboardItems.delete())
     }
     
-    func fetchAllClipboardItems() throws -> [ClipboardItem] {
+    func fetchAllClipboardItems() async throws -> [ClipboardItem] {
+        await ensureInitialized()
         guard let db = db else { throw DatabaseError.connectionFailed }
         
         var items: [ClipboardItem] = []
@@ -159,7 +165,8 @@ actor DatabaseManager {
         return items
     }
     
-    func fetchClipboardItems(limit: Int) throws -> [ClipboardItem] {
+    func fetchClipboardItems(limit: Int) async throws -> [ClipboardItem] {
+        await ensureInitialized()
         guard let db = db else { throw DatabaseError.connectionFailed }
         
         var items: [ClipboardItem] = []
@@ -206,7 +213,8 @@ actor DatabaseManager {
     
     // MARK: - App Settings Operations
     
-    func getSetting(key: String) -> String? {
+    func getSetting(key: String) async -> String? {
+        await ensureInitialized()
         guard let db = db else { return nil }
         
         do {
@@ -221,7 +229,8 @@ actor DatabaseManager {
         return nil
     }
     
-    func setSetting(key: String, value: String) throws {
+    func setSetting(key: String, value: String) async throws {
+        await ensureInitialized()
         guard let db = db else { throw DatabaseError.connectionFailed }
         
         let insert = appSettings.insert(or: .replace,
@@ -232,7 +241,8 @@ actor DatabaseManager {
         try db.run(insert)
     }
     
-    func deleteSetting(key: String) throws {
+    func deleteSetting(key: String) async throws {
+        await ensureInitialized()
         guard let db = db else { throw DatabaseError.connectionFailed }
         
         let settingRow = appSettings.filter(self.key == key)

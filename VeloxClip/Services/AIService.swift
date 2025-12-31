@@ -45,9 +45,6 @@ class AIService {
             let request = VNRecognizeTextRequest { request, error in
                 if let error = error {
                     print("OCR Error: \(error.localizedDescription)")
-                    #if DEBUG
-                    print("OCR languages used: \(request.recognitionLanguages?.joined(separator: ", ") ?? "none")")
-                    #endif
                     completion(nil)
                     return
                 }
@@ -55,7 +52,6 @@ class AIService {
                 guard let observations = request.results as? [VNRecognizedTextObservation] else {
                     #if DEBUG
                     print("OCR: No text detected")
-                    print("OCR languages used: \(request.recognitionLanguages?.joined(separator: ", ") ?? "none")")
                     #endif
                     completion(nil)
                     return

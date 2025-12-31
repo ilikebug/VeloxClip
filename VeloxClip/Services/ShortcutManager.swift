@@ -8,6 +8,9 @@ class ShortcutManager {
     private var hotKeyRef: EventHotKeyRef?
     private var eventHandler: EventHandlerRef?
     
+    // Note: As a singleton, this object is never deallocated during app lifetime
+    // Resources are automatically cleaned up by the system when the app terminates
+    
     func registerGlobalShortcut() {
         let shortcutString = AppSettings.shared.globalShortcut
         registerShortcut(shortcutString)
@@ -41,20 +44,21 @@ class ShortcutManager {
         eventType.eventClass = OSType(kEventClassKeyboard)
         eventType.eventKind = UInt32(kEventHotKeyPressed)
         
-        let ptr = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
-        
         // Remove old handler if exists
         if let oldHandler = eventHandler {
             RemoveEventHandler(oldHandler)
+            eventHandler = nil
         }
         
         var handler: EventHandlerRef?
+        // Pass nil as userData since the callback doesn't use it
+        // This avoids potential memory management issues with passUnretained
         InstallEventHandler(GetApplicationEventTarget(), { (nextHandler, theEvent, userData) -> OSStatus in
             DispatchQueue.main.async {
                 WindowManager.shared.toggleWindow()
             }
             return noErr
-        }, 1, &eventType, ptr, &handler)
+        }, 1, &eventType, nil, &handler)
         
         eventHandler = handler
         
@@ -83,15 +87,20 @@ class ShortcutManager {
         eventType.eventClass = OSType(kEventClassKeyboard)
         eventType.eventKind = UInt32(kEventHotKeyPressed)
         
-        let ptr = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
+        // Remove old handler if exists
+        if let oldHandler = eventHandler {
+            RemoveEventHandler(oldHandler)
+            eventHandler = nil
+        }
         
         var handler: EventHandlerRef?
+        // Pass nil as userData since the callback doesn't use it
         InstallEventHandler(GetApplicationEventTarget(), { (nextHandler, theEvent, userData) -> OSStatus in
             DispatchQueue.main.async {
                 WindowManager.shared.toggleWindow()
             }
             return noErr
-        }, 1, &eventType, ptr, &handler)
+        }, 1, &eventType, nil, &handler)
         
         eventHandler = handler
         

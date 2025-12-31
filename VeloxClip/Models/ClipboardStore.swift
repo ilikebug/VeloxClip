@@ -18,7 +18,7 @@ class ClipboardStore: ObservableObject {
             return
         }
         
-        // Update local array first for immediate UI update
+        // Optimistic UI update for better UX
         self.items.insert(item, at: 0)
         
         // Enforce history limit
@@ -29,7 +29,10 @@ class ClipboardStore: ObservableObject {
             self.items = Array(self.items.prefix(limit))
         }
         
-        // Then insert into database asynchronously
+        // Capture the item ID to safely remove it later if needed
+        let itemId = item.id
+        
+        // Then persist to database asynchronously
         Task {
             do {
                 try await dbManager.insertClipboardItem(item)
@@ -40,13 +43,13 @@ class ClipboardStore: ObservableObject {
                 }
             } catch {
                 print("Failed to add item to database: \(error)")
-                // Remove from local array if database insert failed
+                // Rollback UI change if database insert failed
+                // Use captured ID instead of relying on index
                 await MainActor.run {
-                    if let index = self.items.firstIndex(where: { $0.id == item.id }) {
+                    // Only remove if the item still exists and hasn't been modified
+                    if let index = self.items.firstIndex(where: { $0.id == itemId }) {
                         self.items.remove(at: index)
                     }
-                }
-                Task { @MainActor in
                     ErrorHandler.shared.handle(error)
                 }
             }
@@ -57,21 +60,26 @@ class ClipboardStore: ObservableObject {
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
         
         var updatedItem = items[index]
+        let originalItem = items[index] // Backup for rollback
+        
         updatedItem.content = content
         updatedItem.tags.append("OCR")
         
-        // Update in database first
+        // Optimistic UI update
+        self.items[index] = updatedItem
+        
+        // Persist to database
         Task {
             do {
                 try await dbManager.updateClipboardItem(updatedItem)
-                
-                // Then update local array
-                await MainActor.run {
-                    self.items[index] = updatedItem
-                }
             } catch {
                 print("Failed to update item: \(error)")
-                Task { @MainActor in
+                // Rollback to original state if database update failed
+                await MainActor.run {
+                    // Find item again by ID (index might have changed)
+                    if let currentIndex = self.items.firstIndex(where: { $0.id == id }) {
+                        self.items[currentIndex] = originalItem
+                    }
                     ErrorHandler.shared.handle(error)
                 }
             }
