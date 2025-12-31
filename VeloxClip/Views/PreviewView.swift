@@ -238,17 +238,59 @@ struct PreviewView: View {
     @ViewBuilder
     private func previewContent(for item: ClipboardItem) -> some View {
         if item.type == "image", let data = item.data {
-            // Lazy load and scale down large images
-            if let nsImage = NSImage(data: data) {
-                let maxDimension: CGFloat = 800
-                let scaledImage = resizeImage(nsImage, maxDimension: maxDimension)
-                Image(nsImage: scaledImage)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxHeight: 500)
-            } else {
-                Text("Unable to load image")
-                    .foregroundColor(.secondary)
+            VStack(alignment: .leading, spacing: 12) {
+                // Lazy load and scale down large images
+                if let nsImage = NSImage(data: data) {
+                    let maxDimension: CGFloat = 800
+                    let scaledImage = resizeImage(nsImage, maxDimension: maxDimension)
+                    Image(nsImage: scaledImage)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxHeight: 500)
+                } else {
+                    Text("Unable to load image")
+                        .foregroundColor(.secondary)
+                }
+                
+                // OCR Text Section - Show if OCR text exists
+                if let ocrText = item.content, !ocrText.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Image(systemName: "text.viewfinder")
+                                .foregroundColor(.blue)
+                            Text("OCR 识别文字")
+                                .font(.headline)
+                            Spacer()
+                            Button(action: {
+                                copyOCRText(ocrText)
+                            }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "doc.on.doc")
+                                    Text("复制文字")
+                                }
+                                .font(.caption.bold())
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(DesignSystem.primaryGradient)
+                                .foregroundColor(.white)
+                                .cornerRadius(8)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        
+                        ScrollView {
+                            Text(ocrText)
+                                .font(.system(.body, design: .monospaced))
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(12)
+                                .background(Color.secondary.opacity(0.1))
+                                .cornerRadius(8)
+                        }
+                        .frame(maxHeight: 200)
+                    }
+                    .padding(.top, 8)
+                }
             }
         } else if item.type == "color", let content = item.content {
             VStack {
@@ -361,6 +403,15 @@ struct PreviewView: View {
             }
             isAIProcessing = false
         }
+    }
+    
+    private func copyOCRText(_ text: String) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+        
+        // Show brief feedback
+        print("OCR text copied to clipboard")
     }
     
     private func copyTransformedText(_ text: String) {
