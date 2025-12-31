@@ -1,11 +1,17 @@
 import SwiftUI
 import SwiftData
 
+enum ViewMode {
+    case favorites
+    case history
+}
+
 struct MainView: View {
     @ObservedObject var store = ClipboardStore.shared
     @State private var selectedItem: ClipboardItem?
     @State private var searchText = ""
     @FocusState private var isSearchFocused: Bool
+    @State private var viewMode: ViewMode = .history
     
     // Debounced search text for semantic search
     @State private var debouncedSearchText = ""
@@ -15,13 +21,16 @@ struct MainView: View {
     @State private var cachedSemanticResults: [String: [(UUID, Double)]] = [:]
     
     var filteredItems: [ClipboardItem] {
+        // Get base items based on view mode
+        let baseItems = viewMode == .favorites ? store.favoriteItems : store.items
+        
         if searchText.isEmpty {
-            return store.items
+            return baseItems
         } else {
             let trimmedQuery = searchText.trimmingCharacters(in: .whitespaces)
             
             // Keyword search (exact matches)
-            let keywordMatches = store.items.filter { item in
+            let keywordMatches = baseItems.filter { item in
                 item.content?.localizedCaseInsensitiveContains(trimmedQuery) ?? false ||
                 item.type.localizedCaseInsensitiveContains(trimmedQuery) ||
                 (item.sourceApp?.localizedCaseInsensitiveContains(trimmedQuery) ?? false) ||
@@ -48,15 +57,15 @@ struct MainView: View {
                 for (itemId, similarity) in semanticMatches {
                     // Avoid duplicates with keyword matches
                     if !keywordMatchIds.contains(itemId) {
-                        // Look up the actual item from store
-                        if let item = store.items.first(where: { $0.id == itemId }) {
+                        // Look up the actual item from base items
+                        if let item = baseItems.first(where: { $0.id == itemId }) {
                             allMatches.append((item, similarity))
                         }
                     }
                 }
             }
             
-            // Sort by score (keyword matches first, then by similarity)
+            // Sort by score (keyword matches first, then by similarity, favorites prioritized in history view)
             let sorted = allMatches.sorted { item1, item2 in
                 // Exact matches first
                 if item1.1 == 1.0 && item2.1 != 1.0 {
@@ -64,6 +73,15 @@ struct MainView: View {
                 }
                 if item1.1 != 1.0 && item2.1 == 1.0 {
                     return false
+                }
+                // In history view, prioritize favorites
+                if viewMode == .history {
+                    if item1.0.isFavorite && !item2.0.isFavorite {
+                        return true
+                    }
+                    if !item1.0.isFavorite && item2.0.isFavorite {
+                        return false
+                    }
                 }
                 // Then by similarity score
                 return item1.1 > item2.1
@@ -92,7 +110,8 @@ struct MainView: View {
         let maxResults = 20
         
         // Filter items that have embeddings first (performance optimization)
-        let itemsWithEmbeddings = store.items.filter { item in
+        let baseItems = viewMode == .favorites ? store.favoriteItems : store.items
+        let itemsWithEmbeddings = baseItems.filter { item in
             item.content != nil && !item.content!.isEmpty && item.vector != nil
         }
         
@@ -143,6 +162,11 @@ struct MainView: View {
                     .onSubmit {
                         executeSelection()
                     }
+                
+                Spacer()
+                
+                // Favorite toggle button
+                favoriteToggleButton
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 20)
@@ -158,6 +182,15 @@ struct MainView: View {
             .onKeyPress(.return) {
                 executeSelection()
                 return .handled
+            }
+            .onKeyPress(.tab) {
+                if isSearchFocused {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        viewMode = viewMode == .history ? .favorites : .history
+                    }
+                    return .handled
+                }
+                return .ignored
             }
             
             Divider()
@@ -194,6 +227,16 @@ struct MainView: View {
             if !filteredItems.isEmpty {
                 selectedItem = filteredItems.first
             }
+            // Load favorites on appear
+            store.loadFavorites()
+        }
+        .onChange(of: viewMode) { _ in
+            // Update selected item when switching views
+            if !filteredItems.isEmpty {
+                selectedItem = filteredItems.first
+            } else {
+                selectedItem = nil
+            }
         }
         .onChange(of: searchText) { newValue in
             // Auto select first on search
@@ -224,6 +267,7 @@ struct MainView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
             isSearchFocused = true
             // Reset state when window opens
+            viewMode = .history
             searchText = ""
             debouncedSearchText = ""
             debounceTask?.cancel()
@@ -254,5 +298,27 @@ struct MainView: View {
         if nextIndex >= 0 && nextIndex < items.count {
             selectedItem = items[nextIndex]
         }
+    }
+    
+    private var favoriteToggleButton: some View {
+        Button(action: {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                viewMode = viewMode == .history ? .favorites : .history
+            }
+        }) {
+            Group {
+                if viewMode == .favorites {
+                    Image(systemName: "star.fill")
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundStyle(DesignSystem.primaryGradient)
+                } else {
+                    Image(systemName: "star")
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundStyle(Color.secondary)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .help(viewMode == .favorites ? "Show History" : "Show Favorites")
     }
 }

@@ -14,6 +14,10 @@ struct ClipboardItem: Identifiable, Codable, Hashable, Equatable {
     var isSensitive: Bool = false
     var embedding: Data?
     
+    // Favorite Metadata
+    var isFavorite: Bool = false
+    var favoritedAt: Date?
+    
     var vector: [Double]? {
         guard let data = embedding else { return nil }
         return try? JSONDecoder().decode([Double].self, from: data)

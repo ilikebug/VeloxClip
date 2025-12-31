@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PreviewView: View {
     let item: ClipboardItem?
+    @ObservedObject var store = ClipboardStore.shared
     @State private var debouncedItem: ClipboardItem?
     @State private var debounceTask: Task<Void, Never>?
     
@@ -9,9 +10,21 @@ struct PreviewView: View {
     @State private var aiError: String?
     @State private var showErrorDetails = false
     
+    // Tag editing state
+    @State private var isEditingTags = false
+    @State private var newTagText = ""
+    @FocusState private var isTagInputFocused: Bool
+    
+    // Get the latest item from store to ensure favorite status is up to date
+    private var currentItem: ClipboardItem? {
+        guard let item = item else { return nil }
+        return store.items.first(where: { $0.id == item.id }) ?? item
+    }
+    
     var body: some View {
         Group {
             if let item = debouncedItem {
+                let displayItem = currentItem ?? item
                 VStack(alignment: .leading, spacing: 0) {
                     // Header
                     HStack {
@@ -26,6 +39,26 @@ struct PreviewView: View {
                         }
                         
                         Spacer()
+                        
+                        // Favorite button
+                        Button(action: {
+                            store.toggleFavorite(for: displayItem)
+                        }) {
+                            Group {
+                                if displayItem.isFavorite {
+                                    Image(systemName: "star.fill")
+                                        .font(.system(size: 18, weight: .semibold))
+                                        .foregroundStyle(DesignSystem.primaryGradient)
+                                } else {
+                                    Image(systemName: "star")
+                                        .font(.system(size: 18, weight: .semibold))
+                                        .foregroundStyle(Color.secondary)
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .help(displayItem.isFavorite ? "Remove from Favorites" : "Add to Favorites")
+                        
                         
                         // AI Processing Indicator
                         if isAIProcessing {
@@ -91,24 +124,7 @@ struct PreviewView: View {
                     .background(DesignSystem.primaryGradient.opacity(0.1))
                     
                     // Tags Section
-                    if !item.tags.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
-                                ForEach(item.tags, id: \.self) { tag in
-                                    Text(tag)
-                                        .font(.caption.bold())
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 4)
-                                        .background(tagColor(for: tag))
-                                        .cornerRadius(6)
-                                }
-                            }
-                            .padding(.horizontal)
-                            .padding(.vertical, 8)
-                        }
-                        .background(Color.black.opacity(0.02))
-                    }
+                    tagsSection(for: displayItem)
                     
                     Divider()
                     
@@ -210,6 +226,12 @@ struct PreviewView: View {
             }
         }
         .onChange(of: item) { newItem in
+            // Reset editing state when switching items
+            if newItem?.id != item?.id {
+                isEditingTags = false
+                newTagText = ""
+            }
+            
             // Cancel previous debounce task
             debounceTask?.cancel()
             
@@ -229,8 +251,14 @@ struct PreviewView: View {
                 }
             }
         }
+        .onChange(of: currentItem) { newItem in
+            // Update debounced item when favorite status changes
+            if let newItem = newItem, debouncedItem?.id == newItem.id {
+                debouncedItem = newItem
+            }
+        }
         .onAppear {
-            debouncedItem = item
+            debouncedItem = currentItem ?? item
         }
         .frame(minWidth: 400)
     }
@@ -460,8 +488,157 @@ struct PreviewView: View {
         case "PHONE":
             return Color.orange
         default:
-            return Color.gray
+            // Generate a colorful background for custom tags based on tag name
+            return generateColorFromString(tag)
         }
+    }
+    
+    // Generate a consistent vibrant color from a string (for custom tags)
+    private func generateColorFromString(_ string: String) -> Color {
+        // Use hash to generate consistent color for same tag name
+        var hash = 0
+        for char in string.utf8 {
+            hash = Int(char) &+ (hash << 6) &+ (hash << 16) &- hash
+        }
+        
+        // Generate vibrant colors using HSB (Hue, Saturation, Brightness)
+        // Hue: 0-360 degrees, map to 0.0-1.0
+        let hue = Double(abs(hash) % 360) / 360.0
+        // Saturation: 0.6-0.9 for vibrant colors
+        let saturation = 0.6 + (Double(abs(hash / 7) % 30) / 100.0)
+        // Brightness: 0.5-0.7 for good contrast
+        let brightness = 0.5 + (Double(abs(hash / 13) % 20) / 100.0)
+        
+        return Color(hue: hue, saturation: saturation, brightness: brightness)
+    }
+    
+    // Determine text color based on background color brightness
+    private func textColor(for tag: String) -> Color {
+        // For system tags, always use white
+        switch tag.uppercased() {
+        case "OCR", "URL", "EMAIL", "CODE", "JSON", "PHONE":
+            return .white
+        default:
+            // For custom tags, check brightness to determine text color
+            var hash = 0
+            for char in tag.utf8 {
+                hash = Int(char) &+ (hash << 6) &+ (hash << 16) &- hash
+            }
+            // Brightness range: 0.5-0.7, use white for darker colors (< 0.65), black for lighter
+            let brightness = 0.5 + (Double(abs(hash / 13) % 20) / 100.0)
+            return brightness > 0.65 ? .black : .white
+        }
+    }
+    
+    @ViewBuilder
+    private func tagsSection(for item: ClipboardItem) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Tags")
+                    .font(.caption.bold())
+                    .foregroundColor(.secondary)
+                
+                Spacer()
+                
+                // Edit button (only show for favorite items)
+                if item.isFavorite {
+                    Button(action: {
+                        isEditingTags.toggle()
+                        if isEditingTags {
+                            isTagInputFocused = true
+                        }
+                    }) {
+                        Image(systemName: isEditingTags ? "checkmark.circle.fill" : "pencil.circle.fill")
+                            .font(.caption)
+                            .foregroundColor(.accentColor)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal)
+            .padding(.top, 8)
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(item.tags, id: \.self) { tag in
+                        let bgColor = tagColor(for: tag)
+                        let txtColor = textColor(for: tag)
+                        
+                        HStack(spacing: 4) {
+                            Text(tag)
+                                .font(.caption.bold())
+                                .foregroundColor(txtColor)
+                            
+                            // Delete button (only show when editing)
+                            if isEditingTags && item.isFavorite {
+                                Button(action: {
+                                    removeTag(tag, from: item)
+                                }) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.caption2)
+                                        .foregroundColor(txtColor.opacity(0.8))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(bgColor)
+                        .cornerRadius(6)
+                    }
+                    
+                    // Add tag input (only show when editing)
+                    if isEditingTags && item.isFavorite {
+                        HStack(spacing: 4) {
+                            TextField("Add tag", text: $newTagText)
+                                .textFieldStyle(.plain)
+                                .font(.caption)
+                                .focused($isTagInputFocused)
+                                .frame(width: 80)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.secondary.opacity(0.1))
+                                .cornerRadius(6)
+                                .onSubmit {
+                                    addTag(from: item)
+                                }
+                            
+                            Button(action: {
+                                addTag(from: item)
+                            }) {
+                                Image(systemName: "plus.circle.fill")
+                                    .font(.caption)
+                                    .foregroundColor(.accentColor)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(newTagText.trimmingCharacters(in: .whitespaces).isEmpty)
+                        }
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.bottom, 8)
+            }
+        }
+        .background(Color.black.opacity(0.02))
+    }
+    
+    private func addTag(from item: ClipboardItem) {
+        let trimmedTag = newTagText.trimmingCharacters(in: .whitespaces)
+        guard !trimmedTag.isEmpty else { return }
+        
+        var updatedTags = item.tags
+        if !updatedTags.contains(trimmedTag) {
+            updatedTags.append(trimmedTag)
+            store.updateTags(id: item.id, tags: updatedTags)
+        }
+        
+        newTagText = ""
+    }
+    
+    private func removeTag(_ tag: String, from item: ClipboardItem) {
+        var updatedTags = item.tags
+        updatedTags.removeAll(where: { $0 == tag })
+        store.updateTags(id: item.id, tags: updatedTags)
     }
     
     // Detect if content looks like Markdown

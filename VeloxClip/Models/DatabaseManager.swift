@@ -20,6 +20,8 @@ actor DatabaseManager {
     let summary = Expression<String?>("summary")
     let isSensitive = Expression<Bool>("isSensitive")
     let embedding = Expression<Data?>("embedding")
+    let isFavorite = Expression<Bool>("isFavorite")
+    let favoritedAt = Expression<Double?>("favoritedAt")
     
     // App settings table
     let appSettings = Table("app_settings")
@@ -70,6 +72,8 @@ actor DatabaseManager {
                 t.column(summary)
                 t.column(isSensitive, defaultValue: false)
                 t.column(embedding)
+                t.column(isFavorite, defaultValue: false)
+                t.column(favoritedAt)
             })
             
             // Create app_settings table
@@ -111,7 +115,9 @@ actor DatabaseManager {
             tags <- tagsString,
             summary <- item.summary,
             isSensitive <- item.isSensitive,
-            embedding <- item.embedding
+            embedding <- item.embedding,
+            isFavorite <- item.isFavorite,
+            favoritedAt <- item.favoritedAt?.timeIntervalSince1970
         )
         
         try db.run(insert)
@@ -133,7 +139,9 @@ actor DatabaseManager {
             tags <- tagsString,
             summary <- item.summary,
             isSensitive <- item.isSensitive,
-            embedding <- item.embedding
+            embedding <- item.embedding,
+            isFavorite <- item.isFavorite,
+            favoritedAt <- item.favoritedAt?.timeIntervalSince1970
         ))
     }
     
@@ -207,6 +215,10 @@ actor DatabaseManager {
         item.summary = row[summary]
         item.isSensitive = row[isSensitive]
         item.embedding = row[embedding]
+        item.isFavorite = row[isFavorite]
+        if let favoritedAtTimestamp = row[favoritedAt] {
+            item.favoritedAt = Date(timeIntervalSince1970: favoritedAtTimestamp)
+        }
         
         return item
     }
@@ -247,6 +259,39 @@ actor DatabaseManager {
         
         let settingRow = appSettings.filter(self.key == key)
         try db.run(settingRow.delete())
+    }
+    
+    // MARK: - Favorite Operations
+    
+    func toggleFavorite(id: UUID) async throws {
+        await ensureInitialized()
+        guard let db = db else { throw DatabaseError.connectionFailed }
+        
+        let itemRow = clipboardItems.filter(self.id == id.uuidString)
+        if let row = try db.pluck(itemRow) {
+            let currentFavorite = row[isFavorite]
+            let newFavorite = !currentFavorite
+            let newFavoritedAt = newFavorite ? Date().timeIntervalSince1970 : nil
+            
+            try db.run(itemRow.update(
+                isFavorite <- newFavorite,
+                favoritedAt <- newFavoritedAt
+            ))
+        }
+    }
+    
+    func fetchFavoriteItems() async throws -> [ClipboardItem] {
+        await ensureInitialized()
+        guard let db = db else { throw DatabaseError.connectionFailed }
+        
+        var items: [ClipboardItem] = []
+        
+        for row in try db.prepare(clipboardItems.filter(isFavorite == true).order(favoritedAt.desc)) {
+            let item = try rowToClipboardItem(row)
+            items.append(item)
+        }
+        
+        return items
     }
 }
 

@@ -4,6 +4,7 @@ import Combine
 @MainActor
 class ClipboardStore: ObservableObject {
     @Published var items: [ClipboardItem] = []
+    @Published var favoriteItems: [ClipboardItem] = []
     private let dbManager = DatabaseManager.shared
     
     static let shared = ClipboardStore()
@@ -21,12 +22,31 @@ class ClipboardStore: ObservableObject {
         // Optimistic UI update for better UX
         self.items.insert(item, at: 0)
         
-        // Enforce history limit
+        // Enforce history limit - only limit non-favorite items
         let limit = AppSettings.shared.historyLimit
         var itemsToRemove: [ClipboardItem] = []
-        if self.items.count > limit {
-            itemsToRemove = Array(self.items.suffix(self.items.count - limit))
-            self.items = Array(self.items.prefix(limit))
+        
+        // Separate favorite and regular items
+        let regularItems = self.items.filter { !$0.isFavorite }
+        let regularCount = regularItems.count
+        
+        // Only apply limit to non-favorite items
+        if regularCount > limit {
+            let excessCount = regularCount - limit
+            // Collect non-favorite items from the end (oldest first)
+            var collected = 0
+            for item in self.items.reversed() {
+                if !item.isFavorite && collected < excessCount {
+                    itemsToRemove.append(item)
+                    collected += 1
+                }
+            }
+            // Remove from local array
+            for itemToRemove in itemsToRemove {
+                if let index = self.items.firstIndex(where: { $0.id == itemToRemove.id }) {
+                    self.items.remove(at: index)
+                }
+            }
         }
         
         // Capture the item ID to safely remove it later if needed
@@ -86,6 +106,44 @@ class ClipboardStore: ObservableObject {
         }
     }
     
+    func updateTags(id: UUID, tags: [String]) {
+        guard let index = items.firstIndex(where: { $0.id == id }) else { return }
+        
+        var updatedItem = items[index]
+        let originalItem = items[index] // Backup for rollback
+        
+        updatedItem.tags = tags
+        
+        // Optimistic UI update
+        self.items[index] = updatedItem
+        
+        // Update favoriteItems if it's a favorite
+        if updatedItem.isFavorite, let favIndex = favoriteItems.firstIndex(where: { $0.id == id }) {
+            favoriteItems[favIndex] = updatedItem
+        }
+        
+        // Persist to database
+        Task {
+            do {
+                try await dbManager.updateClipboardItem(updatedItem)
+            } catch {
+                print("Failed to update tags: \(error)")
+                // Rollback to original state if database update failed
+                await MainActor.run {
+                    // Find item again by ID (index might have changed)
+                    if let currentIndex = self.items.firstIndex(where: { $0.id == id }) {
+                        self.items[currentIndex] = originalItem
+                    }
+                    // Also rollback favoriteItems
+                    if originalItem.isFavorite, let favIndex = self.favoriteItems.firstIndex(where: { $0.id == id }) {
+                        self.favoriteItems[favIndex] = originalItem
+                    }
+                    ErrorHandler.shared.handle(error)
+                }
+            }
+        }
+    }
+    
     func deleteItems(at offsets: IndexSet) {
         let itemsToDelete = offsets.map { items[$0] }
         
@@ -124,18 +182,88 @@ class ClipboardStore: ObservableObject {
         }
     }
     
+    func toggleFavorite(for item: ClipboardItem) {
+        let itemId = item.id
+        
+        // Optimistic UI update
+        if let index = items.firstIndex(where: { $0.id == itemId }) {
+            var updatedItem = items[index]
+            updatedItem.isFavorite.toggle()
+            updatedItem.favoritedAt = updatedItem.isFavorite ? Date() : nil
+            items[index] = updatedItem
+            
+            // Update favoriteItems list
+            if updatedItem.isFavorite {
+                if !favoriteItems.contains(where: { $0.id == itemId }) {
+                    favoriteItems.insert(updatedItem, at: 0)
+                }
+            } else {
+                favoriteItems.removeAll(where: { $0.id == itemId })
+            }
+        }
+        
+        // Persist to database
+        Task {
+            do {
+                try await dbManager.toggleFavorite(id: itemId)
+            } catch {
+                print("Failed to toggle favorite: \(error)")
+                // Rollback UI change
+                await MainActor.run {
+                    if let index = self.items.firstIndex(where: { $0.id == itemId }) {
+                        var revertedItem = self.items[index]
+                        revertedItem.isFavorite = item.isFavorite
+                        revertedItem.favoritedAt = item.favoritedAt
+                        self.items[index] = revertedItem
+                        
+                        // Update favoriteItems list
+                        if revertedItem.isFavorite {
+                            if !self.favoriteItems.contains(where: { $0.id == itemId }) {
+                                self.favoriteItems.insert(revertedItem, at: 0)
+                            }
+                        } else {
+                            self.favoriteItems.removeAll(where: { $0.id == itemId })
+                        }
+                    }
+                    ErrorHandler.shared.handle(error)
+                }
+            }
+        }
+    }
+    
+    func loadFavorites() {
+        Task {
+            do {
+                let loadedFavorites = try await dbManager.fetchFavoriteItems()
+                await MainActor.run {
+                    self.favoriteItems = loadedFavorites
+                }
+            } catch {
+                print("Failed to load favorites: \(error)")
+                Task { @MainActor in
+                    ErrorHandler.shared.handle(error)
+                    self.favoriteItems = []
+                }
+            }
+        }
+    }
+    
     private func load() {
         Task {
             do {
                 let loadedItems = try await dbManager.fetchAllClipboardItems()
                 await MainActor.run {
                     self.items = loadedItems
+                    // Load favorites from items
+                    self.favoriteItems = loadedItems.filter { $0.isFavorite }
+                        .sorted { ($0.favoritedAt ?? $0.createdAt) > ($1.favoritedAt ?? $1.createdAt) }
                 }
             } catch {
                 print("Failed to load items: \(error)")
                 Task { @MainActor in
                     ErrorHandler.shared.handle(error)
                     self.items = []
+                    self.favoriteItems = []
                 }
             }
         }
