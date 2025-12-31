@@ -84,27 +84,55 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
         
         // 5. Targeted Event Injection (PID-based)
         // This is the "Alfred Way" - sending events directly to the target process
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            let pid = app.processIdentifier
-            let source = CGEventSource(stateID: .hidSystemState) // HID state is more reliable
+        // Use a longer delay to ensure the app has fully received focus
+        // Some apps (especially Electron-based) need more time to process focus events
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            // Double-check that the app is still the frontmost app
+            let currentFrontmost = NSWorkspace.shared.frontmostApplication
+            let targetPID = app.processIdentifier
             
-            // Define the keys
-            let vKey: UInt16 = 0x09
-            
-            // Cmd + V Down
-            guard let vDown = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: true) else { return }
-            vDown.flags = .maskCommand
-            
-            // Cmd + V Up
-            guard let vUp = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: false) else { return }
-            vUp.flags = .maskCommand
-            
-            // Post DIRECTLY to the previous application's PID
-            vDown.postToPid(pid)
-            vUp.postToPid(pid)
-            
-            print("Directly injected paste event to PID: \(pid)")
+            // If another app became frontmost, try to reactivate target app
+            if currentFrontmost?.processIdentifier != targetPID {
+                app.activate(options: .activateIgnoringOtherApps)
+                // Wait a bit more before injecting
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    self.injectPasteEvent(to: app)
+                }
+            } else {
+                self.injectPasteEvent(to: app)
+            }
         }
+    }
+    
+    private func injectPasteEvent(to app: NSRunningApplication) {
+        let pid = app.processIdentifier
+        let source = CGEventSource(stateID: .hidSystemState) // HID state is more reliable
+        
+        // Define the keys
+        let vKey: UInt16 = 0x09
+        
+        // Cmd + V Down
+        guard let vDown = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: true) else {
+            print("Failed to create Cmd+V down event")
+            return
+        }
+        vDown.flags = .maskCommand
+        
+        // Cmd + V Up
+        guard let vUp = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: false) else {
+            print("Failed to create Cmd+V up event")
+            return
+        }
+        vUp.flags = .maskCommand
+        
+        // Post DIRECTLY to the target application's PID
+        vDown.postToPid(pid)
+        // Small delay between down and up events for better compatibility
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
+            vUp.postToPid(pid)
+        }
+        
+        print("Injected paste event to PID: \(pid) (\(app.localizedName ?? "Unknown"))")
     }
     
     private func copyToClipboard(_ item: ClipboardItem) {

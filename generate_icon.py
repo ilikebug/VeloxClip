@@ -43,6 +43,8 @@ def generate_icon(input_image, output_icns):
     print("📐 Generating icon sizes...")
     
     # Generate all sizes using sips
+    # Use -z to resize maintaining aspect ratio
+    # Since source image is square (2048x2048), this should work without padding
     for size, filename in icon_sizes:
         output_file = os.path.join(iconset_name, filename)
         result = subprocess.run(
@@ -60,7 +62,7 @@ def generate_icon(input_image, output_icns):
     # Generate .icns file using iconutil
     print("🔨 Generating .icns file...")
     result = subprocess.run(
-        ["iconutil", "-c", "icns", iconset_name, "-o", str(output_path)],
+        ["iconutil", "--convert", "icns", "--output", str(output_path), iconset_name],
         capture_output=True,
         text=True
     )

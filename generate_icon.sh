@@ -46,7 +46,9 @@ mkdir -p "$ICONSET_NAME"
 echo "📐 Generating icon sizes..."
 
 # macOS requires specific icon sizes in iconset
-# Generate all required sizes (suppress sips output but check exit codes)
+# Use -z to resize maintaining aspect ratio
+# Note: If source image is not square, sips will add padding (white by default)
+# To avoid white borders, ensure source image is square or use --padColor to match background
 sips -z 16 16 "$INPUT_IMAGE" --out "$ICONSET_NAME/icon_16x16.png" > /dev/null 2>&1 || { echo "Failed to generate 16x16"; exit 1; }
 sips -z 32 32 "$INPUT_IMAGE" --out "$ICONSET_NAME/icon_16x16@2x.png" > /dev/null 2>&1 || { echo "Failed to generate 16x16@2x"; exit 1; }
 sips -z 32 32 "$INPUT_IMAGE" --out "$ICONSET_NAME/icon_32x32.png" > /dev/null 2>&1 || { echo "Failed to generate 32x32"; exit 1; }
@@ -94,8 +96,8 @@ echo "🔨 Generating .icns file..."
 # Ensure output directory exists
 mkdir -p "$(dirname "$OUTPUT_ICNS")"
 
-# Use iconutil with verbose output to see errors
-if iconutil -c icns "$ICONSET_NAME" -o "$OUTPUT_ICNS" 2>&1; then
+# Use iconutil with correct syntax: --convert icns --output
+if iconutil --convert icns --output "$OUTPUT_ICNS" "$ICONSET_NAME" 2>&1; then
     echo "✅ Icon generated successfully!"
     echo "📦 Output file: $OUTPUT_ICNS"
     

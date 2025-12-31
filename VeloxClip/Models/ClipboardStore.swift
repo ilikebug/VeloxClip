@@ -48,6 +48,10 @@ class ClipboardStore: ObservableObject {
             try data.write(to: savePath)
         } catch {
             print("Failed to save items: \(error)")
+            // Notify user about save failure using ErrorHandler
+            Task { @MainActor in
+                ErrorHandler.shared.handle(error)
+            }
         }
     }
     

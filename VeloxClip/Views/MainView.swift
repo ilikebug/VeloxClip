@@ -11,8 +11,8 @@ struct MainView: View {
     @State private var debouncedSearchText = ""
     @State private var debounceTask: Task<Void, Never>?
     
-    // Cached semantic search results
-    @State private var cachedSemanticResults: [String: [(ClipboardItem, Double)]] = [:]
+    // Cached semantic search results - only store IDs and scores to save memory
+    @State private var cachedSemanticResults: [String: [(UUID, Double)]] = [:]
     
     var filteredItems: [ClipboardItem] {
         if searchText.isEmpty {
@@ -40,13 +40,26 @@ struct MainView: View {
             
             // Add semantic matches (with scores already calculated)
             // Use debounced search text for semantic search to avoid frequent recalculations
+            // But if debounced text is empty or different, use current query for immediate feedback
             if trimmedQuery.count >= 2 {
-                let semanticQuery = debouncedSearchText.isEmpty ? trimmedQuery : debouncedSearchText
+                // Use debounced text if it matches current query (meaning user stopped typing)
+                // Otherwise use current query for immediate results
+                let semanticQuery: String
+                if !debouncedSearchText.isEmpty && debouncedSearchText == trimmedQuery {
+                    semanticQuery = debouncedSearchText
+                } else {
+                    // For immediate feedback, use current query but mark as non-cached
+                    semanticQuery = trimmedQuery
+                }
+                
                 let semanticMatches = performSemanticSearch(query: semanticQuery)
-                for (item, similarity) in semanticMatches {
+                for (itemId, similarity) in semanticMatches {
                     // Avoid duplicates with keyword matches
-                    if !keywordMatchIds.contains(item.id) {
-                        allMatches.append((item, similarity))
+                    if !keywordMatchIds.contains(itemId) {
+                        // Look up the actual item from store
+                        if let item = store.items.first(where: { $0.id == itemId }) {
+                            allMatches.append((item, similarity))
+                        }
                     }
                 }
             }
@@ -68,7 +81,7 @@ struct MainView: View {
         }
     }
     
-    private func performSemanticSearch(query: String) -> [(ClipboardItem, Double)] {
+    private func performSemanticSearch(query: String) -> [(UUID, Double)] {
         // Check cache first
         let normalizedQuery = query.trimmingCharacters(in: .whitespaces).lowercased()
         if let cached = cachedSemanticResults[normalizedQuery] {
@@ -96,21 +109,21 @@ struct MainView: View {
             return []
         }
         
-        // Calculate similarities
-        let results = itemsWithEmbeddings.compactMap { item -> (ClipboardItem, Double)? in
+        // Calculate similarities - only store IDs and scores in cache
+        let results = itemsWithEmbeddings.compactMap { item -> (UUID, Double)? in
             guard let itemVector = item.vector else {
                 return nil
             }
             
             let similarity = AIService.shared.calculateSimilarity(queryVector, itemVector)
-            return similarity >= threshold ? (item, similarity) : nil
+            return similarity >= threshold ? (item.id, similarity) : nil
         }
         .sorted { $0.1 > $1.1 } // Sort by similarity score
         .prefix(maxResults) // Limit to top results
         
         let finalResults = Array(results)
         
-        // Cache the results (limit cache size)
+        // Cache the results (limit cache size) - only IDs and scores, not full items
         if cachedSemanticResults.count >= 50 {
             // Remove oldest entries
             let keysToRemove = Array(cachedSemanticResults.keys.prefix(10))
@@ -199,8 +212,21 @@ struct MainView: View {
             debounceTask = Task {
                 try? await Task.sleep(nanoseconds: 300_000_000) // 300ms
                 if !Task.isCancelled {
-                    debouncedSearchText = newValue.trimmingCharacters(in: .whitespaces)
+                    let trimmed = newValue.trimmingCharacters(in: .whitespaces)
+                    debouncedSearchText = trimmed
+                    // Trigger UI update after debounced text changes
+                    // This ensures filteredItems recalculates with cached semantic results
+                    if !trimmed.isEmpty && trimmed.count >= 2 {
+                        selectedItem = filteredItems.first
+                    }
                 }
+            }
+        }
+        .onChange(of: debouncedSearchText) { newValue in
+            // When debounced text updates, recalculate filtered items
+            // This ensures semantic search cache is used when user stops typing
+            if !newValue.isEmpty {
+                selectedItem = filteredItems.first
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in

@@ -101,8 +101,36 @@ class LLMService: ObservableObject {
         
         return try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
+                var cleanupAttempted = false
+                
+                // Cleanup function to ensure temp file is removed
+                let cleanupTempFile = {
+                    if !cleanupAttempted {
+                        cleanupAttempted = true
+                        do {
+                            if FileManager.default.fileExists(atPath: tempPromptURL.path) {
+                                try FileManager.default.removeItem(at: tempPromptURL)
+                                print("✅ Cleaned up temp file: \(tempPromptURL.lastPathComponent)")
+                            }
+                        } catch {
+                            print("⚠️ Failed to clean up temp file \(tempPromptURL.lastPathComponent): \(error)")
+                            // Try again after a short delay in case file is still in use
+                            DispatchQueue.global().asyncAfter(deadline: .now() + 1.0) {
+                                do {
+                                    if FileManager.default.fileExists(atPath: tempPromptURL.path) {
+                                        try FileManager.default.removeItem(at: tempPromptURL)
+                                        print("✅ Cleaned up temp file on retry: \(tempPromptURL.lastPathComponent)")
+                                    }
+                                } catch {
+                                    print("❌ Failed to clean up temp file on retry: \(error)")
+                                }
+                            }
+                        }
+                    }
+                }
+                
                 defer {
-                    try? FileManager.default.removeItem(at: tempPromptURL)
+                    cleanupTempFile()
                 }
                 
                 // Ensure binary is executable
@@ -476,15 +504,22 @@ class LLMService: ObservableObject {
                         
                         cleanOutput = cleanOutput.trimmingCharacters(in: .whitespacesAndNewlines)
                             
+                        // Clean up temp file before resuming
+                        cleanupTempFile()
+                        
                         if cleanOutput.isEmpty {
                              continuation.resume(returning: "[Model returned empty response]")
                         } else {
                              continuation.resume(returning: cleanOutput)
                         }
                     } else {
+                        // Clean up temp file before resuming with error
+                        cleanupTempFile()
                         continuation.resume(throwing: LLMError.processFailed(reason: "Exit \(process.terminationStatus): \(errOutput)"))
                     }
                 } catch {
+                    // Clean up temp file before resuming with error
+                    cleanupTempFile()
                     continuation.resume(throwing: error)
                 }
             }

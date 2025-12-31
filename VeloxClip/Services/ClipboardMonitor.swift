@@ -79,10 +79,11 @@ class ClipboardMonitor: ObservableObject {
     @discardableResult
     private func saveItem(type: String, content: String? = nil, data: Data? = nil, sourceApp: String? = nil) -> ClipboardItem {
         // Improved deduplication: Check recent items (last 10) within 5 seconds
+        // Create a snapshot to avoid concurrent modification issues
         let now = Date()
-        let recentItems = ClipboardStore.shared.items.prefix(10)
+        let recentItemsSnapshot = Array(ClipboardStore.shared.items.prefix(10))
         
-        for recentItem in recentItems {
+        for recentItem in recentItemsSnapshot {
             // Check if content matches
             let contentMatches = recentItem.content == content
             let dataMatches = recentItem.data == data
