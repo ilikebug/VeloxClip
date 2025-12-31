@@ -36,9 +36,19 @@ if [ -d "LLM" ]; then
     cp -R LLM/* "$RESOURCES_DIR/" 2>/dev/null || true
 fi
 
+# 3.2 Copy App Icon (if it exists)
+if [ -f "VeloxClip/Resources/AppIcon.icns" ]; then
+    echo "🎨 Copying app icon..."
+    cp "VeloxClip/Resources/AppIcon.icns" "$RESOURCES_DIR/"
+    ICON_NAME="AppIcon"
+else
+    ICON_NAME=""
+fi
+
 # 4. Create Info.plist
 echo "📝 Generating Info.plist..."
-cat > "$CONTENTS_DIR/Info.plist" <<EOF
+{
+    cat <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -48,6 +58,8 @@ cat > "$CONTENTS_DIR/Info.plist" <<EOF
     <key>CFBundleIdentifier</key>
     <string>$BUNDLE_ID</string>
     <key>CFBundleName</key>
+    <string>$APP_NAME</string>
+    <key>CFBundleDisplayName</key>
     <string>$APP_NAME</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
@@ -59,9 +71,20 @@ cat > "$CONTENTS_DIR/Info.plist" <<EOF
     <true/>
     <key>LSUIElement</key>
     <string>1</string>
+    <key>LSHideExtension</key>
+    <true/>
+EOF
+    if [ -n "$ICON_NAME" ]; then
+        cat <<EOF
+    <key>CFBundleIconFile</key>
+    <string>$ICON_NAME</string>
+EOF
+    fi
+    cat <<EOF
 </dict>
 </plist>
 EOF
+} > "$CONTENTS_DIR/Info.plist"
 
 echo "✅ $APP_BUNDLE created successfully!"
 echo "👉 You can find it at: $(pwd)/$APP_BUNDLE"
