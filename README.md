@@ -10,6 +10,8 @@ A powerful, AI-enhanced clipboard manager for macOS that helps you manage, searc
 - **Configurable History Limit**: Set your preferred history size (default: 100 items)
 - **Source App Tracking**: Know where each clipboard item came from
 - **Quick Paste**: Fast paste to previous application with customizable global shortcut
+- **Favorites System**: Mark important items as favorites for quick access
+- **Custom Tags**: Add custom tags to favorite items for better organization and search
 
 ### 🤖 AI-Powered Features
 - **OCR Text Recognition**: Automatically extracts text from images using Apple Vision framework
@@ -22,14 +24,26 @@ A powerful, AI-enhanced clipboard manager for macOS that helps you manage, searc
 ### 🔍 Advanced Search
 - **Keyword Search**: Fast exact match search across content, type, source app, and tags
 - **Semantic Search**: AI-powered search that understands context and meaning
+- **Tag-based Search**: Search by custom tags or AI-detected tags (URL, Email, Code, JSON, etc.)
+- **Favorites Prioritization**: Favorite items appear first in search results
 - **Search Debouncing**: Optimized performance with intelligent caching
 - **Real-time Filtering**: Instant results as you type
+
+### ⭐ Favorites & Organization
+- **Favorites View**: Toggle between favorites and full history with star button or Tab key
+- **Permanent Preservation**: Favorite items are never deleted by history limit
+- **Custom Tags**: Add personalized tags to favorite items for better categorization
+- **Colorful Tags**: Custom tags automatically get vibrant, name-based colors for easy identification
+- **Tag Management**: Easily add or remove tags from favorite items in the preview pane
+- **Smart History Limit**: Only non-favorite items count toward history limit, ensuring favorites are always preserved
 
 ### 🎨 User Interface
 - **Spotlight-Style Overlay**: Beautiful, modern interface that appears over any application
 - **Markdown Rendering**: Rich Markdown support in preview pane
 - **Image Preview**: View images with OCR text extraction and copy functionality
 - **Keyboard Navigation**: Full keyboard support for efficient workflow
+- **View Switching**: Toggle between favorites and history with Tab key or star button
+- **Tag Editor**: Intuitive tag editing interface in preview pane for favorite items
 - **Customizable Shortcuts**: Set your preferred global hotkey (default: Cmd+Shift+V)
 
 ### 🔒 Privacy & Performance
@@ -159,6 +173,17 @@ The app will automatically detect and use these resources when available. If LLM
 4. **Paste**: Press Enter to paste the selected item to the previous application
 5. **Preview**: View detailed content in the preview pane
 
+### Favorites & Tags
+
+1. **Add to Favorites**: Click the star icon in the preview pane to favorite an item
+2. **View Favorites**: Click the star button in the search bar or press Tab to switch to favorites view
+3. **Add Custom Tags**: 
+   - Favorite an item first
+   - Click the edit button (pencil icon) in the Tags section
+   - Type a tag name and press Enter or click the plus button
+4. **Remove Tags**: In edit mode, click the X button on any tag to remove it
+5. **Search by Tags**: Type a tag name in the search box to find all items with that tag
+
 ### AI Features
 
 - **OCR**: Automatically extracts text from images. Click "Copy Text" button in preview to copy OCR results
@@ -181,11 +206,12 @@ Configure:
 
 ## 🎯 Use Cases
 
-- **Developers**: Quick access to code snippets, error messages, and terminal outputs
-- **Writers**: Manage quotes, references, and research snippets
-- **Designers**: Track color codes, image assets, and design notes
-- **Researchers**: Organize copied text, citations, and notes
-- **Multilingual Users**: Translate and manage content in multiple languages
+- **Developers**: Quick access to code snippets, error messages, and terminal outputs. Tag code snippets by language or project
+- **Writers**: Manage quotes, references, and research snippets. Organize by topic with custom tags
+- **Designers**: Track color codes, image assets, and design notes. Tag by project or color palette
+- **Researchers**: Organize copied text, citations, and notes. Use tags to categorize by research topic
+- **Multilingual Users**: Translate and manage content in multiple languages. Tag by language or translation status
+- **Project Managers**: Keep important information organized with favorites and custom tags for different projects
 
 ## 🔧 Configuration
 
@@ -198,6 +224,9 @@ Default: `Cmd+Shift+V`
 Default: 100 items
 - Adjust in Preferences → General Settings
 - Range: 10-1000 items
+- **Smart Limit**: Only non-favorite items count toward the limit
+- Favorite items are permanently preserved regardless of history limit
+- This ensures your important items are never accidentally deleted
 
 ### AI Response Language
 Choose from:
