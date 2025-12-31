@@ -258,7 +258,7 @@ struct PreviewView: View {
                         HStack {
                             Image(systemName: "text.viewfinder")
                                 .foregroundColor(.blue)
-                            Text("OCR 识别文字")
+                            Text("OCR Recognized Text")
                                 .font(.headline)
                             Spacer()
                             Button(action: {
@@ -266,7 +266,7 @@ struct PreviewView: View {
                             }) {
                                 HStack(spacing: 4) {
                                     Image(systemName: "doc.on.doc")
-                                    Text("复制文字")
+                                    Text("Copy Text")
                                 }
                                 .font(.caption.bold())
                                 .padding(.horizontal, 12)

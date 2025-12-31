@@ -333,7 +333,7 @@ class LLMService: ObservableObject {
                         
                         // Special cleanup for different actions
                         if action == .summarize {
-                            // Remove common summary prefixes
+                            // Remove common summary prefixes (both Chinese and English)
                             let separators = ["总结：", "摘要：", "总结结果：", "Summary:", "总结", "摘要"]
                             for separator in separators {
                                 if let range = cleanOutput.range(of: separator) {
@@ -380,7 +380,7 @@ class LLMService: ObservableObject {
                             // Remove redundant whitespace
                             cleanOutput = cleanOutput.replacingOccurrences(of: "\n\n\n+", with: "\n\n", options: .regularExpression)
                         } else if action == .translate {
-                            // First, detect if output contains a separator like "中文翻译：" and only keep content after it
+                            // First, detect if output contains a separator like "Translation:" and only keep content after it
                             let separators = ["中文翻译：", "翻译：", "中文：", "翻译结果：", "Translation:"]
                             for separator in separators {
                                 if let range = cleanOutput.range(of: separator) {
@@ -401,7 +401,7 @@ class LLMService: ObservableObject {
                                 cleanOutput = cleanOutput.replacingOccurrences(of: prefix, with: "")
                             }
                             
-                            // Remove placeholder text like "例句（如有）没有" or "例句（如有）没有"
+                            // Remove placeholder text like "Example: (if available) None"
                             let placeholders = [
                                 "例句（如有）没有",
                                 "例句（如有） 没有",
@@ -479,7 +479,7 @@ class LLMService: ObservableObject {
                             // Remove redundant whitespace but preserve intentional formatting
                             cleanOutput = cleanOutput.replacingOccurrences(of: "\n\n\n+", with: "\n\n", options: .regularExpression)
                         } else if action == .explainCode || action == .polish {
-                            // Remove common prefixes for explain and polish
+                            // Remove common prefixes for explain and polish (both Chinese and English)
                             let prefixes: [String]
                             if action == .explainCode {
                                 prefixes = ["解释：", "说明：", "代码解释：", "Explanation:", "解释", "说明"]

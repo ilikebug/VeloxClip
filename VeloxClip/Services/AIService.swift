@@ -43,18 +43,92 @@ class AIService {
             }
             
             let request = VNRecognizeTextRequest { request, error in
-                guard let observations = request.results as? [VNRecognizedTextObservation] else {
+                if let error = error {
+                    print("OCR Error: \(error.localizedDescription)")
+                    #if DEBUG
+                    print("OCR languages used: \(request.recognitionLanguages?.joined(separator: ", ") ?? "none")")
+                    #endif
                     completion(nil)
                     return
                 }
                 
-                let recognizedText = observations.compactMap { $0.topCandidates(1).first?.string }.joined(separator: "\n")
-                completion(recognizedText)
+                guard let observations = request.results as? [VNRecognizedTextObservation] else {
+                    #if DEBUG
+                    print("OCR: No text detected")
+                    print("OCR languages used: \(request.recognitionLanguages?.joined(separator: ", ") ?? "none")")
+                    #endif
+                    completion(nil)
+                    return
+                }
+                
+                #if DEBUG
+                print("OCR: Detected \(observations.count) text regions")
+                #endif
+                
+                let recognizedText = observations.compactMap { observation -> String? in
+                    // Get multiple candidates to improve accuracy (especially for punctuation)
+                    let candidates = observation.topCandidates(3)
+                    
+                    // Prefer the highest confidence result
+                    guard let bestCandidate = candidates.first else {
+                        return nil
+                    }
+                    
+                    // If confidence is very high (>0.9), use it directly
+                    if bestCandidate.confidence > 0.9 {
+                        return bestCandidate.string
+                    }
+                    
+                    // Otherwise, check other candidates and select the one with more punctuation
+                    // Punctuation recognition may be inaccurate, try to select the best result from multiple candidates
+                    var bestText = bestCandidate.string
+                    var bestScore = bestCandidate.confidence
+                    
+                    // Define Chinese and English punctuation sets
+                    let chinesePunctuation = "，。！？；：、\u{201C}\u{201D}\u{2018}\u{2019}（）【】《》"
+                    let englishPunctuation = ".,!?;:\"'-()[]{}"
+                    
+                    for candidate in candidates.dropFirst() {
+                        // If candidate confidence is close to best result (difference < 0.1) and contains more punctuation, consider using it
+                        if candidate.confidence > bestScore - 0.1 {
+                            let candidateText = candidate.string
+                            // Count punctuation marks
+                            let candidatePunctCount = candidateText.filter { chinesePunctuation.contains($0) || englishPunctuation.contains($0) }.count
+                            let bestPunctCount = bestText.filter { chinesePunctuation.contains($0) || englishPunctuation.contains($0) }.count
+                            
+                            // If candidate has more punctuation and confidence is acceptable, use it
+                            if candidatePunctCount > bestPunctCount && candidate.confidence > 0.7 {
+                                bestText = candidateText
+                                bestScore = candidate.confidence
+                            }
+                        }
+                    }
+                    
+                    #if DEBUG
+                    print("OCR recognized text (confidence: \(bestScore)): \(bestText)")
+                    #endif
+                    return bestText
+                }.joined(separator: "\n")
+                
+                #if DEBUG
+                if recognizedText.isEmpty {
+                    print("OCR: Recognition result is empty")
+                } else {
+                    print("OCR final result: \(recognizedText)")
+                }
+                #endif
+                
+                completion(recognizedText.isEmpty ? nil : recognizedText)
             }
             
             request.recognitionLevel = .accurate
+            request.usesLanguageCorrection = true
             
-            let requestHandler = VNImageRequestHandler(cgImage: cgImage)
+            // Set Chinese and English language codes directly (standard approach)
+            // Vision framework will automatically handle multilingual recognition
+            request.recognitionLanguages = ["zh-Hans", "en-US"]
+            
+            let requestHandler = VNImageRequestHandler(cgImage: cgImage, options: [:])
             do {
                 try requestHandler.perform([request])
             } catch {

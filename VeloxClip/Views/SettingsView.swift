@@ -40,7 +40,7 @@ struct GeneralSettingsView: View {
             
             Section("AI Settings") {
                 Picker("AI Response Language", selection: $settings.aiResponseLanguage) {
-                    Text("中文 (Chinese)").tag("Chinese")
+                    Text("Chinese (中文)").tag("Chinese")
                     Text("English").tag("English")
                     Text("日本語 (Japanese)").tag("Japanese")
                     Text("한국어 (Korean)").tag("Korean")
