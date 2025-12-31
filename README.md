@@ -80,9 +80,74 @@ cp -R VeloxClip.app /Applications/
 
 ### LLM Setup (Optional, for AI features)
 
-1. Download the Qwen2.5 model and place it in the `LLM/` directory
-2. Download `llama-cli` binary and place it in the `LLM/` directory
-3. The app will automatically use these resources when available
+To enable AI features like summarization, translation, code explanation, and text polishing, you need to set up a local LLM:
+
+#### Step 1: Download llama-cli
+
+Download the `llama-cli` binary for macOS:
+
+- **For Apple Silicon (M1/M2/M3)**: Download from [llama-cli releases](https://github.com/ggerganov/llama.cpp/releases)
+  - Look for `llama-cli` or `llama-cli-macos-arm64` in the latest release
+  - Or build from source: [llama.cpp repository](https://github.com/ggerganov/llama.cpp)
+
+- **For Intel Macs**: Download `llama-cli-macos-x64` from the releases page
+
+#### Step 2: Download Qwen2.5 Model
+
+Download a compatible Qwen2.5 model in GGUF format:
+
+- **Recommended**: Qwen2.5-7B-Instruct-GGUF (around 4-5GB)
+- **Download sources**:
+  - [Hugging Face - Qwen2.5 Models](https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF)
+  - [TheBloke's Qwen2.5 Models](https://huggingface.co/TheBloke)
+  - Look for files ending in `.gguf` format
+
+**Model size recommendations**:
+- **7B model**: Good balance of quality and speed (~4-5GB)
+- **3B model**: Faster but lower quality (~2GB)
+- **14B+ model**: Higher quality but slower (~8GB+)
+
+#### Step 3: Place Files in LLM Directory
+
+1. Make sure the `LLM/` directory exists in the project root
+2. Copy the downloaded files:
+   ```bash
+   # Copy llama-cli binary
+   cp /path/to/llama-cli LLM/
+   
+   # Copy the model file (replace with your actual model filename)
+   cp /path/to/qwen2.5-7b-instruct.gguf LLM/
+   ```
+
+3. Make llama-cli executable:
+   ```bash
+   chmod +x LLM/llama-cli
+   ```
+
+#### Step 4: Verify Setup
+
+Your `LLM/` directory should contain:
+```
+LLM/
+├── llama-cli          # Executable binary
+├── qwen2.5-*.gguf     # Model file (name may vary)
+└── README.md          # This file
+```
+
+#### Step 5: Build App with LLM Resources
+
+When you run `./build_app.sh`, the LLM files will be automatically copied into the app bundle:
+```bash
+./build_app.sh
+```
+
+The app will automatically detect and use these resources when available. If LLM files are not found, the app will still work but AI features (summarization, translation, etc.) will be unavailable.
+
+#### Troubleshooting
+
+- **Permission denied**: Make sure `llama-cli` is executable (`chmod +x LLM/llama-cli`)
+- **Model not found**: Check that the model file is in `.gguf` format and placed in `LLM/` directory
+- **AI features not working**: Verify the model file name matches what the app expects, or check the console logs for errors
 
 ## 🚀 Usage
 
