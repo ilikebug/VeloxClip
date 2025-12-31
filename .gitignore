@@ -1,0 +1,38 @@
+# Xcode
+.DS_Store
+*.xcodeproj/*
+!*.xcodeproj/project.pbxproj
+!*.xcodeproj/xcshareddata/
+*.xcworkspace/*
+!*.xcworkspace/contents.xcworkspacedata
+*.xcuserdata
+*.xcuserstate
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+*.xcodeproj
+
+# Compiled binaries
+*.app/
+VeloxClip.app/
+
+
+# User-specific files
+*.swiftpm
+.velox_clips.json
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Temporary files
+*.swp
+*~.nib
+*.tmp
+
+# Logs
+*.log
+
