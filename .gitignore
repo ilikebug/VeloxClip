@@ -43,3 +43,10 @@ LLM/llama-cli-*
 # But keep README.md and .gitkeep
 !LLM/README.md
 !LLM/.gitkeep
+
+# Icon generation temporary files
+VeloxClip.iconset/
+*.iconset/
+icon.png
+VeloxClip/Resources/AppIcon.icns.backup
+*.icns.backup
