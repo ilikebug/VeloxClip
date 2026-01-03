@@ -120,6 +120,7 @@ class LLMService: ObservableObject {
 ```
 
 ### Assistant:
+
 """
         
         // Write prompt to temp file
@@ -259,7 +260,26 @@ class LLMService: ObservableObject {
                             "Only output",
                             "Do not output",
                             "Do not repeat",
-                            "Output directly"
+                            "Output directly",
+                            // Translation instruction patterns
+                            "【重要】只输出翻译结果",
+                            "不要输出本指令的任何内容",
+                            "严格格式要求",
+                            "必须严格遵守",
+                            "每次输出格式必须完全一致",
+                            "如果是单词",
+                            "严格按照以下格式输出",
+                            "每个字段都必须包含",
+                            "如果是句子或段落",
+                            "现在开始翻译",
+                            "只输出翻译结果：",
+                            "Strict format requirements",
+                            "must be strictly followed",
+                            "output format must be completely consistent",
+                            "If it's a word",
+                            "If it's a sentence or paragraph",
+                            "Now start translating",
+                            "Only output the translation result"
                         ]
                         
                         // Remove prompt phrases that appear at the start of lines (only short lines)
@@ -530,6 +550,12 @@ class LLMService: ObservableObject {
                         }
                         
                         cleanOutput = cleanOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+                        
+                        // Special cleanup for translation action - remove instruction content
+                        // This should be done last to ensure all instruction content is removed
+                        if action == .translate {
+                            cleanOutput = filterTranslationInstructionContent(cleanOutput)
+                        }
                             
                         // Clean up temp file before resuming
                         cleanupTempFile()
@@ -631,77 +657,242 @@ Important requirements:
         }
     }
     
+    // Filter out instruction content from translation responses
+    private func filterTranslationInstructionContent(_ text: String) -> String {
+        var cleaned = text
+        
+        // Remove instruction patterns that might appear in the output
+        let instructionPatterns = [
+            // Chinese instruction patterns
+            "【重要】只输出翻译结果，不要输出本指令的任何内容。",
+            "【重要】只输出翻译结果",
+            "不要输出本指令的任何内容",
+            "严格格式要求（必须严格遵守，每次输出格式必须完全一致）",
+            "严格格式要求",
+            "必须严格遵守",
+            "每次输出格式必须完全一致",
+            "如果是单词，严格按照以下格式输出（每个字段都必须包含）",
+            "如果是单词，必须严格按照以下模板格式输出",
+            "如果是单词",
+            "严格按照以下格式输出",
+            "每个字段都必须包含",
+            "如果某个字段没有信息则写",
+            "（如有其他词性如adj./adv./prep.等，按同样格式列出）",
+            "（如果是动词）",
+            "（不知道写",
+            "（没有写",
+            "（用逗号分隔",
+            "（用分号分隔",
+            "（至少提供2-3个例句）",
+            "如果是句子或段落，直接输出中文翻译，不要添加任何前缀、后缀或说明文字。",
+            "如果是句子或段落",
+            "直接输出中文翻译",
+            "不要添加任何前缀、后缀或说明文字",
+            "现在开始翻译，只输出翻译结果：",
+            "现在开始翻译",
+            "只输出翻译结果：",
+            "请严格按照以上格式要求输出，确保每次输出的格式完全一致。",
+            "请严格按照以上格式要求输出",
+            "确保每次输出的格式完全一致",
+            // English instruction patterns
+            "Strict format requirements \\(must be strictly followed, output format must be completely consistent every time\\)",
+            "Strict format requirements",
+            "must be strictly followed",
+            "output format must be completely consistent every time",
+            "If it's a word, you must strictly follow this template format",
+            "If it's a word",
+            "you must strictly follow this template format",
+            "every field must be included",
+            "If it's a sentence or paragraph",
+            "output the translation directly without any format markers",
+            "Now start translating",
+            "Only output the translation result:",
+            "Please strictly follow the above format requirements"
+        ]
+        
+        // Remove instruction patterns (simple string replacement first)
+        for pattern in instructionPatterns {
+            cleaned = cleaned.replacingOccurrences(of: pattern, with: "")
+        }
+        
+        // Remove lines that contain instruction keywords
+        let lines = cleaned.components(separatedBy: .newlines)
+        var filteredLines: [String] = []
+        
+        let instructionKeywords = [
+            "严格格式要求", "必须严格遵守", "只输出翻译结果", "不要输出本指令",
+            "如果是单词", "如果是句子", "现在开始翻译", "Strict format requirements",
+            "must be strictly followed", "If it's a word", "If it's a sentence",
+            "Now start translating", "Only output the translation result"
+        ]
+        
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            var isInstructionLine = false
+            
+            // Check if line contains instruction keywords (only for short lines to avoid false positives)
+            if trimmed.count < 150 {
+                for keyword in instructionKeywords {
+                    if trimmed.contains(keyword) {
+                        isInstructionLine = true
+                        break
+                    }
+                }
+            }
+            
+            // Skip instruction lines, but keep content lines
+            if !isInstructionLine {
+                filteredLines.append(line)
+            } else if trimmed.isEmpty && !filteredLines.isEmpty {
+                // Preserve empty lines between content
+                filteredLines.append("")
+            }
+        }
+        
+        cleaned = filteredLines.joined(separator: "\n")
+        
+        // Remove instruction blocks that might appear at the start
+        let startPatterns = [
+            "请将以下内容翻译成中文。",
+            "请将以下内容翻译成中文",
+            "Please translate the following content"
+        ]
+        
+        for pattern in startPatterns {
+            if let range = cleaned.range(of: pattern) {
+                // Find the first actual content line after the pattern
+                let afterMatch = String(cleaned[range.upperBound...])
+                let afterLines = afterMatch.components(separatedBy: .newlines)
+                var foundContent = false
+                var contentStartIndex = 0
+                
+                for (index, line) in afterLines.enumerated() {
+                    let trimmed = line.trimmingCharacters(in: .whitespaces)
+                    if !trimmed.isEmpty {
+                        // Check if this line contains instruction keywords
+                        let isInstruction = instructionKeywords.contains { trimmed.contains($0) }
+                        if !isInstruction {
+                            // Found actual content
+                            contentStartIndex = index
+                            foundContent = true
+                            break
+                        }
+                    }
+                }
+                
+                if foundContent {
+                    cleaned = afterLines[contentStartIndex...].joined(separator: "\n")
+                }
+            }
+        }
+        
+        // Clean up multiple newlines
+        cleaned = cleaned.replacingOccurrences(of: "\n\n\n+", with: "\n\n", options: .regularExpression)
+        cleaned = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        return cleaned
+    }
+    
     private func generateTranslateInstruction(for language: String) -> String {
         switch language {
         case "Chinese":
             return """
 请将以下内容翻译成中文。
 
-重要要求：
-1. 只输出翻译后的中文内容，不要输出原始英文内容
-2. 不要输出"中文翻译："、"翻译："、"Translation:"等任何前缀
-3. 如果是单词，格式：
-   **单词** [音标]
-   - **词性**: 词性
-   - **释义**: 中文释义
-   - **例句**: 例句（如有，没有则省略此项）
-4. 如果是句子或段落，直接输出中文翻译，不要添加任何格式标记
-5. 不要重复输出相同的内容
+【重要】只输出翻译结果，不要输出本指令的任何内容。
+
+如果是单词，严格按照以下格式输出（每个字段都必须包含）：
+发音: /音标/
+n. 名词释义（多个义项用分号分隔）
+v. 动词释义（多个义项用分号分隔）
+（如有其他词性如adj./adv./prep.等，按同样格式列出）
+时态:
+第三人称单数: xxx
+现在分词: xxx
+过去式: xxx
+过去分词: xxx
+解释: 详细的中文解释
+词源学: 词源信息（不知道写"无"）
+记忆方法: 记忆方法（不知道写"无"）
+同根词: 同根词列表（没有写"None"）
+近义词: 近义词列表（用逗号分隔，没有写"None"）
+反义词: 反义词列表（用逗号分隔，没有写"None"）
+常用短语: 常用短语及其中文翻译（用分号分隔，没有写"None"）
+例句:
+英文例句1 中文翻译1 *（标注使用的义项）*
+英文例句2 中文翻译2 *（标注使用的义项）*
+（至少提供2-3个例句）
+
+如果是句子或段落，直接输出中文翻译，不要添加任何前缀、后缀或说明文字。
+
+现在开始翻译，只输出翻译结果：
 """
         case "English":
             return """
 Please translate the following content to English.
 
-Important requirements:
+Strict format requirements (must be strictly followed, output format must be completely consistent every time):
 1. Only output the translated English content, do not output the original content
-2. Do not output prefixes like "Translation:" or "English:"
-3. If it's a word, format:
+2. Absolutely do not output prefixes or suffixes like "Translation:", "English:", "Translated:", etc.
+3. If it's a word, you must strictly follow this template format (every field must be included):
    **word** [phonetic]
    - **Part of speech**: ...
    - **Definition**: ...
    - **Example**: ... (if available, omit if not)
-4. If it's a sentence or paragraph, output the English translation directly without format markers
+4. If it's a sentence or paragraph, output the English translation directly without any format markers, prefixes, suffixes, or explanatory text
 5. Do not repeat the same content
+6. Output format must be consistent, the format must be exactly the same every time when translating the same content
+
+Please strictly follow the above format requirements and ensure the output format is completely consistent every time.
 """
         case "Japanese":
             return """
 以下の内容を日本語に翻訳してください。
 
-重要な要件：
+厳格な形式要件（厳密に遵守する必要があり、出力形式は毎回完全に一致する必要があります）：
 1. 翻訳された日本語の内容のみを出力し、元の内容を出力しないでください
-2. 「日本語翻訳：」や「翻訳：」などの接頭辞を出力しないでください
-3. 単語の場合は、形式：
+2. 「日本語翻訳：」、「翻訳：」、「Translation:」、「訳文：」などの接頭辞や接尾辞を絶対に出力しないでください
+3. 単語の場合は、以下のテンプレート形式を厳密に遵守してください（各フィールドを含める必要があります）：
    **単語** [音声記号]
    - **品詞**: ...
    - **意味**: ...
    - **例文**: ...（ある場合は、ない場合は省略）
-4. 文や段落の場合は、フォーマットマーカーなしで日本語翻訳を直接出力してください
+4. 文や段落の場合は、フォーマットマーカー、接頭辞、接尾辞、説明文なしで日本語翻訳を直接出力してください
 5. 同じ内容を繰り返さないでください
+6. 出力形式は一貫している必要があり、同じ内容を翻訳する際は毎回形式が完全に同じである必要があります
+
+上記の形式要件を厳密に遵守し、出力形式が毎回完全に一致することを確認してください。
 """
         case "Korean":
             return """
 다음 내용을 한국어로 번역해 주세요.
 
-중요한 요구사항:
+엄격한 형식 요구사항(엄격히 준수해야 하며, 출력 형식은 매번 완전히 일치해야 함):
 1. 번역된 한국어 내용만 출력하고 원본 내용을 출력하지 마세요
-2. "한국어 번역:" 또는 "번역:"과 같은 접두사를 출력하지 마세요
-3. 단어인 경우 형식:
+2. "한국어 번역:", "번역:", "Translation:", "번역문:"과 같은 접두사나 접미사를 절대 출력하지 마세요
+3. 단어인 경우 다음 템플릿 형식을 엄격히 준수해야 합니다(모든 필드를 포함해야 함):
    **단어** [음성 기호]
    - **품사**: ...
    - **의미**: ...
    - **예문**: ... (있는 경우, 없는 경우 생략)
-4. 문장이나 단락인 경우 형식 마커 없이 한국어 번역을 직접 출력하세요
+4. 문장이나 단락인 경우 형식 마커, 접두사, 접미사, 설명 텍스트 없이 한국어 번역을 직접 출력하세요
 5. 동일한 내용을 반복하지 마세요
+6. 출력 형식은 일관되어야 하며, 동일한 내용을 번역할 때마다 형식이 완전히 동일해야 합니다
+
+위 형식 요구사항을 엄격히 준수하고 출력 형식이 매번 완전히 일치하는지 확인하세요.
 """
         default:
             return """
 Please translate the following content to \(language).
 
-Important requirements:
+Strict format requirements (must be strictly followed, output format must be completely consistent every time):
 1. Only output the translated content, do not output the original content
-2. Do not output prefixes
-3. Output the translation directly without format markers
+2. Absolutely do not output prefixes or suffixes
+3. Output the translation directly without any format markers, prefixes, suffixes, or explanatory text
 4. Do not repeat the same content
+5. Output format must be consistent, the format must be exactly the same every time when translating the same content
+
+Please strictly follow the above format requirements and ensure the output format is completely consistent every time.
 """
         }
     }

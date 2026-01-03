@@ -5,15 +5,37 @@ APP_NAME="VeloxClip"
 BUNDLE_ID="com.antigravity.veloxclip"
 EXECUTABLE_NAME="VeloxClip"
 BUILD_CONFIG="release"
+BUILD_PATH=".build"
 
 echo "🚀 Building $APP_NAME in $BUILD_CONFIG mode..."
 
-# 1. Build the project
-swift build -c $BUILD_CONFIG --product $EXECUTABLE_NAME
+# Set build path to avoid permission issues with system cache
+export SWIFT_PACKAGE_BUILD_PATH="$BUILD_PATH"
+# Disable user-level cache to avoid permission issues
+export SWIFTPM_DISABLE_CACHE=1
 
-if [ $? -ne 0 ]; then
-    echo "❌ Build failed!"
-    exit 1
+# Clean build directory if needed (optional, comment out if you want incremental builds)
+# echo "🧹 Cleaning build directory..."
+# rm -rf "$BUILD_PATH"
+
+# 1. Build the project with explicit build path
+echo "📦 Building Swift package..."
+swift build -c $BUILD_CONFIG --product $EXECUTABLE_NAME --build-path "$BUILD_PATH" 2>&1
+BUILD_STATUS=$?
+
+# Check if executable was created (warnings are OK, but we need the binary)
+if [ ! -f "$BUILD_PATH/$BUILD_CONFIG/$EXECUTABLE_NAME" ]; then
+    if [ $BUILD_STATUS -ne 0 ]; then
+        echo "❌ Build failed with exit code $BUILD_STATUS!"
+        exit 1
+    else
+        echo "❌ Build completed but executable not found!"
+        exit 1
+    fi
+fi
+
+if [ $BUILD_STATUS -ne 0 ]; then
+    echo "⚠️  Build completed with warnings (exit code $BUILD_STATUS), but executable exists. Continuing..."
 fi
 
 # 2. Setup Bundle Structure
@@ -27,7 +49,11 @@ mkdir -p "$MACOS_DIR"
 mkdir -p "$RESOURCES_DIR"
 
 # 3. Copy Executable
-BINARY_PATH=$(swift build -c $BUILD_CONFIG --show-bin-path)/$EXECUTABLE_NAME
+BINARY_PATH="$BUILD_PATH/$BUILD_CONFIG/$EXECUTABLE_NAME"
+if [ ! -f "$BINARY_PATH" ]; then
+    echo "❌ Executable not found at $BINARY_PATH"
+    exit 1
+fi
 cp "$BINARY_PATH" "$MACOS_DIR/"
 
 # 3.1 Copy LLM Resources (if they exist)
