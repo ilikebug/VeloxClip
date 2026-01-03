@@ -114,3 +114,151 @@ EOF
 
 echo "✅ $APP_BUNDLE created successfully!"
 echo "👉 You can find it at: $(pwd)/$APP_BUNDLE"
+
+# 5. Create DMG package
+echo "📦 Creating DMG package..."
+DMG_NAME="${APP_NAME}.dmg"
+DMG_TEMP_DIR="dmg_temp"
+DMG_VOLUME_NAME="${APP_NAME}"
+
+# Clean up any existing temp directory
+rm -rf "$DMG_TEMP_DIR"
+mkdir -p "$DMG_TEMP_DIR"
+
+# Copy app to temp directory
+cp -R "$APP_BUNDLE" "$DMG_TEMP_DIR/"
+
+# Create Applications link (shortcut)
+# Use macOS alias instead of symlink for better icon display
+# First create a symlink, then convert it to an alias using osascript
+ln -sf /Applications "$DMG_TEMP_DIR/Applications"
+
+# Note: We'll set the icon after DMG is mounted using osascript
+# The symlink should work, but we'll ensure the icon is set correctly
+APPLICATIONS_ICON_PATH="/System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/ApplicationsFolderIcon.icns"
+if [ -f "$APPLICATIONS_ICON_PATH" ]; then
+    # Copy icon for later use
+    cp "$APPLICATIONS_ICON_PATH" "$DMG_TEMP_DIR/.ApplicationsIcon.icns" 2>/dev/null || true
+fi
+
+# Create installation instructions as a hidden file that will be shown in DMG
+cat > "$DMG_TEMP_DIR/.DS_Store" <<'EOF'
+# This will be created by Finder
+EOF
+
+# Create installation instructions file
+cat > "$DMG_TEMP_DIR/📖 安装说明.txt" <<'INSTRUCTIONS'
+╔══════════════════════════════════════════════════════════════╗
+║                    VeloxClip 安装说明                        ║
+╚══════════════════════════════════════════════════════════════╝
+
+安装方法：
+
+  将左侧的 VeloxClip.app 拖拽到右侧的 Applications 文件夹
+
+  Drag VeloxClip.app on the left to Applications folder on the right
+
+──────────────────────────────────────────────────────────────
+
+安装完成后，您可以在应用程序文件夹中找到 VeloxClip。
+After installation, find VeloxClip in your Applications folder.
+
+INSTRUCTIONS
+
+# Create DMG
+DMG_TEMP="${DMG_NAME}.temp.dmg"
+rm -f "$DMG_TEMP" "$DMG_NAME"
+
+# Calculate size needed (app size + 50MB overhead)
+APP_SIZE=$(du -sk "$DMG_TEMP_DIR" | cut -f1)
+DMG_SIZE=$((APP_SIZE + 51200)) # Add 50MB overhead
+
+# Create temporary DMG
+hdiutil create -srcfolder "$DMG_TEMP_DIR" -volname "$DMG_VOLUME_NAME" \
+    -fs HFS+ -fsargs "-c c=64,a=16,e=16" -format UDRW -size ${DMG_SIZE}k "$DMG_TEMP"
+
+# Mount the DMG
+MOUNT_DIR="/Volumes/$DMG_VOLUME_NAME"
+DEVICE=$(hdiutil attach -readwrite -noverify -noautoopen "$DMG_TEMP" | \
+    egrep '^/dev/' | sed 1q | awk '{print $1}')
+
+# Wait for mount
+sleep 2
+
+# Set DMG window properties and fix Applications icon
+if [ -d "$MOUNT_DIR" ]; then
+    # Set Applications folder icon using osascript
+    # This is the most reliable method for setting folder icons in DMG
+    APPLICATIONS_ICON_PATH="/System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/ApplicationsFolderIcon.icns"
+    
+    if [ -f "$APPLICATIONS_ICON_PATH" ] && [ -L "$MOUNT_DIR/Applications" ]; then
+        # Ensure icon file exists in mounted volume
+        if [ ! -f "$MOUNT_DIR/.ApplicationsIcon.icns" ]; then
+            cp "$APPLICATIONS_ICON_PATH" "$MOUNT_DIR/.ApplicationsIcon.icns" 2>/dev/null || true
+        fi
+        
+        # Use osascript to set the icon for the Applications symlink
+        # Try multiple times to ensure it works
+        for i in 1 2 3; do
+            osascript <<APPLICON 2>/dev/null || true
+tell application "Finder"
+    try
+        set iconPath to POSIX file "$MOUNT_DIR/.ApplicationsIcon.icns"
+        set applicationsItem to item "Applications" of disk "$DMG_VOLUME_NAME"
+        set icon of applicationsItem to iconPath
+        delay 0.5
+    end try
+end tell
+APPLICON
+            sleep 0.5
+        done
+    fi
+    
+    # Set window properties and icon positions
+    osascript <<EOF 2>/dev/null || true
+tell application "Finder"
+    tell disk "$DMG_VOLUME_NAME"
+        open
+        set current view of container window to icon view
+        set toolbar visible of container window to false
+        set statusbar visible of container window to false
+        set bounds of container window to {400, 100, 1000, 550}
+        set viewOptions to the icon view options of container window
+        set arrangement of viewOptions to not arranged
+        set icon size of viewOptions to 72
+        -- Position icons: App on left, Applications on right, Instructions below
+        set position of item "$APP_BUNDLE" of container window to {180, 200}
+        set position of item "Applications" of container window to {380, 200}
+        try
+            set position of item "📖 安装说明.txt" of container window to {280, 320}
+        end try
+        -- Set background color (light gray)
+        set background picture of viewOptions to none
+        set background color of viewOptions to {65535, 65535, 65535}
+        close
+        open
+        update without registering applications
+        delay 2
+    end tell
+end tell
+EOF
+    
+    # Wait a bit for Finder to update
+    sleep 1
+fi
+
+# Unmount (with error handling - device may have auto-unmounted)
+if [ -n "$DEVICE" ]; then
+    hdiutil detach "$DEVICE" 2>/dev/null || true
+fi
+
+# Convert to compressed read-only DMG
+hdiutil convert "$DMG_TEMP" -format UDZO -imagekey zlib-level=9 -o "$DMG_NAME"
+
+# Clean up
+rm -rf "$DMG_TEMP_DIR"
+rm -f "$DMG_TEMP"
+
+echo "✅ DMG package created successfully!"
+echo "👉 DMG file: $(pwd)/$DMG_NAME"
+echo "📦 Users can drag $APP_NAME.app to Applications folder to install"
