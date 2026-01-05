@@ -150,20 +150,17 @@ cat > "$DMG_TEMP_DIR/.DS_Store" <<'EOF'
 EOF
 
 # Create installation instructions file
-cat > "$DMG_TEMP_DIR/📖 安装说明.txt" <<'INSTRUCTIONS'
+cat > "$DMG_TEMP_DIR/📖 Installation Instructions.txt" <<'INSTRUCTIONS'
 ╔══════════════════════════════════════════════════════════════╗
-║                    VeloxClip 安装说明                        ║
+║              VeloxClip Installation Instructions            ║
 ╚══════════════════════════════════════════════════════════════╝
 
-安装方法：
-
-  将左侧的 VeloxClip.app 拖拽到右侧的 Applications 文件夹
+Installation:
 
   Drag VeloxClip.app on the left to Applications folder on the right
 
 ──────────────────────────────────────────────────────────────
 
-安装完成后，您可以在应用程序文件夹中找到 VeloxClip。
 After installation, find VeloxClip in your Applications folder.
 
 INSTRUCTIONS
@@ -172,19 +169,13 @@ INSTRUCTIONS
 DMG_TEMP="${DMG_NAME}.temp.dmg"
 rm -f "$DMG_TEMP" "$DMG_NAME"
 
-# Calculate size needed (app size + sufficient overhead for DMG creation)
+# Calculate app size for display
 APP_SIZE=$(du -sk "$DMG_TEMP_DIR" | cut -f1)
-# Add 50% overhead for filesystem and temporary space (minimum 200MB for large apps)
-OVERHEAD=$((APP_SIZE / 2))
-if [ $OVERHEAD -lt 204800 ]; then
-    OVERHEAD=204800  # Minimum 200MB overhead
-fi
-DMG_SIZE=$((APP_SIZE + OVERHEAD))
-echo "📊 App size: $((APP_SIZE / 1024))MB, DMG size: $((DMG_SIZE / 1024))MB"
+echo "📊 App size: $((APP_SIZE / 1024))MB"
 
-# Create temporary DMG
+# Create temporary DMG (hdiutil will auto-calculate size from srcfolder)
 hdiutil create -srcfolder "$DMG_TEMP_DIR" -volname "$DMG_VOLUME_NAME" \
-    -fs HFS+ -fsargs "-c c=64,a=16,e=16" -format UDRW -size ${DMG_SIZE}k "$DMG_TEMP"
+    -fs HFS+ -fsargs "-c c=64,a=16,e=16" -format UDRW "$DMG_TEMP"
 
 # Mount the DMG
 MOUNT_DIR="/Volumes/$DMG_VOLUME_NAME"
@@ -239,7 +230,7 @@ tell application "Finder"
         set position of item "$APP_BUNDLE" of container window to {180, 200}
         set position of item "Applications" of container window to {380, 200}
         try
-            set position of item "📖 安装说明.txt" of container window to {280, 320}
+            set position of item "📖 Installation Instructions.txt" of container window to {280, 320}
         end try
         -- Set background color (light gray)
         set background picture of viewOptions to none
