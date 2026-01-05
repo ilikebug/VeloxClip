@@ -1,6 +1,6 @@
 # VeloxClip
 
-A powerful, AI-enhanced clipboard manager for macOS that helps you manage, search, and transform your clipboard history with intelligent features.
+A powerful, AI-enhanced clipboard manager for macOS that helps you manage, search, and transform your clipboard history with intelligent features. Includes built-in screenshot capture and professional image editing tools.
 
 ## ✨ Features
 
@@ -12,6 +12,7 @@ A powerful, AI-enhanced clipboard manager for macOS that helps you manage, searc
 - **Quick Paste**: Fast paste to previous application with customizable global shortcut
 - **Favorites System**: Mark important items as favorites for quick access
 - **Custom Tags**: Add custom tags to favorite items for better organization and search
+- **Single Instance**: Automatically prevents multiple instances from running simultaneously
 
 ### 🤖 AI-Powered Features
 - **OCR Text Recognition**: Automatically extracts text from images using Apple Vision framework
@@ -37,6 +38,18 @@ A powerful, AI-enhanced clipboard manager for macOS that helps you manage, searc
 - **Tag Management**: Easily add or remove tags from favorite items in the preview pane
 - **Smart History Limit**: Only non-favorite items count toward history limit, ensuring favorites are always preserved
 
+### 📸 Screenshot & Image Tools
+- **Area Screenshot**: Capture area screenshots using macOS native tool (default: F1)
+- **Paste Image**: Display floating image window from clipboard (default: F3)
+- **Image Editor**: Professional screenshot editing with multiple tools:
+  - **Drawing Tools**: Pen, Arrow, Rectangle, Circle, Line
+  - **Highlight Tool**: Semi-transparent highlighting for emphasis
+  - **Text Tool**: Add text annotations with customizable font size
+  - **Mosaic Tool**: Blur sensitive areas with mosaic effect
+  - **Eraser Tool**: Remove unwanted annotations
+- **Edit Workflow**: After taking a screenshot, access history and click "Edit" button on image items
+- **Save & Copy**: Save edited images or copy directly to clipboard
+
 ### 🎨 User Interface
 - **Spotlight-Style Overlay**: Beautiful, modern interface that appears over any application
 - **Markdown Rendering**: Rich Markdown support in preview pane
@@ -45,6 +58,7 @@ A powerful, AI-enhanced clipboard manager for macOS that helps you manage, searc
 - **View Switching**: Toggle between favorites and history with Tab key or star button
 - **Tag Editor**: Intuitive tag editing interface in preview pane for favorite items
 - **Customizable Shortcuts**: Set your preferred global hotkey (default: Cmd+Shift+V)
+- **Screenshot Shortcuts**: Customize screenshot and paste image shortcuts (defaults: F1, F3)
 
 ### 🔒 Privacy & Performance
 - **Cloud AI Processing**: AI features powered by OpenRouter API (free DeepSeek model available)
@@ -130,6 +144,19 @@ To enable AI features like summarization, translation, code explanation, and tex
 4. **Paste**: Press Enter to paste the selected item to the previous application
 5. **Preview**: View detailed content in the preview pane
 
+### Screenshot & Image Editing
+
+1. **Take Screenshot**: Press `F1` (or your custom shortcut) to capture area screenshot
+2. **View History**: After screenshot, clipboard history window opens automatically
+3. **Edit Image**: Click "Edit" button on any image item in the preview pane
+4. **Edit Tools**: 
+   - Select drawing tools (Pen, Arrow, Rectangle, Circle, Line, Highlight)
+   - Add text annotations with customizable size
+   - Apply mosaic effect to blur sensitive areas
+   - Use eraser to remove unwanted annotations
+5. **Save or Copy**: Save edited image to file or copy to clipboard
+6. **Paste Image**: Press `F3` (or your custom shortcut) to display floating image from clipboard
+
 ### Favorites & Tags
 
 1. **Add to Favorites**: Click the star icon in the preview pane to favorite an item
@@ -157,26 +184,32 @@ Access settings via:
 
 Configure:
 - History limit
-- Global shortcut
+- Global shortcut (default: Cmd+Shift+V)
+- Screenshot shortcut (default: F1)
+- Paste image shortcut (default: F3)
 - OpenRouter API Key (required for AI features)
 - AI response language
 - Launch at login
 
 ## 🎯 Use Cases
 
-- **Developers**: Quick access to code snippets, error messages, and terminal outputs. Tag code snippets by language or project
-- **Writers**: Manage quotes, references, and research snippets. Organize by topic with custom tags
-- **Designers**: Track color codes, image assets, and design notes. Tag by project or color palette
-- **Researchers**: Organize copied text, citations, and notes. Use tags to categorize by research topic
+- **Developers**: Quick access to code snippets, error messages, and terminal outputs. Tag code snippets by language or project. Capture and annotate screenshots of bugs or UI issues
+- **Writers**: Manage quotes, references, and research snippets. Organize by topic with custom tags. Capture and highlight important text from documents
+- **Designers**: Track color codes, image assets, and design notes. Tag by project or color palette. Edit screenshots with annotations and highlights
+- **Researchers**: Organize copied text, citations, and notes. Use tags to categorize by research topic. Capture and annotate research materials
 - **Multilingual Users**: Translate and manage content in multiple languages. Tag by language or translation status
-- **Project Managers**: Keep important information organized with favorites and custom tags for different projects
+- **Project Managers**: Keep important information organized with favorites and custom tags for different projects. Capture and annotate meeting notes or project screenshots
+- **Content Creators**: Capture screenshots, add annotations, and quickly paste images for social media or documentation
 
 ## 🔧 Configuration
 
-### Global Shortcut
-Default: `Cmd+Shift+V`
-- Customize in Preferences → General Settings
+### Global Shortcuts
+- **Toggle Window**: Default `Cmd+Shift+V`
+- **Area Screenshot**: Default `F1`
+- **Paste Image**: Default `F3`
+- Customize in Preferences → Shortcuts Settings
 - Supports modifier keys: Cmd, Shift, Option, Control
+- Supports function keys (F1-F12) without modifiers
 
 ### History Limit
 Default: 100 items
@@ -202,8 +235,15 @@ Choose from:
 VeloxClip/
 ├── VeloxClip/
 │   ├── App/              # Application entry point and window management
-│   ├── Models/            # Data models (ClipboardItem, AppSettings)
-│   ├── Services/          # Core services (AI, LLM, Clipboard monitoring)
+│   ├── Models/            # Data models (ClipboardItem, AppSettings, DatabaseManager)
+│   ├── Services/          # Core services
+│   │   ├── AI/            # AI services (AIService, LLMService)
+│   │   ├── ScreenshotEditor/  # Screenshot editing (EditorModels, EditorState, ScreenshotEditorService, ScreenshotEditorView)
+│   │   ├── ClipboardMonitor.swift
+│   │   ├── ScreenshotService.swift
+│   │   ├── PasteImageService.swift
+│   │   ├── ShortcutManager.swift
+│   │   └── ErrorHandler.swift
 │   ├── Views/             # SwiftUI views (MainView, PreviewView, Settings)
 │   └── Resources/         # App resources (icons, assets)
 ├── build_app.sh           # Build script
