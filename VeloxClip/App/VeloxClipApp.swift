@@ -45,6 +45,14 @@ struct VeloxClipApp: App {
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Check if another instance is already running
+        if isAnotherInstanceRunning() {
+            print("⚠️ Another instance of VeloxClip is already running. Activating it and quitting this instance.")
+            activateExistingInstance()
+            NSApplication.shared.terminate(nil)
+            return
+        }
+        
         // Hide dock icon if desired, or keep it. 
         // For a clipboard tool, usually we might hide it, but let's keep it consistent with the PRD.
         
@@ -53,6 +61,37 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         // Note: Window will be shown when user presses the shortcut or clicks menu item
         // Removed auto-show on launch to avoid interrupting user workflow
+    }
+    
+    private func isAnotherInstanceRunning() -> Bool {
+        let bundleIdentifier = Bundle.main.bundleIdentifier ?? "com.antigravity.veloxclip"
+        let runningApps = NSWorkspace.shared.runningApplications
+        
+        var instanceCount = 0
+        for app in runningApps {
+            if app.bundleIdentifier == bundleIdentifier {
+                // Don't count the current instance
+                if app.processIdentifier != ProcessInfo.processInfo.processIdentifier {
+                    instanceCount += 1
+                }
+            }
+        }
+        
+        return instanceCount > 0
+    }
+    
+    private func activateExistingInstance() {
+        let bundleIdentifier = Bundle.main.bundleIdentifier ?? "com.antigravity.veloxclip"
+        let runningApps = NSWorkspace.shared.runningApplications
+        
+        for app in runningApps {
+            if app.bundleIdentifier == bundleIdentifier &&
+               app.processIdentifier != ProcessInfo.processInfo.processIdentifier {
+                // Activate the existing instance
+                app.activate(options: [.activateIgnoringOtherApps])
+                break
+            }
+        }
     }
     
     func applicationWillTerminate(_ notification: Notification) {
