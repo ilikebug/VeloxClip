@@ -35,7 +35,6 @@ class ClipboardMonitor: ObservableObject {
         
         // Check blacklist
         if BlacklistManager.shared.shouldIgnore(bundleID: bundleID) {
-            print("Ignoring clipboard change from blacklisted app: \(sourceApp ?? "Unknown")")
             return
         }
         

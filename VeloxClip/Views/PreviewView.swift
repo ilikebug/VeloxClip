@@ -462,9 +462,6 @@ struct PreviewView: View {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
-        
-        // Show brief feedback
-        print("OCR text copied to clipboard")
     }
     
     private func copyTransformedText(_ text: String) {

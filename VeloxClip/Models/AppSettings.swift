@@ -42,12 +42,21 @@ class AppSettings: ObservableObject {
         }
     }
     
+    @Published var openRouterAPIKey: String {
+        didSet {
+            Task {
+                try? await dbManager.setSetting(key: "openRouterAPIKey", value: openRouterAPIKey)
+            }
+        }
+    }
+    
     private init() {
         // Initialize with default values first
         self.historyLimit = 100
         self.launchAtLogin = false
         self.globalShortcut = "cmd+shift+v"
         self.aiResponseLanguage = "Chinese"
+        self.openRouterAPIKey = ""
         
         // Load settings from database asynchronously
         Task {
@@ -103,6 +112,15 @@ class AppSettings: ObservableObject {
             }
         } else {
             try? await dbManager.setSetting(key: "aiResponseLanguage", value: "Chinese")
+        }
+        
+        // Load openRouterAPIKey
+        if let apiKey = await dbManager.getSetting(key: "openRouterAPIKey") {
+            await MainActor.run {
+                self.openRouterAPIKey = apiKey
+            }
+        } else {
+            try? await dbManager.setSetting(key: "openRouterAPIKey", value: "")
         }
     }
     

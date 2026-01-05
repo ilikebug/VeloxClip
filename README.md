@@ -47,7 +47,7 @@ A powerful, AI-enhanced clipboard manager for macOS that helps you manage, searc
 - **Customizable Shortcuts**: Set your preferred global hotkey (default: Cmd+Shift+V)
 
 ### 🔒 Privacy & Performance
-- **Local Processing**: All AI features run locally using on-device models
+- **Cloud AI Processing**: AI features powered by OpenRouter API (free DeepSeek model available)
 - **No Cloud Sync**: Your clipboard data stays on your Mac
 - **Efficient Caching**: Smart caching for embeddings and search results
 - **Memory Optimized**: Designed for performance with large clipboard histories
@@ -59,7 +59,7 @@ A powerful, AI-enhanced clipboard manager for macOS that helps you manage, searc
 - **AI/ML**: 
   - Apple Vision Framework (OCR)
   - Natural Language Framework (Embeddings, Language Detection)
-  - Local LLM via llama-cli (Qwen2.5 model)
+  - OpenRouter API (DeepSeek Chat model)
 - **Platform**: macOS 14.0+
 
 ## 📦 Installation
@@ -92,76 +92,33 @@ swift build -c release
 cp -R VeloxClip.app /Applications/
 ```
 
-### LLM Setup (Optional, for AI features)
+### AI Setup (Required for AI features)
 
-To enable AI features like summarization, translation, code explanation, and text polishing, you need to set up a local LLM:
+To enable AI features like summarization, translation, code explanation, and text polishing, you need to configure an OpenRouter API key:
 
-#### Step 1: Download llama-cli
+#### Step 1: Get OpenRouter API Key
 
-Download the `llama-cli` binary for macOS:
+1. Visit [OpenRouter.ai](https://openrouter.ai/)
+2. Sign up for a free account
+3. Go to [API Keys page](https://openrouter.ai/keys)
+4. Create a new API key
+5. Copy your API key
 
-- **For Apple Silicon (M1/M2/M3)**: Download from [llama-cli releases](https://github.com/ggerganov/llama.cpp/releases)
-  - Look for `llama-cli` or `llama-cli-macos-arm64` in the latest release
-  - Or build from source: [llama.cpp repository](https://github.com/ggerganov/llama.cpp)
+**Note**: OpenRouter offers free models including DeepSeek Chat, which is used by default in VeloxClip.
 
-- **For Intel Macs**: Download `llama-cli-macos-x64` from the releases page
+#### Step 2: Configure API Key in App
 
-#### Step 2: Download Qwen2.5 Model
-
-Download a compatible Qwen2.5 model in GGUF format:
-
-- **Recommended**: Qwen2.5-7B-Instruct-GGUF (around 4-5GB)
-- **Download sources**:
-  - [Hugging Face - Qwen2.5 Models](https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF)
-  - [TheBloke's Qwen2.5 Models](https://huggingface.co/TheBloke)
-  - Look for files ending in `.gguf` format
-
-**Model size recommendations**:
-- **7B model**: Good balance of quality and speed (~4-5GB)
-- **3B model**: Faster but lower quality (~2GB)
-- **14B+ model**: Higher quality but slower (~8GB+)
-
-#### Step 3: Place Files in LLM Directory
-
-1. Make sure the `LLM/` directory exists in the project root
-2. Copy the downloaded files:
-   ```bash
-   # Copy llama-cli binary
-   cp /path/to/llama-cli LLM/
-   
-   # Copy the model file (replace with your actual model filename)
-   cp /path/to/qwen2.5-7b-instruct.gguf LLM/
-   ```
-
-3. Make llama-cli executable:
-   ```bash
-   chmod +x LLM/llama-cli
-   ```
-
-#### Step 4: Verify Setup
-
-Your `LLM/` directory should contain:
-```
-LLM/
-├── llama-cli          # Executable binary
-├── qwen2.5-*.gguf     # Model file (name may vary)
-└── README.md          # This file
-```
-
-#### Step 5: Build App with LLM Resources
-
-When you run `./build_app.sh`, the LLM files will be automatically copied into the app bundle:
-```bash
-./build_app.sh
-```
-
-The app will automatically detect and use these resources when available. If LLM files are not found, the app will still work but AI features (summarization, translation, etc.) will be unavailable.
+1. Launch VeloxClip
+2. Open Settings (Menu bar icon → Preferences, or press `Cmd+,`)
+3. Go to "AI Settings" section
+4. Paste your OpenRouter API Key in the "OpenRouter API Key" field
+5. The API key will be saved automatically
 
 #### Troubleshooting
 
-- **Permission denied**: Make sure `llama-cli` is executable (`chmod +x LLM/llama-cli`)
-- **Model not found**: Check that the model file is in `.gguf` format and placed in `LLM/` directory
-- **AI features not working**: Verify the model file name matches what the app expects, or check the console logs for errors
+- **AI features not working**: Make sure you've entered a valid API key in Settings
+- **API Key error**: Verify your API key is correct and has sufficient credits/quota
+- **Rate limit exceeded**: You may have hit the rate limit, try again later
 
 ## 🚀 Usage
 
@@ -201,6 +158,7 @@ Access settings via:
 Configure:
 - History limit
 - Global shortcut
+- OpenRouter API Key (required for AI features)
 - AI response language
 - Launch at login
 
@@ -248,7 +206,6 @@ VeloxClip/
 │   ├── Services/          # Core services (AI, LLM, Clipboard monitoring)
 │   ├── Views/             # SwiftUI views (MainView, PreviewView, Settings)
 │   └── Resources/         # App resources (icons, assets)
-├── LLM/                   # LLM model files (optional)
 ├── build_app.sh           # Build script
 ├── generate_icon.sh       # Icon generation script
 └── Package.swift          # Swift package configuration
@@ -272,7 +229,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 - Built with SwiftUI and Apple's native frameworks
 - Uses Apple Vision Framework for OCR
-- Local LLM powered by llama-cli and Qwen2.5 model
+- AI features powered by OpenRouter API (DeepSeek Chat model)
 
 ## 📧 Support
 

@@ -30,7 +30,6 @@ class ShortcutManager {
     
     private func registerShortcut(_ shortcutString: String) {
         guard let (keyCode, modifiers) = parseShortcut(shortcutString) else {
-            print("Failed to parse shortcut: \(shortcutString), using default Cmd+Shift+V")
             // Fallback to default
             registerDefaultShortcut()
             return
@@ -67,9 +66,7 @@ class ShortcutManager {
         
         if status == noErr {
             hotKeyRef = ref
-            print("Global shortcut \(shortcutString) registered successfully.")
         } else {
-            print("Failed to register shortcut: \(shortcutString), error: \(status)")
             // Fallback to default
             registerDefaultShortcut()
         }
@@ -136,7 +133,6 @@ class ShortcutManager {
         
         // Convert character to key code
         guard let keyCode = stringToKeyCode(keyChar) else {
-            print("Unknown key: \(keyChar)")
             return nil
         }
         

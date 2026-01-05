@@ -9,22 +9,31 @@ BUILD_PATH=".build"
 
 echo "🚀 Building $APP_NAME in $BUILD_CONFIG mode..."
 
+# Get absolute paths to avoid permission issues
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ABS_BUILD_PATH="$PROJECT_ROOT/$BUILD_PATH"
+
 # Set build path to avoid permission issues with system cache
-export SWIFT_PACKAGE_BUILD_PATH="$BUILD_PATH"
+export SWIFT_PACKAGE_BUILD_PATH="$ABS_BUILD_PATH"
 # Disable user-level cache to avoid permission issues
 export SWIFTPM_DISABLE_CACHE=1
+# Redirect Clang module cache to build directory to avoid permission issues
+export CLANG_MODULE_CACHE_PATH="$ABS_BUILD_PATH/clang-module-cache"
+mkdir -p "$CLANG_MODULE_CACHE_PATH"
+# Note: TMPDIR is not set to avoid sandbox-exec issues with Swift compiler
+# The compiler will use system temp directory, but module cache is redirected to avoid permission issues
 
 # Clean build directory if needed (optional, comment out if you want incremental builds)
 # echo "🧹 Cleaning build directory..."
-# rm -rf "$BUILD_PATH"
+# rm -rf "$ABS_BUILD_PATH"
 
 # 1. Build the project with explicit build path
 echo "📦 Building Swift package..."
-swift build -c $BUILD_CONFIG --product $EXECUTABLE_NAME --build-path "$BUILD_PATH" 2>&1
+swift build -c $BUILD_CONFIG --product $EXECUTABLE_NAME --build-path "$ABS_BUILD_PATH" 2>&1
 BUILD_STATUS=$?
 
 # Check if executable was created (warnings are OK, but we need the binary)
-if [ ! -f "$BUILD_PATH/$BUILD_CONFIG/$EXECUTABLE_NAME" ]; then
+if [ ! -f "$ABS_BUILD_PATH/$BUILD_CONFIG/$EXECUTABLE_NAME" ]; then
     if [ $BUILD_STATUS -ne 0 ]; then
         echo "❌ Build failed with exit code $BUILD_STATUS!"
         exit 1
@@ -49,20 +58,14 @@ mkdir -p "$MACOS_DIR"
 mkdir -p "$RESOURCES_DIR"
 
 # 3. Copy Executable
-BINARY_PATH="$BUILD_PATH/$BUILD_CONFIG/$EXECUTABLE_NAME"
+BINARY_PATH="$ABS_BUILD_PATH/$BUILD_CONFIG/$EXECUTABLE_NAME"
 if [ ! -f "$BINARY_PATH" ]; then
     echo "❌ Executable not found at $BINARY_PATH"
     exit 1
 fi
 cp "$BINARY_PATH" "$MACOS_DIR/"
 
-# 3.1 Copy LLM Resources (if they exist)
-if [ -d "LLM" ]; then
-    echo "🧠 Copying LLM/AI model resources..."
-    cp -R LLM/* "$RESOURCES_DIR/" 2>/dev/null || true
-fi
-
-# 3.2 Copy App Icon (if it exists)
+# 3.1 Copy App Icon (if it exists)
 if [ -f "VeloxClip/Resources/AppIcon.icns" ]; then
     echo "🎨 Copying app icon..."
     cp "VeloxClip/Resources/AppIcon.icns" "$RESOURCES_DIR/"
@@ -169,9 +172,15 @@ INSTRUCTIONS
 DMG_TEMP="${DMG_NAME}.temp.dmg"
 rm -f "$DMG_TEMP" "$DMG_NAME"
 
-# Calculate size needed (app size + 50MB overhead)
+# Calculate size needed (app size + sufficient overhead for DMG creation)
 APP_SIZE=$(du -sk "$DMG_TEMP_DIR" | cut -f1)
-DMG_SIZE=$((APP_SIZE + 51200)) # Add 50MB overhead
+# Add 50% overhead for filesystem and temporary space (minimum 200MB for large apps)
+OVERHEAD=$((APP_SIZE / 2))
+if [ $OVERHEAD -lt 204800 ]; then
+    OVERHEAD=204800  # Minimum 200MB overhead
+fi
+DMG_SIZE=$((APP_SIZE + OVERHEAD))
+echo "📊 App size: $((APP_SIZE / 1024))MB, DMG size: $((DMG_SIZE / 1024))MB"
 
 # Create temporary DMG
 hdiutil create -srcfolder "$DMG_TEMP_DIR" -volname "$DMG_VOLUME_NAME" \

@@ -131,8 +131,6 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
             vUp.postToPid(pid)
         }
-        
-        print("Injected paste event to PID: \(pid) (\(app.localizedName ?? "Unknown"))")
     }
     
     private func copyToClipboard(_ item: ClipboardItem) {

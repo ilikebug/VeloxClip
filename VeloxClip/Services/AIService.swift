@@ -50,16 +50,9 @@ class AIService {
                 }
                 
                 guard let observations = request.results as? [VNRecognizedTextObservation] else {
-                    #if DEBUG
-                    print("OCR: No text detected")
-                    #endif
                     completion(nil)
                     return
                 }
-                
-                #if DEBUG
-                print("OCR: Detected \(observations.count) text regions")
-                #endif
                 
                 let recognizedText = observations.compactMap { observation -> String? in
                     // Get multiple candidates to improve accuracy (especially for punctuation)
@@ -100,19 +93,8 @@ class AIService {
                         }
                     }
                     
-                    #if DEBUG
-                    print("OCR recognized text (confidence: \(bestScore)): \(bestText)")
-                    #endif
                     return bestText
                 }.joined(separator: "\n")
-                
-                #if DEBUG
-                if recognizedText.isEmpty {
-                    print("OCR: Recognition result is empty")
-                } else {
-                    print("OCR final result: \(recognizedText)")
-                }
-                #endif
                 
                 completion(recognizedText.isEmpty ? nil : recognizedText)
             }

@@ -39,6 +39,9 @@ struct GeneralSettingsView: View {
             }
             
             Section("AI Settings") {
+                SecureField("OpenRouter API Key", text: $settings.openRouterAPIKey)
+                    .help("Get your free API key from https://openrouter.ai/keys")
+                
                 Picker("AI Response Language", selection: $settings.aiResponseLanguage) {
                     Text("Chinese (中文)").tag("Chinese")
                     Text("English").tag("English")
