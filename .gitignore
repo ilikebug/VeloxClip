@@ -17,6 +17,7 @@ Package.resolved
 # Compiled binaries
 *.app/
 VeloxClip.app/
+VeloxClip.dmg
 
 
 # User-specific files
