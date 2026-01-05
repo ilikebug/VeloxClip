@@ -8,7 +8,7 @@ class LLMService: ObservableObject {
     
     // OpenRouter API Configuration
     private let openRouterURL = URL(string: "https://openrouter.ai/api/v1/chat/completions")!
-    private let modelName = "deepseek/deepseek-chat" // Free DeepSeek model
+    private let modelName = "tngtech/deepseek-r1t2-chimera:free" // Free DeepSeek model
     
     func performAction(_ action: AIAction, content: String) async throws -> String {
         // Check if API key is configured
@@ -21,13 +21,13 @@ class LLMService: ObservableObject {
         let responseLanguage = AppSettings.shared.aiResponseLanguage
         let instruction: String
         switch action {
-        case .summarize:
+        case .summarize: 
             instruction = generateSummarizeInstruction(for: responseLanguage)
-        case .translate:
+        case .translate: 
             instruction = generateTranslateInstruction(for: responseLanguage)
-        case .explainCode:
+        case .explainCode: 
             instruction = generateExplainCodeInstruction(for: responseLanguage)
-        case .polish:
+        case .polish: 
             // Detect language and generate appropriate prompt
             let detectedLanguage = detectLanguage(content)
             instruction = generatePolishInstruction(for: detectedLanguage)
@@ -113,14 +113,14 @@ class LLMService: ObservableObject {
             // Clean up output - remove markdown code fences if present
             if output.hasPrefix("```") {
                 let lines = output.components(separatedBy: .newlines)
-                var cleanedLines: [String] = []
+                            var cleanedLines: [String] = []
                 var skipCodeFence = true
                 
                 for line in lines {
                     if skipCodeFence && line.hasPrefix("```") {
                         skipCodeFence = false
-                        continue
-                    }
+                                    continue
+                                }
                     if !skipCodeFence {
                         cleanedLines.append(line)
                     }
