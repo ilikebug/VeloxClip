@@ -31,14 +31,16 @@ class ScreenshotEditorService {
         
         let hostingController = NSHostingController(rootView: contentView)
         
-        // Calculate window size
+        // Calculate window size - larger window for better editing experience
         let imageSize = image.size
-        let maxWidth: CGFloat = 1200
-        let maxHeight: CGFloat = 800
+        let maxWidth: CGFloat = 1600  // Increased from 1200
+        let maxHeight: CGFloat = 1000  // Increased from 800
+        let minWidth: CGFloat = 1200   // Minimum width to show all tools
+        let minHeight: CGFloat = 800   // Minimum height to show all tools
         let scale = min(1.0, min(maxWidth / imageSize.width, maxHeight / imageSize.height))
         let windowSize = NSSize(
-            width: min(imageSize.width * scale, maxWidth) + 100,
-            height: min(imageSize.height * scale, maxHeight) + 150
+            width: max(minWidth, min(imageSize.width * scale, maxWidth) + 120),  // Ensure minimum width
+            height: max(minHeight, min(imageSize.height * scale, maxHeight) + 180)  // Ensure minimum height
         )
         
         // Create window with default frame (will center it after)
@@ -51,8 +53,8 @@ class ScreenshotEditorService {
         
         window.contentView = hostingController.view
         window.title = "Screenshot Editor"
-        window.backgroundColor = .black
-        window.level = .floating
+        window.backgroundColor = NSColor(white: 0.95, alpha: 1.0)  // Light gray background
+        window.level = .normal  // Changed from .floating to allow save dialog on top
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.isReleasedWhenClosed = false
         
@@ -90,6 +92,10 @@ class ScreenshotEditorService {
     }
     
     private func saveImage(_ image: NSImage) {
+        // Temporarily lower window level to allow save dialog on top
+        let originalLevel = editorWindow?.level
+        editorWindow?.level = .normal
+        
         let savePanel = NSSavePanel()
         savePanel.allowedContentTypes = [.png, .jpeg]
         
@@ -100,17 +106,42 @@ class ScreenshotEditorService {
         savePanel.nameFieldStringValue = "Screenshot \(timestamp)"
         savePanel.canCreateDirectories = true
         
-        savePanel.begin { response in
-            if response == .OK, let url = savePanel.url {
-                if let tiffData = image.tiffRepresentation,
-                   let bitmapImage = NSBitmapImageRep(data: tiffData) {
-                    let pngData = bitmapImage.representation(using: .png, properties: [:])
-                    do {
-                        try pngData?.write(to: url)
-                        print("✅ Image saved to: \(url.path)")
-                    } catch {
-                        print("❌ Failed to save image: \(error)")
-                        ErrorHandler.shared.handle(error)
+        // Use beginSheetModal to ensure it appears above the editor window
+        if let window = editorWindow {
+            savePanel.beginSheetModal(for: window) { response in
+                // Restore original window level after dialog closes
+                if let originalLevel = originalLevel {
+                    self.editorWindow?.level = originalLevel
+                }
+                
+                if response == .OK, let url = savePanel.url {
+                    if let tiffData = image.tiffRepresentation,
+                       let bitmapImage = NSBitmapImageRep(data: tiffData) {
+                        let pngData = bitmapImage.representation(using: .png, properties: [:])
+                        do {
+                            try pngData?.write(to: url)
+                            print("✅ Image saved to: \(url.path)")
+                        } catch {
+                            print("❌ Failed to save image: \(error)")
+                            ErrorHandler.shared.handle(error)
+                        }
+                    }
+                }
+            }
+        } else {
+            // Fallback if window is nil
+            savePanel.begin { response in
+                if response == .OK, let url = savePanel.url {
+                    if let tiffData = image.tiffRepresentation,
+                       let bitmapImage = NSBitmapImageRep(data: tiffData) {
+                        let pngData = bitmapImage.representation(using: .png, properties: [:])
+                        do {
+                            try pngData?.write(to: url)
+                            print("✅ Image saved to: \(url.path)")
+                        } catch {
+                            print("❌ Failed to save image: \(error)")
+                            ErrorHandler.shared.handle(error)
+                        }
                     }
                 }
             }

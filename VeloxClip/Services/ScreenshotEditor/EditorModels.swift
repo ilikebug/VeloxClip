@@ -10,6 +10,9 @@ enum EditorTool: String, CaseIterable, Identifiable {
     case circle = "Circle"
     case line = "Line"
     case highlight = "Highlight"
+    case text = "Text"
+    case mosaic = "Mosaic"
+    case eraser = "Eraser"
     
     var id: String { rawValue }
     
@@ -21,6 +24,9 @@ enum EditorTool: String, CaseIterable, Identifiable {
         case .circle: return "circle"
         case .line: return "line.diagonal"
         case .highlight: return "highlighter"
+        case .text: return "text.bubble"
+        case .mosaic: return "square.grid.3x3"
+        case .eraser: return "eraser"
         }
     }
 }
@@ -33,6 +39,9 @@ enum DrawingElementType {
     case circle
     case line
     case highlight
+    case text
+    case mosaic
+    case eraser
 }
 
 // Drawing element model
@@ -45,6 +54,9 @@ struct DrawingElement: Identifiable, Equatable {
     let opacity: Double
     let startPoint: CGPoint
     let endPoint: CGPoint
+    var text: String?
+    var fontSize: CGFloat?
+    var rect: CGRect? // For mosaic
     
     init(
         id: UUID = UUID(),
@@ -54,7 +66,10 @@ struct DrawingElement: Identifiable, Equatable {
         lineWidth: CGFloat,
         opacity: Double = 1.0,
         startPoint: CGPoint,
-        endPoint: CGPoint
+        endPoint: CGPoint,
+        text: String? = nil,
+        fontSize: CGFloat? = nil,
+        rect: CGRect? = nil
     ) {
         self.id = id
         self.type = type
@@ -64,6 +79,9 @@ struct DrawingElement: Identifiable, Equatable {
         self.opacity = opacity
         self.startPoint = startPoint
         self.endPoint = endPoint
+        self.text = text
+        self.fontSize = fontSize
+        self.rect = rect
     }
     
     static func == (lhs: DrawingElement, rhs: DrawingElement) -> Bool {

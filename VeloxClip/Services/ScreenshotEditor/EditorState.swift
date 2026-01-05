@@ -23,6 +23,11 @@ class EditorState: ObservableObject {
     // For pen tool - track all points
     @Published var penPoints: [CGPoint] = []
     
+    // For text tool
+    @Published var textInput: String = ""
+    @Published var textPosition: CGPoint?
+    @Published var fontSize: CGFloat = 16.0  // Default font size
+    
     // Save state snapshot for undo
     func saveState() {
         undoStack.append(elements)
@@ -98,6 +103,37 @@ class EditorState: ObservableObject {
         guard isDrawing else { return }
         isDrawing = false
         
+        // Handle text tool separately
+        if currentTool == .text {
+            guard !textInput.isEmpty, let textPos = textPosition else {
+                textInput = ""
+                textPosition = nil
+                return
+            }
+            
+            // Create a path for text (just a point)
+            let path = CGMutablePath()
+            path.move(to: textPos)
+            
+            let element = DrawingElement(
+                type: .text,
+                path: path,
+                color: currentColor,
+                lineWidth: lineWidth,
+                opacity: opacity,
+                startPoint: textPos,
+                endPoint: textPos,
+                text: textInput,
+                fontSize: fontSize,
+                rect: nil
+            )
+            
+            addElement(element)
+            textInput = ""
+            textPosition = nil
+            return
+        }
+        
         guard let path = currentPath else {
             penPoints.removeAll()
             return
@@ -111,6 +147,19 @@ class EditorState: ObservableObject {
         case .circle: elementType = .circle
         case .line: elementType = .line
         case .highlight: elementType = .highlight
+        case .mosaic: elementType = .mosaic
+        case .eraser: elementType = .eraser
+        case .text: return // Already handled above
+        }
+        
+        var rect: CGRect? = nil
+        if currentTool == .mosaic {
+            rect = CGRect(
+                x: min(startPoint.x, endPoint.x),
+                y: min(startPoint.y, endPoint.y),
+                width: abs(endPoint.x - startPoint.x),
+                height: abs(endPoint.y - startPoint.y)
+            )
         }
         
         let element = DrawingElement(
@@ -120,7 +169,10 @@ class EditorState: ObservableObject {
             lineWidth: lineWidth,
             opacity: currentTool == .highlight ? 0.5 : opacity,
             startPoint: startPoint,
-            endPoint: endPoint
+            endPoint: endPoint,
+            text: nil,
+            fontSize: nil,
+            rect: rect
         )
         
         addElement(element)
@@ -202,9 +254,46 @@ class EditorState: ObservableObject {
                 height: abs(end.y - start.y)
             )
             path.addRect(rect)
+            
+        case .mosaic:
+            let rect = CGRect(
+                x: min(start.x, end.x),
+                y: min(start.y, end.y),
+                width: abs(end.x - start.x),
+                height: abs(end.y - start.y)
+            )
+            path.addRect(rect)
+            
+        case .eraser:
+            // Eraser uses pen-like path
+            path.move(to: start)
+            path.addLine(to: end)
+            
+        case .text:
+            // This is handled separately
+            break
         }
         
         return path
+    }
+    
+    // Remove elements that intersect with eraser path
+    func eraseElements(at point: CGPoint, radius: CGFloat) {
+        saveState()
+        let eraseRect = CGRect(
+            x: point.x - radius,
+            y: point.y - radius,
+            width: radius * 2,
+            height: radius * 2
+        )
+        
+        elements.removeAll { element in
+            if let elementRect = element.rect {
+                return eraseRect.intersects(elementRect)
+            }
+            // For path-based elements, check if start or end point is in erase area
+            return eraseRect.contains(element.startPoint) || eraseRect.contains(element.endPoint)
+        }
     }
 }
 
