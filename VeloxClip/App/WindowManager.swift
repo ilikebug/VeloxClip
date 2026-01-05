@@ -54,9 +54,20 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
             self.window = win
         }
         
-        window?.center()
-        window?.makeKeyAndOrderFront(nil)
+        // Activate app first to ensure it can receive focus
         NSApp.activate(ignoringOtherApps: true)
+        
+        // Center window before showing
+        window?.center()
+        
+        // Show window and make it key window
+        window?.makeKeyAndOrderFront(nil)
+        
+        // Ensure window becomes key window (for keyboard input)
+        // Use a small delay to ensure activation completes
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            self.window?.makeKey()
+        }
     }
     
     func windowDidResignKey(_ notification: Notification) {

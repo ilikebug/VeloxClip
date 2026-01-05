@@ -241,6 +241,19 @@ actor DatabaseManager {
         return nil
     }
     
+    func settingExists(key: String) async -> Bool {
+        await ensureInitialized()
+        guard let db = db else { return false }
+        
+        do {
+            let query = appSettings.filter(self.key == key)
+            return try db.pluck(query) != nil
+        } catch {
+            print("Failed to check if setting \(key) exists: \(error)")
+            return false
+        }
+    }
+    
     func setSetting(key: String, value: String) async throws {
         await ensureInitialized()
         guard let db = db else { throw DatabaseError.connectionFailed }

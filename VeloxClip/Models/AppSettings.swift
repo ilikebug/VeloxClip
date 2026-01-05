@@ -167,20 +167,28 @@ class AppSettings: ObservableObject {
         }
         
         // Load openRouterAPIKey
-        if let apiKey = await dbManager.getSetting(key: "openRouterAPIKey") {
-            await MainActor.run {
-                self.openRouterAPIKey = apiKey
-                print("✅ Loaded OpenRouter API Key from database (length: \(apiKey.count))")
+        // Use a separate method to check if key exists (not just if it has a value)
+        let apiKeyExists = await dbManager.settingExists(key: "openRouterAPIKey")
+        
+        if apiKeyExists {
+            // Key exists in database, load its value (even if empty)
+            if let apiKey = await dbManager.getSetting(key: "openRouterAPIKey") {
+                await MainActor.run {
+                    self.openRouterAPIKey = apiKey
+                    if apiKey.isEmpty {
+                        print("⚠️ Loaded OpenRouter API Key from database but it's empty (length: 0)")
+                    } else {
+                        print("✅ Loaded OpenRouter API Key from database (length: \(apiKey.count))")
+                    }
+                }
+            } else {
+                print("⚠️ OpenRouter API Key exists in database but failed to read value")
             }
         } else {
-            // Only initialize empty string if it doesn't exist in database
-            // Don't overwrite if user has already set a value
-            let currentValue = await MainActor.run { self.openRouterAPIKey }
-            if currentValue.isEmpty {
-                // Only initialize if still empty (user hasn't set it yet)
-                try? await dbManager.setSetting(key: "openRouterAPIKey", value: "")
-                print("ℹ️ OpenRouter API Key not found in database, initialized as empty")
-            }
+            // Key doesn't exist in database, don't write empty string
+            // Just keep the default empty string in memory
+            // This prevents overwriting a valid key if database read fails
+            print("ℹ️ OpenRouter API Key not found in database, keeping default empty value (not writing to DB)")
         }
     }
     
