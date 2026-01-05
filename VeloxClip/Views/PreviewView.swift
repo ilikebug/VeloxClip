@@ -144,6 +144,23 @@ struct PreviewView: View {
                         .buttonStyle(.borderedProminent)
                         .tint(.accentColor)
                         
+                        // Edit button for images
+                        // Edit the original image from clipboard, not the displayed/scaled version
+                        if item.type == "image", item.data != nil {
+                            Button(action: {
+                                // Get original image data from item - this is the raw clipboard data
+                                if let imageData = item.data,
+                                   let nsImage = NSImage(data: imageData) {
+                                    // Use the original image data directly, not any scaled/resized version
+                                    ScreenshotEditorService.shared.showEditor(with: nsImage)
+                                }
+                            }) {
+                                Label("Edit", systemImage: "pencil")
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(.blue)
+                        }
+                        
                         Menu {
                             Section("AI Assistant") {
                                 if let content = item.content {
