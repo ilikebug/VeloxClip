@@ -73,8 +73,11 @@ class ShortcutRecorderView: NSView {
                 let modifiers = event.modifierFlags
                 let keyCode = event.keyCode
                 
-                // Require at least one modifier key
-                guard modifiers.contains(.command) || modifiers.contains(.shift) || modifiers.contains(.option) || modifiers.contains(.control) else {
+                // Allow function keys (F1-F12) without modifiers, or require at least one modifier for other keys
+                let isFunctionKey = self.isFunctionKey(keyCode)
+                let hasModifier = modifiers.contains(.command) || modifiers.contains(.shift) || modifiers.contains(.option) || modifiers.contains(.control)
+                
+                guard isFunctionKey || hasModifier else {
                     // If ESC pressed without modifiers, cancel
                     if keyCode == 53 { // ESC
                         self.cancelRecording()
@@ -89,8 +92,7 @@ class ShortcutRecorderView: NSView {
                 self.updateButton()
                 self.stopMonitoring()
                 
-                // Re-register shortcut
-                ShortcutManager.shared.updateShortcut(shortcutString)
+                // The binding will trigger onChange in SettingsView to update the shortcut
                 
                 return nil // Consume the event
             } else if event.type == .flagsChanged {
@@ -143,7 +145,18 @@ class ShortcutRecorderView: NSView {
             parts.append(keyChar.lowercased())
         }
         
+        // If no modifiers, return just the key (for function keys)
+        if parts.count == 1 {
+            return parts[0]
+        }
+        
         return parts.joined(separator: "+")
+    }
+    
+    private func isFunctionKey(_ keyCode: UInt16) -> Bool {
+        // Function keys F1-F12 key codes
+        let functionKeyCodes: Set<UInt16> = [122, 120, 99, 118, 96, 97, 98, 100, 101, 109, 103, 111]
+        return functionKeyCodes.contains(keyCode)
     }
     
     private func keyCodeToString(_ keyCode: UInt16) -> String? {
@@ -155,7 +168,11 @@ class ShortcutRecorderView: NSView {
             38: "j", 40: "k", 45: "n", 46: "m", 36: "return", 48: "tab",
             49: "space", 51: "delete", 53: "escape", 123: "left", 124: "right",
             125: "down", 126: "up", 27: "[", 30: "]", 33: "\\", 39: "'",
-            41: ";", 42: "\\", 43: ",", 44: "/", 47: ".", 50: "`"
+            41: ";", 42: "\\", 43: ",", 44: "/", 47: ".", 50: "`",
+            // Function keys F1-F12
+            122: "f1", 120: "f2", 99: "f3", 118: "f4",
+            96: "f5", 97: "f6", 98: "f7", 100: "f8",
+            101: "f9", 109: "f10", 103: "f11", 111: "f12"
         ]
         
         return keyMap[keyCode]

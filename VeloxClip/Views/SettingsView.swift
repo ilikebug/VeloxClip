@@ -23,6 +23,18 @@ struct SettingsView: View {
 struct GeneralSettingsView: View {
     @ObservedObject var settings = AppSettings.shared
     
+    // Helper function to explicitly save API key
+    private func saveAPIKey(_ apiKey: String) {
+        Task {
+            do {
+                try await DatabaseManager.shared.setSetting(key: "openRouterAPIKey", value: apiKey)
+                print("✅ OpenRouter API Key explicitly saved (length: \(apiKey.count))")
+            } catch {
+                print("❌ Failed to explicitly save OpenRouter API Key: \(error)")
+            }
+        }
+    }
+    
     var body: some View {
         Form {
             Section {
@@ -39,8 +51,29 @@ struct GeneralSettingsView: View {
             }
             
             Section("AI Settings") {
-                SecureField("OpenRouter API Key", text: $settings.openRouterAPIKey)
-                    .help("Get your free API key from https://openrouter.ai/keys")
+                HStack {
+                    SecureField("OpenRouter API Key", text: $settings.openRouterAPIKey)
+                        .help("Get your free API key from https://openrouter.ai/keys")
+                        .onSubmit {
+                            // Explicitly save when user presses Enter
+                            saveAPIKey(settings.openRouterAPIKey)
+                        }
+                        .onChange(of: settings.openRouterAPIKey) { newValue in
+                            // Save immediately when changed
+                            print("🔑 OpenRouter API Key changed, length: \(newValue.count)")
+                            saveAPIKey(newValue)
+                        }
+                    
+                    // Save button for explicit save
+                    Button(action: {
+                        saveAPIKey(settings.openRouterAPIKey)
+                    }) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Save API Key")
+                }
                 
                 Picker("AI Response Language", selection: $settings.aiResponseLanguage) {
                     Text("Chinese (中文)").tag("Chinese")
@@ -82,11 +115,41 @@ struct ShortcutsSettingsView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
+            
+            Section {
+                HStack {
+                    Text("Area Screenshot")
+                    Spacer()
+                    ShortcutRecorder(shortcut: $settings.screenshotShortcut)
+                        .frame(width: 200, height: 24)
+                }
+                Text("Capture area screenshot (default: F1)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            Section {
+                HStack {
+                    Text("Paste Image")
+                    Spacer()
+                    ShortcutRecorder(shortcut: $settings.pasteImageShortcut)
+                        .frame(width: 200, height: 24)
+                }
+                Text("Show floating image from clipboard (default: F3)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
         }
         .padding()
         .formStyle(.grouped)
         .onChange(of: settings.globalShortcut) { newValue in
             ShortcutManager.shared.updateShortcut(newValue)
+        }
+        .onChange(of: settings.screenshotShortcut) { newValue in
+            ShortcutManager.shared.updateScreenshotShortcut(newValue)
+        }
+        .onChange(of: settings.pasteImageShortcut) { newValue in
+            ShortcutManager.shared.updatePasteImageShortcut(newValue)
         }
     }
 }

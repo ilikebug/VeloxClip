@@ -5,111 +5,147 @@ import Carbon
 class ShortcutManager {
     static let shared = ShortcutManager()
     
-    private var hotKeyRef: EventHotKeyRef?
+    // Store multiple hotkey references by ID
+    private var hotKeyRefs: [UInt32: EventHotKeyRef] = [:]
     private var eventHandler: EventHandlerRef?
+    
+    // Hotkey IDs
+    private let windowToggleID: UInt32 = 1
+    private let screenshotID: UInt32 = 2
+    private let pasteImageID: UInt32 = 3
     
     // Note: As a singleton, this object is never deallocated during app lifetime
     // Resources are automatically cleaned up by the system when the app terminates
     
+    func registerAllShortcuts() {
+        registerGlobalShortcut()
+        registerScreenshotShortcut()
+        registerPasteImageShortcut()
+    }
+    
     func registerGlobalShortcut() {
         let shortcutString = AppSettings.shared.globalShortcut
-        registerShortcut(shortcutString)
+        registerShortcut(shortcutString, id: windowToggleID, action: {
+            WindowManager.shared.toggleWindow()
+        })
+    }
+    
+    func registerScreenshotShortcut() {
+        let shortcutString = AppSettings.shared.screenshotShortcut
+        registerShortcut(shortcutString, id: screenshotID, action: {
+            ScreenshotService.shared.captureArea()
+        })
+    }
+    
+    func registerPasteImageShortcut() {
+        let shortcutString = AppSettings.shared.pasteImageShortcut
+        registerShortcut(shortcutString, id: pasteImageID, action: {
+            PasteImageService.shared.showPasteImage()
+        })
     }
     
     func updateShortcut(_ shortcutString: String) {
-        unregisterShortcut()
-        registerShortcut(shortcutString)
+        unregisterShortcut(id: windowToggleID)
+        registerShortcut(shortcutString, id: windowToggleID, action: {
+            WindowManager.shared.toggleWindow()
+        })
     }
     
-    private func unregisterShortcut() {
-        if let ref = hotKeyRef {
+    func updateScreenshotShortcut(_ shortcutString: String) {
+        unregisterShortcut(id: screenshotID)
+        registerShortcut(shortcutString, id: screenshotID, action: {
+            ScreenshotService.shared.captureArea()
+        })
+    }
+    
+    func updatePasteImageShortcut(_ shortcutString: String) {
+        unregisterShortcut(id: pasteImageID)
+        registerShortcut(shortcutString, id: pasteImageID, action: {
+            PasteImageService.shared.showPasteImage()
+        })
+    }
+    
+    private func unregisterShortcut(id: UInt32) {
+        if let ref = hotKeyRefs[id] {
             UnregisterEventHotKey(ref)
-            hotKeyRef = nil
+            hotKeyRefs.removeValue(forKey: id)
         }
     }
     
-    private func registerShortcut(_ shortcutString: String) {
-        guard let (keyCode, modifiers) = parseShortcut(shortcutString) else {
-            // Fallback to default
-            registerDefaultShortcut()
-            return
+    private func registerShortcut(_ shortcutString: String, id: UInt32, action: @escaping () -> Void) {
+        // Parse shortcut string
+        let (keyCode, modifiers): (UInt32, UInt32)
+        
+        if let parsed = parseShortcut(shortcutString) {
+            keyCode = parsed.0
+            modifiers = parsed.1
+        } else {
+            // Fallback: if parsing fails, try to handle function keys without modifiers
+            if let funcKeyCode = parseFunctionKey(shortcutString) {
+                keyCode = funcKeyCode
+                modifiers = 0 // Function keys can be used without modifiers
+            } else {
+                print("Failed to parse shortcut: \(shortcutString)")
+                return
+            }
         }
         
+        // Setup event handler if not already set
+        if eventHandler == nil {
+            var eventType = EventTypeSpec()
+            eventType.eventClass = OSType(kEventClassKeyboard)
+            eventType.eventKind = UInt32(kEventHotKeyPressed)
+            
+            var handler: EventHandlerRef?
+            InstallEventHandler(GetApplicationEventTarget(), { (nextHandler, theEvent, userData) -> OSStatus in
+                var hotKeyID = EventHotKeyID()
+                let err = GetEventParameter(
+                    theEvent,
+                    EventParamName(kEventParamDirectObject),
+                    EventParamType(typeEventHotKeyID),
+                    nil,
+                    MemoryLayout<EventHotKeyID>.size,
+                    nil,
+                    &hotKeyID
+                )
+                
+                if err == noErr {
+                    DispatchQueue.main.async {
+                        if hotKeyID.id == 1 {
+                            WindowManager.shared.toggleWindow()
+                        } else if hotKeyID.id == 2 {
+                            ScreenshotService.shared.captureArea()
+                        } else if hotKeyID.id == 3 {
+                            PasteImageService.shared.showPasteImage()
+                        }
+                    }
+                }
+                return noErr
+            }, 1, &eventType, nil, &handler)
+            
+            eventHandler = handler
+        }
+        
+        // Register the hotkey
         var hotKeyID = EventHotKeyID()
         hotKeyID.signature = OSType(0x564c5843) // 'VLXC'
-        hotKeyID.id = 1
-        
-        var eventType = EventTypeSpec()
-        eventType.eventClass = OSType(kEventClassKeyboard)
-        eventType.eventKind = UInt32(kEventHotKeyPressed)
-        
-        // Remove old handler if exists
-        if let oldHandler = eventHandler {
-            RemoveEventHandler(oldHandler)
-            eventHandler = nil
-        }
-        
-        var handler: EventHandlerRef?
-        // Pass nil as userData since the callback doesn't use it
-        // This avoids potential memory management issues with passUnretained
-        InstallEventHandler(GetApplicationEventTarget(), { (nextHandler, theEvent, userData) -> OSStatus in
-            DispatchQueue.main.async {
-                WindowManager.shared.toggleWindow()
-            }
-            return noErr
-        }, 1, &eventType, nil, &handler)
-        
-        eventHandler = handler
+        hotKeyID.id = id
         
         var ref: EventHotKeyRef?
         let status = RegisterEventHotKey(keyCode, modifiers, hotKeyID, GetApplicationEventTarget(), 0, &ref)
         
         if status == noErr {
-            hotKeyRef = ref
+            hotKeyRefs[id] = ref
         } else {
-            // Fallback to default
-            registerDefaultShortcut()
+            print("Failed to register hotkey \(id) with shortcut \(shortcutString), status: \(status)")
         }
-    }
-    
-    private func registerDefaultShortcut() {
-        let modifiers = UInt32(cmdKey | shiftKey)
-        let keyCode = UInt32(9) // V key code is 9
-        
-        var hotKeyID = EventHotKeyID()
-        hotKeyID.signature = OSType(0x564c5843)
-        hotKeyID.id = 1
-        
-        var eventType = EventTypeSpec()
-        eventType.eventClass = OSType(kEventClassKeyboard)
-        eventType.eventKind = UInt32(kEventHotKeyPressed)
-        
-        // Remove old handler if exists
-        if let oldHandler = eventHandler {
-            RemoveEventHandler(oldHandler)
-            eventHandler = nil
-        }
-        
-        var handler: EventHandlerRef?
-        // Pass nil as userData since the callback doesn't use it
-        InstallEventHandler(GetApplicationEventTarget(), { (nextHandler, theEvent, userData) -> OSStatus in
-            DispatchQueue.main.async {
-                WindowManager.shared.toggleWindow()
-            }
-            return noErr
-        }, 1, &eventType, nil, &handler)
-        
-        eventHandler = handler
-        
-        var ref: EventHotKeyRef?
-        RegisterEventHotKey(keyCode, modifiers, hotKeyID, GetApplicationEventTarget(), 0, &ref)
-        hotKeyRef = ref
     }
     
     private func parseShortcut(_ shortcutString: String) -> (UInt32, UInt32)? {
         let parts = shortcutString.lowercased().components(separatedBy: "+").map { $0.trimmingCharacters(in: .whitespaces) }
         
-        guard parts.count >= 2 else { return nil } // Need at least modifier + key
+        // Allow single key (for function keys) or modifier + key
+        guard !parts.isEmpty else { return nil }
         
         var modifiers: UInt32 = 0
         var keyChar: String = ""
@@ -129,7 +165,7 @@ class ShortcutManager {
             }
         }
         
-        guard !keyChar.isEmpty, modifiers != 0 else { return nil }
+        guard !keyChar.isEmpty else { return nil }
         
         // Convert character to key code
         guard let keyCode = stringToKeyCode(keyChar) else {
@@ -137,6 +173,20 @@ class ShortcutManager {
         }
         
         return (UInt32(keyCode), modifiers)
+    }
+    
+    // Parse function keys (F1-F12) without modifiers
+    private func parseFunctionKey(_ shortcutString: String) -> UInt32? {
+        let lowercased = shortcutString.lowercased().trimmingCharacters(in: .whitespaces)
+        
+        // Function keys F1-F12
+        let functionKeyMap: [String: UInt32] = [
+            "f1": 122, "f2": 120, "f3": 99, "f4": 118,
+            "f5": 96, "f6": 97, "f7": 98, "f8": 100,
+            "f9": 101, "f10": 109, "f11": 103, "f12": 111
+        ]
+        
+        return functionKeyMap[lowercased]
     }
     
     private func stringToKeyCode(_ key: String) -> UInt16? {
@@ -148,7 +198,11 @@ class ShortcutManager {
             "tab": 48, "space": 49, "delete": 51, "backspace": 51,
             "escape": 53, "esc": 53, "left": 123, "right": 124,
             "down": 125, "up": 126, "[": 27, "]": 30, "\\": 33,
-            "'": 39, "\"": 39, ";": 41, ",": 43, "/": 44, ".": 47, "`": 50
+            "'": 39, "\"": 39, ";": 41, ",": 43, "/": 44, ".": 47, "`": 50,
+            // Function keys F1-F12
+            "f1": 122, "f2": 120, "f3": 99, "f4": 118,
+            "f5": 96, "f6": 97, "f7": 98, "f8": 100,
+            "f9": 101, "f10": 109, "f11": 103, "f12": 111
         ]
         
         return keyMap[key.lowercased()]

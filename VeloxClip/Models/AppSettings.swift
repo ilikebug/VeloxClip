@@ -34,6 +34,22 @@ class AppSettings: ObservableObject {
         }
     }
     
+    @Published var screenshotShortcut: String {
+        didSet {
+            Task {
+                try? await dbManager.setSetting(key: "screenshotShortcut", value: screenshotShortcut)
+            }
+        }
+    }
+    
+    @Published var pasteImageShortcut: String {
+        didSet {
+            Task {
+                try? await dbManager.setSetting(key: "pasteImageShortcut", value: pasteImageShortcut)
+            }
+        }
+    }
+    
     @Published var aiResponseLanguage: String {
         didSet {
             Task {
@@ -44,23 +60,41 @@ class AppSettings: ObservableObject {
     
     @Published var openRouterAPIKey: String {
         didSet {
+            // Only save if not initializing (avoid saving empty string on init)
+            guard !isInitializing else { return }
+            
+            // Save immediately when changed
             Task {
-                try? await dbManager.setSetting(key: "openRouterAPIKey", value: openRouterAPIKey)
+                do {
+                    try await dbManager.setSetting(key: "openRouterAPIKey", value: openRouterAPIKey)
+                    print("✅ OpenRouter API Key saved successfully (length: \(openRouterAPIKey.count))")
+                } catch {
+                    print("❌ Failed to save OpenRouter API Key: \(error)")
+                    ErrorHandler.shared.handle(error)
+                }
             }
         }
     }
+    
+    private var isInitializing = true
     
     private init() {
         // Initialize with default values first
         self.historyLimit = 100
         self.launchAtLogin = false
         self.globalShortcut = "cmd+shift+v"
+        self.screenshotShortcut = "f1"
+        self.pasteImageShortcut = "f3"
         self.aiResponseLanguage = "Chinese"
         self.openRouterAPIKey = ""
         
         // Load settings from database asynchronously
         Task {
             await loadSettings()
+            // Mark initialization complete after loading
+            await MainActor.run {
+                self.isInitializing = false
+            }
         }
         
         // Sync state with system on launch
@@ -105,6 +139,24 @@ class AppSettings: ObservableObject {
             try? await dbManager.setSetting(key: "globalShortcut", value: "cmd+shift+v")
         }
         
+        // Load screenshotShortcut
+        if let shortcut = await dbManager.getSetting(key: "screenshotShortcut") {
+            await MainActor.run {
+                self.screenshotShortcut = shortcut
+            }
+        } else {
+            try? await dbManager.setSetting(key: "screenshotShortcut", value: "f1")
+        }
+        
+        // Load pasteImageShortcut
+        if let shortcut = await dbManager.getSetting(key: "pasteImageShortcut") {
+            await MainActor.run {
+                self.pasteImageShortcut = shortcut
+            }
+        } else {
+            try? await dbManager.setSetting(key: "pasteImageShortcut", value: "f3")
+        }
+        
         // Load aiResponseLanguage
         if let language = await dbManager.getSetting(key: "aiResponseLanguage") {
             await MainActor.run {
@@ -118,9 +170,17 @@ class AppSettings: ObservableObject {
         if let apiKey = await dbManager.getSetting(key: "openRouterAPIKey") {
             await MainActor.run {
                 self.openRouterAPIKey = apiKey
+                print("✅ Loaded OpenRouter API Key from database (length: \(apiKey.count))")
             }
         } else {
-            try? await dbManager.setSetting(key: "openRouterAPIKey", value: "")
+            // Only initialize empty string if it doesn't exist in database
+            // Don't overwrite if user has already set a value
+            let currentValue = await MainActor.run { self.openRouterAPIKey }
+            if currentValue.isEmpty {
+                // Only initialize if still empty (user hasn't set it yet)
+                try? await dbManager.setSetting(key: "openRouterAPIKey", value: "")
+                print("ℹ️ OpenRouter API Key not found in database, initialized as empty")
+            }
         }
     }
     

@@ -113,14 +113,14 @@ class LLMService: ObservableObject {
             // Clean up output - remove markdown code fences if present
             if output.hasPrefix("```") {
                 let lines = output.components(separatedBy: .newlines)
-                            var cleanedLines: [String] = []
+                var cleanedLines: [String] = []
                 var skipCodeFence = true
                 
                 for line in lines {
                     if skipCodeFence && line.hasPrefix("```") {
                         skipCodeFence = false
-                                    continue
-                                }
+                        continue
+                    }
                     if !skipCodeFence {
                         cleanedLines.append(line)
                     }

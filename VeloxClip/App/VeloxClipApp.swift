@@ -21,6 +21,12 @@ struct VeloxClipApp: App {
             }
             .keyboardShortcut("v", modifiers: [.command, .shift])
             
+            Button("Paste Image") {
+                PasteImageService.shared.showPasteImage()
+            }
+            
+            Divider()
+            
             Button("Preferences...") {
                 openWindow(id: "settings")
                 NSApp.activate(ignoringOtherApps: true)
@@ -42,10 +48,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Hide dock icon if desired, or keep it. 
         // For a clipboard tool, usually we might hide it, but let's keep it consistent with the PRD.
         
-        // Register global shortcut
-        ShortcutManager.shared.registerGlobalShortcut()
+        // Register all global shortcuts
+        ShortcutManager.shared.registerAllShortcuts()
         
         // Note: Window will be shown when user presses the shortcut or clicks menu item
         // Removed auto-show on launch to avoid interrupting user workflow
+    }
+    
+    func applicationWillTerminate(_ notification: Notification) {
+        // Ensure API Key is saved before app terminates
+        Task {
+            let apiKey = await MainActor.run { AppSettings.shared.openRouterAPIKey }
+            if !apiKey.isEmpty {
+                do {
+                    try await DatabaseManager.shared.setSetting(key: "openRouterAPIKey", value: apiKey)
+                    print("✅ OpenRouter API Key saved on app termination")
+                } catch {
+                    print("❌ Failed to save OpenRouter API Key on termination: \(error)")
+                }
+            }
+        }
     }
 }
