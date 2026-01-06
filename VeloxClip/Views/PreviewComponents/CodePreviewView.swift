@@ -80,10 +80,10 @@ struct CodePreviewView: View {
             Toggle("Line Numbers", isOn: $showLineNumbers).toggleStyle(.switch).controlSize(.small)
             
             HStack(spacing: 8) {
-                Button(action: { fontSize = max(10, fontSize - 1) }) { Image(systemName: "textformat.size.smaller") }
+                Button(action: { fontSize = max(10, fontSize - 1) }) { Image(systemName: "minus") }
                 .buttonStyle(.plain)
                 Text("\(Int(fontSize))pt").font(.caption).foregroundColor(.secondary).frame(width: 40)
-                Button(action: { fontSize = min(20, fontSize + 1) }) { Image(systemName: "textformat.size.larger") }
+                Button(action: { fontSize = min(20, fontSize + 1) }) { Image(systemName: "plus") }
                 .buttonStyle(.plain)
             }
             
