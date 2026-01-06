@@ -1,4 +1,5 @@
 import SwiftUI
+import Foundation
 
 struct PreviewView: View {
     let item: ClipboardItem?
@@ -242,7 +243,7 @@ struct PreviewView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .onChange(of: item) { newItem in
+        .onChange(of: item) { _, newItem in
             // Reset editing state when switching items
             if newItem?.id != item?.id {
                 isEditingTags = false
@@ -251,6 +252,11 @@ struct PreviewView: View {
             
             // Cancel previous debounce task
             debounceTask?.cancel()
+            
+            // Auto-add content type tag
+            if let newItem = newItem {
+                autoAddContentTypeTag(for: newItem)
+            }
             
             // For small content, update immediately
             if let newItem = newItem,
@@ -268,9 +274,9 @@ struct PreviewView: View {
                 }
             }
         }
-        .onChange(of: currentItem) { newItem in
+        .onChange(of: currentItem) { oldValue, newValue in
             // Update debounced item when favorite status changes
-            if let newItem = newItem, debouncedItem?.id == newItem.id {
+            if let newItem = newValue, debouncedItem?.id == newItem.id {
                 debouncedItem = newItem
             }
         }
@@ -283,97 +289,249 @@ struct PreviewView: View {
     @ViewBuilder
     private func previewContent(for item: ClipboardItem) -> some View {
         if item.type == "image", let data = item.data {
-            VStack(alignment: .leading, spacing: 12) {
-                // Lazy load and scale down large images
-                if let nsImage = NSImage(data: data) {
-                    let maxDimension: CGFloat = 800
-                    let scaledImage = resizeImage(nsImage, maxDimension: maxDimension)
-                    Image(nsImage: scaledImage)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxHeight: 500)
-                } else {
-                    Text("Unable to load image")
-                        .foregroundColor(.secondary)
-                }
-                
-                // OCR Text Section - Show if OCR text exists
-                if let ocrText = item.content, !ocrText.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Image(systemName: "text.viewfinder")
-                                .foregroundColor(.blue)
-                            Text("OCR Recognized Text")
-                                .font(.headline)
-                            Spacer()
-                            Button(action: {
-                                copyOCRText(ocrText)
-                            }) {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "doc.on.doc")
-                                    Text("Copy Text")
-                                }
-                                .font(.caption.bold())
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(DesignSystem.primaryGradient)
-                                .foregroundColor(.white)
-                                .cornerRadius(8)
+            ImagePreviewView(imageData: data)
+            
+            // OCR Text Section - Show if OCR text exists
+            if let ocrText = item.content, !ocrText.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Image(systemName: "text.viewfinder")
+                            .foregroundColor(.blue)
+                        Text("OCR Recognized Text")
+                            .font(.headline)
+                        Spacer()
+                        Button(action: {
+                            copyOCRText(ocrText)
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "doc.on.doc")
+                                Text("Copy Text")
                             }
-                            .buttonStyle(.plain)
+                            .font(.caption.bold())
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(DesignSystem.primaryGradient)
+                            .foregroundColor(.white)
+                            .cornerRadius(8)
                         }
-                        
-                        ScrollView {
-                            Text(ocrText)
-                                .font(.system(.body, design: .monospaced))
-                                .textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(12)
-                                .background(Color.secondary.opacity(0.1))
-                                .cornerRadius(8)
-                        }
-                        .frame(maxHeight: 200)
+                        .buttonStyle(.plain)
                     }
-                    .padding(.top, 8)
+                    
+                    ScrollView {
+                        Text(ocrText)
+                            .font(.system(.body, design: .monospaced))
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(12)
+                            .background(Color.secondary.opacity(0.1))
+                            .cornerRadius(8)
+                    }
+                    .frame(maxHeight: 200)
                 }
+                .padding(.top, 8)
             }
         } else if item.type == "color", let content = item.content {
-            VStack {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(hex: content) ?? .clear)
-                    .frame(height: 200)
-                Text(content)
-                    .font(.system(.title, design: .monospaced))
-            }
+            ColorPreviewView(colorString: content)
+        } else if item.type == "file", let content = item.content {
+            FilePreviewView(filePath: content)
         } else if let content = item.content {
-            // More aggressive truncation for better performance
-            let maxChars = 5000
-            let displayContent = content.count > maxChars ? String(content.prefix(maxChars)) : content
+            // Detect content type and show appropriate preview
+            // Priority order: URL > JSON > Table > DateTime > Code > LongText > Markdown > Plain
+            // URL should be checked first to avoid false positives from JSON/Table detection
             
-            VStack(alignment: .leading, spacing: 8) {
-                // Detect if content looks like Markdown and render it
-                if isMarkdown(content) {
-                    MarkdownView(markdown: displayContent)
-                        .textSelection(.enabled)
+            Group {
+                if isURL(content) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        typeIndicator("URL")
+                        URLPreviewView(urlString: content)
+                    }
+                } else if isJSON(content) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        typeIndicator("JSON")
+                        JSONPreviewView(jsonString: content)
+                    }
+                } else if isTableData(content) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        typeIndicator("Table")
+                        TablePreviewView(content: content)
+                    }
+                } else if isDateTime(content) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        typeIndicator("DateTime")
+                        DateTimePreviewView(dateString: content)
+                    }
+                } else if isCode(content) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        typeIndicator("Code")
+                        CodePreviewView(code: content)
+                    }
+                } else if isLongText(content) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        typeIndicator("LongText")
+                        TextSummaryView(text: content)
+                    }
+                } else if isMarkdown(content) {
+                    let maxChars = 5000
+                    let displayContent = content.count > maxChars ? String(content.prefix(maxChars)) : content
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        typeIndicator("Markdown")
+                        MarkdownView(markdown: displayContent)
+                            .textSelection(.enabled)
+                        
+                        if content.count > maxChars {
+                            Text("... (\(content.count - maxChars) more characters)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .italic()
+                                .padding(.top, 4)
+                        }
+                    }
                 } else {
                     // Plain text fallback
-                    Text(displayContent)
-                        .font(.body)
-                        .textSelection(.enabled)
-                        .lineLimit(nil)
-                }
-                
-                if content.count > maxChars {
-                    Text("... (\(content.count - maxChars) more characters)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .italic()
-                        .padding(.top, 4)
+                    let maxChars = 5000
+                    let displayContent = content.count > maxChars ? String(content.prefix(maxChars)) : content
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(displayContent)
+                            .font(.body)
+                            .textSelection(.enabled)
+                            .lineLimit(nil)
+                        
+                        if content.count > maxChars {
+                            Text("... (\(content.count - maxChars) more characters)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .italic()
+                                .padding(.top, 4)
+                        }
+                    }
                 }
             }
         } else {
             Text("Preview not available for this type.")
                 .foregroundColor(.secondary)
+        }
+    }
+    
+    // Content type detection helpers
+    private func isJSON(_ content: String) -> Bool {
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count > 2 else { return false }
+        
+        // Check if starts with { or [ and ends with } or ]
+        let startsWithBrace = trimmed.first == "{" || trimmed.first == "["
+        let endsWithBrace = trimmed.last == "}" || trimmed.last == "]"
+        
+        guard startsWithBrace && endsWithBrace else { return false }
+        
+        // Try to parse as JSON to verify
+        guard let data = trimmed.data(using: .utf8) else { return false }
+        return (try? JSONSerialization.jsonObject(with: data)) != nil
+    }
+    
+    private func isURL(_ content: String) -> Bool {
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Must be a single line and start with http/https/ftp/file
+        // Also check if it's a valid URL format
+        guard trimmed.components(separatedBy: .newlines).count == 1 else { return false }
+        
+        // Check for URL prefixes
+        let hasURLPrefix = trimmed.hasPrefix("http://") || trimmed.hasPrefix("https://") ||
+                          trimmed.hasPrefix("ftp://") || trimmed.hasPrefix("file://")
+        
+        if hasURLPrefix {
+            // Verify it's a valid URL
+            return URL(string: trimmed) != nil
+        }
+        
+        return false
+    }
+    
+    private func isCode(_ content: String) -> Bool {
+        // Check for common code patterns - need multiple indicators to avoid false positives
+        let codeIndicators = [
+            "func ", "class ", "def ", "import ", "const ", "let ", "var ",
+            "function ", "=>", "->", "public ", "private ", "#include",
+            "<?php", "<script", "SELECT ", "FROM ", "WHERE ", "namespace ",
+            "interface ", "extends ", "implements ", "async ", "await "
+        ]
+        
+        let matchCount = codeIndicators.filter { content.contains($0) }.count
+        // Need at least 2 indicators to be considered code
+        return matchCount >= 2
+    }
+    
+    private func isTableData(_ content: String) -> Bool {
+        // Check if content looks like CSV/TSV
+        let lines = content.components(separatedBy: .newlines)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        
+        guard lines.count >= 2 else { return false }
+        
+        // Check first few lines for consistent delimiter usage
+        let firstLine = lines[0]
+        let commaCount = firstLine.components(separatedBy: ",").count
+        let tabCount = firstLine.components(separatedBy: "\t").count
+        let pipeCount = firstLine.components(separatedBy: "|").count
+        
+        // Need at least 2 columns
+        guard commaCount >= 2 || tabCount >= 2 || pipeCount >= 2 else { return false }
+        
+        // Check if at least 2 lines have similar structure
+        let delimiter = commaCount >= 2 ? "," : (tabCount >= 2 ? "\t" : "|")
+        let expectedColumns = delimiter == "," ? commaCount : (delimiter == "\t" ? tabCount : pipeCount)
+        
+        let consistentLines = lines.prefix(5).filter { line in
+            let count = line.components(separatedBy: delimiter).count
+            return count == expectedColumns || abs(count - expectedColumns) <= 1
+        }
+        
+        return consistentLines.count >= 2
+    }
+    
+    private func isDateTime(_ content: String) -> Bool {
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Must be relatively short (date/time strings are usually short)
+        guard trimmed.count < 100 else { return false }
+        
+        // Check for common date/time patterns
+        let patterns = [
+            #"^\d{4}-\d{2}-\d{2}$"#,                    // YYYY-MM-DD
+            #"^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}"#,       // YYYY-MM-DD HH:MM
+            #"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}"#,         // ISO format
+            #"^\d{2}/\d{2}/\d{4}$"#,                    // MM/DD/YYYY
+            #"^\d{10}$"#,                                // Unix timestamp (seconds)
+            #"^\d{13}$"#                                 // Unix timestamp (milliseconds)
+        ]
+        
+        for pattern in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: []),
+               regex.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)) != nil {
+                return true
+            }
+        }
+        return false
+    }
+    
+    private func isLongText(_ content: String) -> Bool {
+        // Long text: more than 500 characters and multiple paragraphs
+        return content.count > 500 && content.components(separatedBy: "\n\n")
+            .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.count > 2
+    }
+    
+    // Debug helper to show detected type
+    @ViewBuilder
+    private func typeIndicator(_ type: String) -> some View {
+        HStack {
+            Text("Preview Type: \(type)")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.secondary.opacity(0.1))
+                .cornerRadius(4)
+            Spacer()
         }
     }
     
@@ -625,7 +783,7 @@ struct PreviewView: View {
                                     .foregroundColor(.accentColor)
                             }
                             .buttonStyle(.plain)
-                            .disabled(newTagText.trimmingCharacters(in: .whitespaces).isEmpty)
+                            .disabled(newTagText.trimmingCharacters(in: CharacterSet.whitespaces).isEmpty)
                         }
                     }
                 }
@@ -637,7 +795,7 @@ struct PreviewView: View {
     }
     
     private func addTag(from item: ClipboardItem) {
-        let trimmedTag = newTagText.trimmingCharacters(in: .whitespaces)
+        let trimmedTag = newTagText.trimmingCharacters(in: CharacterSet.whitespaces)
         guard !trimmedTag.isEmpty else { return }
         
         var updatedTags = item.tags
@@ -653,6 +811,54 @@ struct PreviewView: View {
         var updatedTags = item.tags
         updatedTags.removeAll(where: { $0 == tag })
         store.updateTags(id: item.id, tags: updatedTags)
+    }
+    
+    // Auto-add content type tag based on detected content type
+    private func autoAddContentTypeTag(for item: ClipboardItem) {
+        var detectedTag: String? = nil
+        
+        // Check item type first
+        switch item.type.lowercased() {
+        case "image":
+            detectedTag = "image"
+        case "file":
+            detectedTag = "file"
+        case "color":
+            detectedTag = "color"
+        default:
+            // Detect content type for text items
+            if let content = item.content {
+                if isURL(content) {
+                    detectedTag = "url"
+                } else if isJSON(content) {
+                    detectedTag = "json"
+                } else if isTableData(content) {
+                    detectedTag = "table"
+                } else if isDateTime(content) {
+                    detectedTag = "datetime"
+                } else if isCode(content) {
+                    detectedTag = "code"
+                } else if isMarkdown(content) {
+                    detectedTag = "markdown"
+                } else if isLongText(content) {
+                    detectedTag = "longtext"
+                }
+            }
+        }
+        
+        // Add tag if detected and not already present
+        if let tag = detectedTag {
+            var updatedTags = item.tags
+            let lowercasedTag = tag.lowercased()
+            
+            // Check if tag already exists (case-insensitive)
+            let tagExists = updatedTags.contains { $0.lowercased() == lowercasedTag }
+            
+            if !tagExists {
+                updatedTags.append(tag)
+                store.updateTags(id: item.id, tags: updatedTags)
+            }
+        }
     }
     
     // Detect if content looks like Markdown
