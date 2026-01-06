@@ -289,14 +289,11 @@ struct StatItem: View {
     
     var body: some View {
         VStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.title3)
-                .foregroundColor(.blue)
             Text(value)
                 .font(.headline)
             Text(label)
                 .font(.caption2)
-                .foregroundColor(.secondary)
+                .foregroundColor(.blue)
         }
     }
 }

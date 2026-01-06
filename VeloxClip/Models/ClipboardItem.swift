@@ -40,9 +40,21 @@ extension ClipboardItem {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         
-        if type == "image", let d = data {
-            pasteboard.setData(d, forType: .tiff)
-            pasteboard.setData(d, forType: .png)
+        if type == "image", let d = data, let nsImage = NSImage(data: d) {
+            // Convert to TIFF format
+            if let tiffData = nsImage.tiffRepresentation {
+                pasteboard.setData(tiffData, forType: .tiff)
+            }
+            
+            // Convert to PNG format
+            if let tiffData = nsImage.tiffRepresentation,
+               let bitmapRep = NSBitmapImageRep(data: tiffData),
+               let pngData = bitmapRep.representation(using: .png, properties: [:]) {
+                pasteboard.setData(pngData, forType: .png)
+            }
+            
+            // Also set as NSImage for better compatibility
+            pasteboard.writeObjects([nsImage])
             return
         }
         

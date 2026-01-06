@@ -37,8 +37,8 @@ actor ContentDetectionService {
         if isTableData(content) { return .table }
         if isDateTime(content) { return .datetime }
         if isCode(content) { return .code }
-        if isLongText(content) { return .longtext }
         if isMarkdown(content) { return .markdown }
+        if isLongText(content) { return .longtext }
         
         return .plain
     }
@@ -79,7 +79,36 @@ actor ContentDetectionService {
     }
     
     private func isMarkdown(_ content: String) -> Bool {
-        return content.contains("# ") || content.contains("**") || content.contains("](")
+        // Check for markdown headers (must be at start of line)
+        let lines = content.components(separatedBy: .newlines)
+        let hasHeader = lines.contains { line in
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            return trimmed.hasPrefix("# ") || trimmed.hasPrefix("## ") || 
+                   trimmed.hasPrefix("### ") || trimmed.hasPrefix("#### ") ||
+                   trimmed.hasPrefix("##### ") || trimmed.hasPrefix("###### ")
+        }
+        
+        // Check for other markdown indicators
+        let hasBold = content.contains("**") && content.components(separatedBy: "**").count > 2
+        let hasLinks = content.contains("](") || content.contains("![")
+        let hasCodeBlock = content.contains("```")
+        let hasBlockquote = lines.contains { $0.trimmingCharacters(in: .whitespaces).hasPrefix(">") }
+        let hasList = lines.contains { line in
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("- ") || trimmed.hasPrefix("* ") || trimmed.hasPrefix("+ ") {
+                return true
+            }
+            // Check for numbered list (1. 2. etc.)
+            if trimmed.range(of: #"^\d+\.\s"#, options: .regularExpression) != nil {
+                return true
+            }
+            return false
+        }
+        let hasTable = content.contains("|") && lines.filter { $0.contains("|") }.count >= 2
+        
+        // Markdown if it has header, or multiple other indicators
+        let indicatorCount = [hasBold, hasLinks, hasCodeBlock, hasBlockquote, hasList, hasTable].filter { $0 }.count
+        return hasHeader || indicatorCount >= 2
     }
     
     func clearCache() {
