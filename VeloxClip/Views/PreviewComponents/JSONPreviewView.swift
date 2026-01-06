@@ -64,22 +64,29 @@ struct JSONPreviewView: View {
     
     private func contentArea(availableWidth: CGFloat) -> some View {
         ScrollView([.horizontal, .vertical], showsIndicators: true) {
-            VStack(alignment: .leading, spacing: 0) {
+            Group {
                 if isLoading {
                     loadingSpinner
                 } else if isValidJSON {
                     switch viewMode {
-                    case .formatted: formattedView
-                    case .minified: minifiedView
-                    case .tree: treeView
+                    case .formatted: 
+                        formattedView
+                            .fixedSize(horizontal: true, vertical: false)
+                            .frame(minWidth: availableWidth, alignment: .leading)
+                    case .minified: 
+                        minifiedView
+                            .fixedSize(horizontal: true, vertical: false)
+                            .frame(minWidth: availableWidth, alignment: .leading)
+                    case .tree: 
+                        treeView
+                            .frame(width: availableWidth, alignment: .leading)
                     }
                 } else {
                     errorView
+                        .frame(width: availableWidth, alignment: .leading)
                 }
             }
             .padding(.vertical, 12)
-            .fixedSize(horizontal: true, vertical: false)
-            .frame(minWidth: availableWidth, alignment: .leading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.white)
