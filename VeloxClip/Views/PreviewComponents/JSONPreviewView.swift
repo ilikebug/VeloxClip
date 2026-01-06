@@ -16,11 +16,19 @@ struct JSONPreviewView: View {
         case tree
     }
     
+    @State private var isLoading = true
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Toolbar
             HStack {
-                if isValidJSON {
+                if isLoading {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                    Text("Validating...")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                } else if isValidJSON {
                     HStack(spacing: 4) {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundColor(.green)
@@ -41,26 +49,37 @@ struct JSONPreviewView: View {
                 
                 Spacer()
                 
-                Picker("View", selection: $viewMode) {
-                    Text("Formatted").tag(ViewMode.formatted)
-                    Text("Minified").tag(ViewMode.minified)
-                    Text("Tree").tag(ViewMode.tree)
+                if !isLoading {
+                    Picker("View", selection: $viewMode) {
+                        Text("Formatted").tag(ViewMode.formatted)
+                        Text("Minified").tag(ViewMode.minified)
+                        Text("Tree").tag(ViewMode.tree)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 200)
+                    
+                    Button(action: copyJSON) {
+                        Label("Copy", systemImage: "doc.on.doc")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
                 }
-                .pickerStyle(.segmented)
-                .frame(width: 200)
-                
-                Button(action: copyJSON) {
-                    Label("Copy", systemImage: "doc.on.doc")
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
             }
             .padding(.bottom, 8)
             
             // JSON content
             ScrollView(.horizontal, showsIndicators: true) {
                 ScrollView(.vertical, showsIndicators: true) {
-                    if isValidJSON {
+                    if isLoading {
+                        VStack(spacing: 8) {
+                            ProgressView()
+                            Text("Loading JSON preview...")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 40)
+                    } else if isValidJSON {
                         switch viewMode {
                         case .formatted:
                             formattedView
@@ -78,8 +97,8 @@ struct JSONPreviewView: View {
             .background(Color(white: 0.95))
             .cornerRadius(8)
         }
-        .onAppear {
-            validateAndFormat()
+        .task {
+            await validateAndFormatAsync()
         }
     }
     
@@ -143,29 +162,46 @@ struct JSONPreviewView: View {
         return minified
     }
     
-    private func validateAndFormat() {
-        guard let data = jsonString.data(using: .utf8) else {
-            isValidJSON = false
-            validationError = "Invalid UTF-8 encoding"
-            return
-        }
+    private func validateAndFormatAsync() async {
+        isLoading = true
         
-        do {
-            let jsonObject = try JSONSerialization.jsonObject(with: data)
-            let formattedData = try JSONSerialization.data(withJSONObject: jsonObject, options: [.prettyPrinted, .sortedKeys])
-            
-            if let formatted = String(data: formattedData, encoding: .utf8) {
-                formattedJSON = formatted
-                isValidJSON = true
-                validationError = nil
-            } else {
-                isValidJSON = false
-                validationError = "Failed to format JSON"
+        // Perform heavy JSON parsing on background thread
+        await Task.detached(priority: .userInitiated) { @Sendable () async -> Void in
+            guard let data = jsonString.data(using: .utf8) else {
+                await MainActor.run {
+                    isValidJSON = false
+                    validationError = "Invalid UTF-8 encoding"
+                    isLoading = false
+                }
+                return
             }
-        } catch {
-            isValidJSON = false
-            validationError = error.localizedDescription
-        }
+            
+            do {
+                let jsonObject = try JSONSerialization.jsonObject(with: data)
+                let formattedData = try JSONSerialization.data(withJSONObject: jsonObject, options: [.prettyPrinted, .sortedKeys])
+                
+                if let formatted = String(data: formattedData, encoding: .utf8) {
+                    await MainActor.run {
+                        formattedJSON = formatted
+                        isValidJSON = true
+                        validationError = nil
+                        isLoading = false
+                    }
+                } else {
+                    await MainActor.run {
+                        isValidJSON = false
+                        validationError = "Failed to format JSON"
+                        isLoading = false
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    isValidJSON = false
+                    validationError = error.localizedDescription
+                    isLoading = false
+                }
+            }
+        }.value
     }
     
     private func parseJSON() -> Any? {

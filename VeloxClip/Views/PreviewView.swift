@@ -16,6 +16,11 @@ struct PreviewView: View {
     @State private var newTagText = ""
     @FocusState private var isTagInputFocused: Bool
     
+    // Performance optimization: Cache content type detection results
+    @State private var contentTypeCache: [UUID: String] = [:]
+    @State private var isContentLoading = false
+    @State private var autoTagTask: Task<Void, Never>?
+    
     // Get the latest item from store to ensure favorite status is up to date
     private var currentItem: ClipboardItem? {
         guard let item = item else { return nil }
@@ -130,9 +135,23 @@ struct PreviewView: View {
                     Divider()
                     
                     ScrollView {
-                        previewContent(for: item)
-                            .padding()
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Group {
+                            if isContentLoading {
+                                VStack(spacing: 12) {
+                                    ProgressView()
+                                        .scaleEffect(0.8)
+                                    Text("Loading preview...")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 40)
+                            } else {
+                                previewContent(for: item)
+                            }
+                        }
+                        .padding()
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .textSelection(.enabled)
                     
@@ -250,12 +269,15 @@ struct PreviewView: View {
                 newTagText = ""
             }
             
-            // Cancel previous debounce task
+            // Cancel previous tasks
             debounceTask?.cancel()
+            autoTagTask?.cancel()
             
-            // Auto-add content type tag
+            // Show loading indicator for large content
             if let newItem = newItem {
-                autoAddContentTypeTag(for: newItem)
+                let contentSize = newItem.content?.count ?? 0
+                let isLargeContent = contentSize > 1000 || newItem.type == "image"
+                isContentLoading = isLargeContent
             }
             
             // For small content, update immediately
@@ -263,6 +285,15 @@ struct PreviewView: View {
                let content = newItem.content,
                content.count < 1000 && newItem.type != "image" {
                 debouncedItem = newItem
+                isContentLoading = false
+                
+                // Auto-add content type tag asynchronously (debounced)
+                autoTagTask = Task {
+                    try? await Task.sleep(nanoseconds: 200_000_000) // 200ms delay
+                    if !Task.isCancelled {
+                        await autoAddContentTypeTag(for: newItem)
+                    }
+                }
                 return
             }
             
@@ -270,7 +301,20 @@ struct PreviewView: View {
             debounceTask = Task {
                 try? await Task.sleep(nanoseconds: 50_000_000) // 50ms delay
                 if !Task.isCancelled {
-                    debouncedItem = newItem
+                    await MainActor.run {
+                        debouncedItem = newItem
+                        isContentLoading = false
+                    }
+                    
+                    // Auto-add content type tag asynchronously (debounced)
+                    if let newItem = newItem {
+                        autoTagTask = Task {
+                            try? await Task.sleep(nanoseconds: 200_000_000) // 200ms delay
+                            if !Task.isCancelled {
+                                await autoAddContentTypeTag(for: newItem)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -335,42 +379,44 @@ struct PreviewView: View {
         } else if item.type == "file", let content = item.content {
             FilePreviewView(filePath: content)
         } else if let content = item.content {
+            // Use cached content type if available, otherwise detect and cache
+            let detectedType = getOrDetectContentType(for: item, content: content)
+            
             // Detect content type and show appropriate preview
             // Priority order: URL > JSON > Table > DateTime > Code > LongText > Markdown > Plain
-            // URL should be checked first to avoid false positives from JSON/Table detection
-            
             Group {
-                if isURL(content) {
+                switch detectedType {
+                case "url":
                     VStack(alignment: .leading, spacing: 8) {
                         typeIndicator("URL")
                         URLPreviewView(urlString: content)
                     }
-                } else if isJSON(content) {
+                case "json":
                     VStack(alignment: .leading, spacing: 8) {
                         typeIndicator("JSON")
                         JSONPreviewView(jsonString: content)
                     }
-                } else if isTableData(content) {
+                case "table":
                     VStack(alignment: .leading, spacing: 8) {
                         typeIndicator("Table")
                         TablePreviewView(content: content)
                     }
-                } else if isDateTime(content) {
+                case "datetime":
                     VStack(alignment: .leading, spacing: 8) {
                         typeIndicator("DateTime")
                         DateTimePreviewView(dateString: content)
                     }
-                } else if isCode(content) {
+                case "code":
                     VStack(alignment: .leading, spacing: 8) {
                         typeIndicator("Code")
                         CodePreviewView(code: content)
                     }
-                } else if isLongText(content) {
+                case "longtext":
                     VStack(alignment: .leading, spacing: 8) {
                         typeIndicator("LongText")
                         TextSummaryView(text: content)
                     }
-                } else if isMarkdown(content) {
+                case "markdown":
                     let maxChars = 5000
                     let displayContent = content.count > maxChars ? String(content.prefix(maxChars)) : content
                     
@@ -387,7 +433,7 @@ struct PreviewView: View {
                                 .padding(.top, 4)
                         }
                     }
-                } else {
+                default:
                     // Plain text fallback
                     let maxChars = 5000
                     let displayContent = content.count > maxChars ? String(content.prefix(maxChars)) : content
@@ -412,6 +458,61 @@ struct PreviewView: View {
             Text("Preview not available for this type.")
                 .foregroundColor(.secondary)
         }
+    }
+    
+    // Get cached content type or detect and cache it
+    private func getOrDetectContentType(for item: ClipboardItem, content: String) -> String {
+        if let cached = contentTypeCache[item.id] {
+            return cached
+        } else {
+            let detected = detectContentType(content)
+            contentTypeCache[item.id] = detected
+            return detected
+        }
+    }
+    
+    // Get cached content type or return nil
+    private func getCachedContentType(for item: ClipboardItem) -> String? {
+        return contentTypeCache[item.id]
+    }
+    
+    // Detect content type with optimized priority order
+    private func detectContentType(_ content: String) -> String {
+        // Fast checks first (single line checks)
+        if isURL(content) {
+            return "url"
+        }
+        
+        // Then check for structured data
+        if isJSON(content) {
+            return "json"
+        }
+        
+        if isTableData(content) {
+            return "table"
+        }
+        
+        // Short content checks
+        if isDateTime(content) {
+            return "datetime"
+        }
+        
+        // Code detection (requires scanning)
+        if isCode(content) {
+            return "code"
+        }
+        
+        // Long text check
+        if isLongText(content) {
+            return "longtext"
+        }
+        
+        // Markdown detection (requires regex)
+        if isMarkdown(content) {
+            return "markdown"
+        }
+        
+        return "plain"
     }
     
     // Content type detection helpers
@@ -813,41 +914,36 @@ struct PreviewView: View {
         store.updateTags(id: item.id, tags: updatedTags)
     }
     
-    // Auto-add content type tag based on detected content type
-    private func autoAddContentTypeTag(for item: ClipboardItem) {
-        var detectedTag: String? = nil
+    // Auto-add content type tag based on detected content type (async, optimized)
+    private func autoAddContentTypeTag(for item: ClipboardItem) async {
+        // Only auto-tag favorite items
+        guard item.isFavorite else { return }
         
-        // Check item type first
-        switch item.type.lowercased() {
-        case "image":
-            detectedTag = "image"
-        case "file":
-            detectedTag = "file"
-        case "color":
-            detectedTag = "color"
-        default:
-            // Detect content type for text items
-            if let content = item.content {
-                if isURL(content) {
-                    detectedTag = "url"
-                } else if isJSON(content) {
-                    detectedTag = "json"
-                } else if isTableData(content) {
-                    detectedTag = "table"
-                } else if isDateTime(content) {
-                    detectedTag = "datetime"
-                } else if isCode(content) {
-                    detectedTag = "code"
-                } else if isMarkdown(content) {
-                    detectedTag = "markdown"
-                } else if isLongText(content) {
-                    detectedTag = "longtext"
+        // Use cached content type if available
+        let detectedType: String?
+        if let cachedType = contentTypeCache[item.id] {
+            detectedType = cachedType
+        } else {
+            // Check item type first
+            switch item.type.lowercased() {
+            case "image":
+                detectedType = "image"
+            case "file":
+                detectedType = "file"
+            case "color":
+                detectedType = "color"
+            default:
+                // Detect content type for text items
+                if let content = item.content {
+                    detectedType = detectContentType(content)
+                } else {
+                    detectedType = nil
                 }
             }
         }
         
         // Add tag if detected and not already present
-        if let tag = detectedTag {
+        if let tag = detectedType, tag != "plain" {
             var updatedTags = item.tags
             let lowercasedTag = tag.lowercased()
             
@@ -856,7 +952,9 @@ struct PreviewView: View {
             
             if !tagExists {
                 updatedTags.append(tag)
-                store.updateTags(id: item.id, tags: updatedTags)
+                await MainActor.run {
+                    store.updateTags(id: item.id, tags: updatedTags)
+                }
             }
         }
     }

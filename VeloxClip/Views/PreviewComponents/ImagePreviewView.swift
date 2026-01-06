@@ -15,9 +15,20 @@ struct ImagePreviewView: View {
         let hasAlpha: Bool
     }
     
+    @State private var isLoading = true
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if let nsImage = NSImage(data: imageData) {
+            if isLoading {
+                VStack(spacing: 12) {
+                    ProgressView()
+                    Text("Loading image...")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 40)
+            } else if let nsImage = NSImage(data: imageData) {
                 // Image display with zoom
                 ScrollView([.horizontal, .vertical], showsIndicators: true) {
                     Image(nsImage: nsImage)
@@ -114,53 +125,66 @@ struct ImagePreviewView: View {
                     .foregroundColor(.secondary)
             }
         }
-        .onAppear {
-            loadImageInfo()
+        .task {
+            await loadImageInfoAsync()
         }
     }
     
-    private func loadImageInfo() {
-        guard let nsImage = NSImage(data: imageData),
-              let imageRep = nsImage.representations.first else {
-            return
-        }
+    private func loadImageInfoAsync() async {
+        isLoading = true
         
-        let size = imageRep.size
-        let fileSize = imageData.count
-        
-        var format = "Unknown"
-        var colorSpace: String? = nil
-        var hasAlpha = false
-        
-        if let bitmapRep = imageRep as? NSBitmapImageRep {
-            format = bitmapRep.bitmapFormat.contains(.alphaFirst) || bitmapRep.bitmapFormat.contains(.alphaNonpremultiplied) ? "PNG" : "JPEG"
-            // Get color space name
-            colorSpace = bitmapRep.colorSpace.localizedName
-            hasAlpha = bitmapRep.hasAlpha
-        } else if imageRep is NSPDFImageRep {
-            format = "PDF"
-        }
-        
-        // Try to detect format from data
-        if format == "Unknown" {
-            if imageData.starts(with: [0x89, 0x50, 0x4E, 0x47]) {
-                format = "PNG"
-            } else if imageData.starts(with: [0xFF, 0xD8, 0xFF]) {
-                format = "JPEG"
-            } else if imageData.starts(with: [0x47, 0x49, 0x46]) {
-                format = "GIF"
-            } else if imageData.starts(with: [0x52, 0x49, 0x46, 0x46]) {
-                format = "WebP"
+        // Load image info on background thread
+        await Task.detached(priority: .userInitiated) { @Sendable () async -> Void in
+            guard let nsImage = NSImage(data: imageData),
+                  let imageRep = nsImage.representations.first else {
+                await MainActor.run {
+                    isLoading = false
+                }
+                return
             }
-        }
-        
-        imageInfo = ImageInfo(
-            size: size,
-            fileSize: fileSize,
-            format: format,
-            colorSpace: colorSpace,
-            hasAlpha: hasAlpha
-        )
+            
+            let size = imageRep.size
+            let fileSize = imageData.count
+            
+            var format = "Unknown"
+            var colorSpace: String? = nil
+            var hasAlpha = false
+            
+            if let bitmapRep = imageRep as? NSBitmapImageRep {
+                format = bitmapRep.bitmapFormat.contains(.alphaFirst) || bitmapRep.bitmapFormat.contains(.alphaNonpremultiplied) ? "PNG" : "JPEG"
+                // Get color space name
+                colorSpace = bitmapRep.colorSpace.localizedName
+                hasAlpha = bitmapRep.hasAlpha
+            } else if imageRep is NSPDFImageRep {
+                format = "PDF"
+            }
+            
+            // Try to detect format from data
+            if format == "Unknown" {
+                if imageData.starts(with: [0x89, 0x50, 0x4E, 0x47]) {
+                    format = "PNG"
+                } else if imageData.starts(with: [0xFF, 0xD8, 0xFF]) {
+                    format = "JPEG"
+                } else if imageData.starts(with: [0x47, 0x49, 0x46]) {
+                    format = "GIF"
+                } else if imageData.starts(with: [0x52, 0x49, 0x46, 0x46]) {
+                    format = "WebP"
+                }
+            }
+            
+            let info = ImageInfo(
+                size: size,
+                fileSize: fileSize,
+                format: format,
+                colorSpace: colorSpace,
+                hasAlpha: hasAlpha
+            )
+            
+            await MainActor.run {
+                imageInfo = info
+                isLoading = false
+            }
+        }.value
     }
     
     private func formatFileSize(_ bytes: Int) -> String {

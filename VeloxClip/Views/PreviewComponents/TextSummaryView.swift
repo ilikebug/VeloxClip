@@ -119,8 +119,8 @@ struct TextSummaryView: View {
                 .cornerRadius(8)
             }
         }
-        .onAppear {
-            extractKeywords()
+        .task {
+            await extractKeywordsAsync()
         }
     }
     
@@ -163,20 +163,26 @@ struct TextSummaryView: View {
         return sentences.prefix(summaryLength).joined(separator: ". ") + "."
     }
     
-    private func extractKeywords() {
-        // Simple keyword extraction - find most common words
-        let words = text.lowercased()
-            .components(separatedBy: CharacterSet.alphanumerics.inverted)
-            .filter { $0.count > 3 }
-        
-        var wordCounts: [String: Int] = [:]
-        for word in words {
-            wordCounts[word, default: 0] += 1
-        }
-        
-        keywords = Array(wordCounts.sorted { $0.value > $1.value }
-            .prefix(10)
-            .map { $0.key })
+    private func extractKeywordsAsync() async {
+        // Simple keyword extraction - find most common words (async to avoid blocking UI)
+        await Task.detached(priority: .userInitiated) {
+            let words = text.lowercased()
+                .components(separatedBy: CharacterSet.alphanumerics.inverted)
+                .filter { $0.count > 3 }
+            
+            var wordCounts: [String: Int] = [:]
+            for word in words {
+                wordCounts[word, default: 0] += 1
+            }
+            
+            let extractedKeywords = Array(wordCounts.sorted { $0.value > $1.value }
+                .prefix(10)
+                .map { $0.key })
+            
+            await MainActor.run {
+                keywords = extractedKeywords
+            }
+        }.value
     }
     
     private func copyText(_ text: String) {
