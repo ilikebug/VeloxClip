@@ -126,17 +126,20 @@ class PasteImageService {
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.15
             window.animator().alphaValue = 0.0
-        } completionHandler: {
-            window.orderOut(nil) // Hide window instead of closing to prevent app termination
-            window.close()
-        }
-        pasteImageWindows.remove(window)
-        
-        // Remove event monitor if no windows left
-        if pasteImageWindows.isEmpty {
-            if let monitor = eventMonitor {
-                NSEvent.removeMonitor(monitor)
-                eventMonitor = nil
+        } completionHandler: { [weak self] in
+            guard let self = self else { return }
+            Task { @MainActor in
+                window.orderOut(nil)
+                window.close()
+                self.pasteImageWindows.remove(window)
+                
+                // Remove event monitor if no windows left
+                if self.pasteImageWindows.isEmpty {
+                    if let monitor = self.eventMonitor {
+                        NSEvent.removeMonitor(monitor)
+                        self.eventMonitor = nil
+                    }
+                }
             }
         }
     }
@@ -177,7 +180,7 @@ struct PasteImageView: View {
                     HStack(spacing: 6) {
                         Slider(value: $opacity, in: 0.3...1.0)
                             .frame(width: 100)
-                            .onChange(of: opacity) { newValue in
+                            .onChange(of: opacity) { _, newValue in
                                 // Update window opacity
                                 PasteImageService.shared.setWindowOpacity(newValue, for: window)
                             }

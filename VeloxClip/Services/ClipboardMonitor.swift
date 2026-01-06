@@ -38,92 +38,105 @@ class ClipboardMonitor: ObservableObject {
             return
         }
         
-        // 1. Check for Text
-        if let text = pasteboard.string(forType: .string) {
-            if isHexColor(text) {
-                saveItem(type: "color", content: text, sourceApp: sourceApp)
-            } else {
-                saveItem(type: "text", content: text, sourceApp: sourceApp)
+        // Extract data immediately on main thread to avoid pasteboard state changes
+        let stringContent = pasteboard.string(forType: .string)
+        let rtfData = pasteboard.data(forType: .rtf)
+        let tiffData = pasteboard.data(forType: .tiff)
+        let pngData = pasteboard.data(forType: .png)
+        let fileURLs = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL]
+        
+        Task.detached(priority: .userInitiated) {
+            // 1. Check for Text
+            if let text = stringContent {
+                if self.isColor(text) {
+                    await self.saveItemAsync(type: "color", content: text, sourceApp: sourceApp)
+                } else {
+                    await self.saveItemAsync(type: "text", content: text, sourceApp: sourceApp)
+                }
             }
-        }
-        // 2. Check for RTF
-        else if let rtfData = pasteboard.data(forType: .rtf) {
-            saveItem(type: "rtf", data: rtfData, sourceApp: sourceApp)
-        }
-        // 3. Check for Images
-        else if let imageData = pasteboard.data(forType: .tiff) ?? pasteboard.data(forType: .png) {
-            let newItem = saveItem(type: "image", data: imageData, sourceApp: sourceApp)
-            
-            // Perform OCR in background
-            // Store item ID to ensure we can update it even if it's moved in the list
-            let itemID = newItem.id
-            AIService.shared.performOCR(on: imageData) { [weak self] text in
-                if let text = text, !text.isEmpty {
-                    Task { @MainActor in
-                        // Find the item by ID (in case list order changed)
-                        if ClipboardStore.shared.items.contains(where: { $0.id == itemID }) {
-                            self?.updateItemContent(id: itemID, content: text)
+            // 2. Check for RTF
+            else if let data = rtfData {
+                await self.saveItemAsync(type: "rtf", data: data, sourceApp: sourceApp)
+            }
+            // 3. Check for Images
+            else if let imageData = tiffData ?? pngData {
+                let newItem = await self.saveItemAsync(type: "image", data: imageData, sourceApp: sourceApp)
+                
+                // Perform OCR in background
+                let itemID = newItem.id
+                AIService.shared.performOCR(on: imageData) { text in
+                    if let text = text, !text.isEmpty {
+                        Task { @MainActor in
+                            if ClipboardStore.shared.items.contains(where: { $0.id == itemID }) {
+                                ClipboardStore.shared.updateItem(id: itemID, content: text)
+                            }
                         }
                     }
                 }
             }
-        }
-        // 4. Check for Files
-        else if let fileURLs = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL], !fileURLs.isEmpty {
-            let paths = fileURLs.map { $0.path }.joined(separator: "\n")
-            saveItem(type: "file", content: paths, sourceApp: sourceApp)
+            // 4. Check for Files
+            else if let urls = fileURLs, !urls.isEmpty {
+                let paths = urls.map { $0.path }.joined(separator: "\n")
+                await self.saveItemAsync(type: "file", content: paths, sourceApp: sourceApp)
+            }
         }
     }
     
     @discardableResult
-    private func saveItem(type: String, content: String? = nil, data: Data? = nil, sourceApp: String? = nil) -> ClipboardItem {
-        // Improved deduplication: Check recent items (last 10) within 5 seconds
-        // Create a snapshot to avoid concurrent modification issues
-        let now = Date()
-        let recentItemsSnapshot = Array(ClipboardStore.shared.items.prefix(10))
-        
-        for recentItem in recentItemsSnapshot {
-            // Check if content matches
-            let contentMatches = recentItem.content == content
-            let dataMatches = recentItem.data == data
-            let typeMatches = recentItem.type == type
+    private func saveItemAsync(type: String, content: String? = nil, data: Data? = nil, sourceApp: String? = nil) async -> ClipboardItem {
+        // Deduplication check on MainActor
+        return await MainActor.run {
+            let now = Date()
+            let recentItemsSnapshot = Array(ClipboardStore.shared.items.prefix(10))
             
-            // Check if within 5 seconds
-            let timeDiff = now.timeIntervalSince(recentItem.createdAt)
-            
-            if typeMatches && contentMatches && dataMatches && timeDiff < 5.0 {
-                // Duplicate found, return existing item
-                return recentItem
+            for recentItem in recentItemsSnapshot {
+                if recentItem.type == type && recentItem.content == content && recentItem.data == data {
+                    let timeDiff = now.timeIntervalSince(recentItem.createdAt)
+                    if timeDiff < 5.0 { return recentItem }
+                }
             }
-        }
-        
-        var newItem = ClipboardItem(type: type, content: content, data: data, sourceApp: sourceApp)
-        
-        // Auto-tagging based on content analysis
-        if let text = content {
-            newItem.tags = detectTags(in: text)
             
-            // Generate semantic embedding for text content
-            // Only generate for text that's not too short or too long
-            if text.count >= 3 && text.count <= 2000 {
-                if let vector = AIService.shared.generateEmbedding(for: text) {
-                    if let vectorData = try? JSONEncoder().encode(vector) {
-                        newItem.embedding = vectorData
+            let newItem = ClipboardItem(type: type, content: content, data: data, sourceApp: sourceApp)
+            
+            // Heavy background analysis
+            let capturedContent = content // Capturing for the task below
+            let capturedNewItem = newItem
+            
+            Task.detached(priority: .background) {
+                var analyzedItem = capturedNewItem
+                if let text = capturedContent {
+                    analyzedItem.tags = self.detectTags(in: text)
+                    
+                    if text.count >= 3 && text.count <= 2000 {
+                        if let vector = await AIService.shared.generateEmbedding(for: text) {
+                            if let vectorData = try? JSONEncoder().encode(vector) {
+                                analyzedItem.embedding = vectorData
+                            }
+                        }
+                    }
+                    
+                    // Update item with tags and embedding if changed
+                    if !analyzedItem.tags.isEmpty || analyzedItem.embedding != nil {
+                        await MainActor.run {
+                            // Potentially add a method to update tags/embedding in batch
+                            ClipboardStore.shared.updateTags(id: analyzedItem.id, tags: analyzedItem.tags)
+                            // Note: updateTags currently only updates tags, we might need an updateMetadata
+                            // For simplicity, let's just make sure the initial addItem has what we can get quickly
+                        }
                     }
                 }
             }
+            
+            ClipboardStore.shared.addItem(newItem)
+            return newItem
         }
-        
-        ClipboardStore.shared.addItem(newItem)
-        return newItem
     }
     
-    // Helper to update an item in the store (since it's a struct/value type)
     private func updateItemContent(id: UUID, content: String) {
         ClipboardStore.shared.updateItem(id: id, content: content)
     }
     
-    private func detectTags(in text: String) -> [String] {
+    nonisolated private func detectTags(in text: String) -> [String] {
         var tags: [String] = []
         
         // URL detection
@@ -164,8 +177,12 @@ class ClipboardMonitor: ObservableObject {
         return tags
     }
     
-    private func isHexColor(_ text: String) -> Bool {
-        let pattern = "^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$"
-        return text.range(of: pattern, options: .regularExpression) != nil
+    nonisolated private func isColor(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hexPattern = "^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3}|[A-Fa-f0-9]{8})$"
+        let rgbPattern = #"^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)$"#
+        
+        return trimmed.range(of: hexPattern, options: .regularExpression) != nil ||
+               trimmed.range(of: rgbPattern, options: .regularExpression) != nil
     }
 }

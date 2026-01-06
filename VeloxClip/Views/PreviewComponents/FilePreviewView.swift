@@ -19,74 +19,44 @@ struct FilePreviewView: View {
         VStack(alignment: .leading, spacing: 12) {
             if let info = fileInfo {
                 // File icon and name
-                HStack(spacing: 12) {
+                HStack(spacing: 16) {
                     Image(systemName: fileIcon(for: info.type))
-                        .font(.system(size: 48))
+                        .font(.system(size: 40))
                         .foregroundColor(.blue)
                     
                     VStack(alignment: .leading, spacing: 4) {
                         Text(info.name)
-                            .font(.headline)
+                            .font(.title3.bold())
                         
                         Text(info.path)
                             .font(.caption)
                             .foregroundColor(.secondary)
-                            .lineLimit(2)
+                            .lineLimit(1)
                     }
                     
                     Spacer()
                 }
-                .padding(12)
-                .background(Color(white: 0.95))
-                .cornerRadius(8)
+                .padding(16)
+                .background(Color.secondary.opacity(0.05))
+                .cornerRadius(12)
                 
                 // File info
                 if info.exists {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("File Information")
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("File Details")
                             .font(.headline)
                         
-                        Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
-                            GridRow {
-                                Text("Name:")
-                                    .foregroundColor(.secondary)
-                                Text(info.name)
-                            }
-                            
-                            GridRow {
-                                Text("Path:")
-                                    .foregroundColor(.secondary)
-                                Text(info.path)
-                                    .font(.system(.body, design: .monospaced))
-                                    .lineLimit(2)
-                            }
-                            
-                            GridRow {
-                                Text("Size:")
-                                    .foregroundColor(.secondary)
-                                Text(formatFileSize(info.size))
-                            }
-                            
-                            GridRow {
-                                Text("Type:")
-                                    .foregroundColor(.secondary)
-                                Text(info.type)
-                            }
-                            
+                        Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 12) {
+                            fileInfoRow(label: "Size", value: formatFileSize(info.size))
+                            fileInfoRow(label: "Type", value: info.type)
                             if let modified = info.modifiedDate {
-                                GridRow {
-                                    Text("Modified:")
-                                        .foregroundColor(.secondary)
-                                    Text(modified, style: .date)
-                                    Text(modified, style: .time)
-                                }
+                                fileInfoRow(label: "Modified", value: "\(modified.formatted(date: .abbreviated, time: .shortened))")
                             }
                         }
-                        .font(.caption)
                     }
-                    .padding(12)
-                    .background(Color(white: 0.95))
-                    .cornerRadius(8)
+                    .padding(16)
+                    .background(Color.secondary.opacity(0.05))
+                    .cornerRadius(12)
                     
                     // Actions
                     HStack {
@@ -130,6 +100,16 @@ struct FilePreviewView: View {
         }
         .onAppear {
             loadFileInfo()
+        }
+    }
+    
+    private func fileInfoRow(label: String, value: String) -> some View {
+        GridRow {
+            Text(label)
+                .font(.caption.bold())
+                .foregroundColor(.secondary)
+            Text(value)
+                .font(.caption)
         }
     }
     

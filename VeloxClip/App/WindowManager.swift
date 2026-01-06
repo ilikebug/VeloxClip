@@ -145,26 +145,6 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
     }
     
     private func copyToClipboard(_ item: ClipboardItem) {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        
-        if item.type == "image", let data = item.data {
-            pasteboard.setData(data, forType: .tiff)
-            pasteboard.setData(data, forType: .png)
-            return
-        }
-        
-        if item.type == "color", let content = item.content {
-            pasteboard.setString(content, forType: .string)
-            return
-        }
-        
-        if let content = item.content {
-            pasteboard.setString(content, forType: .string)
-        } else if let data = item.data {
-            if item.type == "rtf" {
-                pasteboard.setData(data, forType: .rtf)
-            }
-        }
+        item.copyToPasteboard()
     }
 }

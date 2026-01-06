@@ -32,7 +32,14 @@ class ShortcutRecorderView: NSView {
     }
     
     deinit {
-        stopMonitoring()
+        // No-op, monitor handled in viewWillMove
+    }
+
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        super.viewWillMove(toWindow: newWindow)
+        if newWindow == nil {
+            stopMonitoring()
+        }
     }
     
     func updateShortcut(_ newShortcut: String) {

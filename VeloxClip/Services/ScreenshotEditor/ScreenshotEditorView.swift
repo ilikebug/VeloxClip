@@ -189,7 +189,7 @@ struct ScreenshotEditorView: View {
                                 NSCursor.arrow.push()
                             }
                         }
-                        .onChange(of: editorState.currentTool) { _ in
+                        .onChange(of: editorState.currentTool) { _, _ in
                             // Update cursor when tool changes
                             setCursorForTool(editorState.currentTool)
                         }

@@ -1,0 +1,314 @@
+🚀 Building VeloxClip in release mode...
+📦 Building Swift package...
+Fetching https://github.com/swiftlang/swift-cmark from cache
+Fetching https://github.com/swiftlang/swift-toolchain-sqlite from cache
+Fetching https://github.com/gonzalezreal/NetworkImage from cache
+Fetching https://github.com/stephencelis/SQLite.swift.git from cache
+Fetching https://github.com/gonzalezreal/swift-markdown-ui.git from cache
+Fetched https://github.com/swiftlang/swift-toolchain-sqlite from cache (0.07s)
+Fetched https://github.com/gonzalezreal/swift-markdown-ui.git from cache (0.07s)
+Fetched https://github.com/stephencelis/SQLite.swift.git from cache (0.07s)
+Fetched https://github.com/gonzalezreal/NetworkImage from cache (0.07s)
+Fetched https://github.com/swiftlang/swift-cmark from cache (0.07s)
+Creating working copy for https://github.com/gonzalezreal/swift-markdown-ui.git
+Creating working copy for https://github.com/stephencelis/SQLite.swift.git
+Creating working copy for https://github.com/gonzalezreal/NetworkImage
+Creating working copy for https://github.com/swiftlang/swift-toolchain-sqlite
+Creating working copy for https://github.com/swiftlang/swift-cmark
+Working copy of https://github.com/gonzalezreal/NetworkImage resolved at 6.0.1
+Working copy of https://github.com/swiftlang/swift-toolchain-sqlite resolved at 1.0.4
+Working copy of https://github.com/stephencelis/SQLite.swift.git resolved at 0.15.4
+Working copy of https://github.com/swiftlang/swift-cmark resolved at 0.7.1
+Working copy of https://github.com/gonzalezreal/swift-markdown-ui.git resolved at 2.4.1
+warning: 'veloxclip': found 1 file(s) which are unhandled; explicitly declare them as resources or exclude from the target
+    /Users/y.zhang/work/selfwork/VeloxClip/VeloxClip/Resources/AppIcon.icns
+warning: 'sqlite.swift': found 1 file(s) which are unhandled; explicitly declare them as resources or exclude from the target
+    /Users/y.zhang/work/selfwork/VeloxClip/.build/checkouts/SQLite.swift/Sources/SQLite/PrivacyInfo.xcprivacy
+Building for production...
+[0/41] Write swift-version--58304C5D6DBC2206.txt
+[1/41] Compiling cmark-gfm cmark.c
+[2/41] Compiling cmark-gfm cmark_ctype.c
+[3/41] Compiling cmark-gfm houdini_href_e.c
+[4/41] Compiling cmark-gfm-extensions tasklist.c
+[5/41] Compiling cmark-gfm buffer.c
+[6/41] Compiling cmark-gfm commonmark.c
+[7/41] Compiling cmark-gfm-extensions strikethrough.c
+[8/41] Compiling cmark-gfm-extensions ext_scanners.c
+[9/41] Compiling cmark-gfm-extensions tagfilter.c
+[10/41] Compiling cmark-gfm-extensions core-extensions.c
+[11/41] Compiling cmark-gfm footnotes.c
+[12/41] Compiling cmark-gfm xml.c
+[13/41] Compiling cmark-gfm syntax_extension.c
+[14/41] Compiling cmark-gfm-extensions table.c
+[15/41] Compiling cmark-gfm registry.c
+[16/41] Compiling cmark-gfm render.c
+[17/41] Compiling cmark-gfm references.c
+[18/41] Compiling cmark-gfm plugin.c
+[19/41] Compiling cmark-gfm plaintext.c
+[20/41] Compiling cmark-gfm map.c
+[21/41] Compiling cmark-gfm man.c
+[22/41] Compiling cmark-gfm linked_list.c
+[23/41] Compiling cmark-gfm node.c
+[24/41] Compiling cmark-gfm latex.c
+[25/41] Compiling cmark-gfm iterator.c
+[26/41] Compiling cmark-gfm houdini_html_e.c
+[27/41] Compiling cmark-gfm houdini_html_u.c
+[28/41] Write sources
+[31/41] Compiling cmark-gfm html.c
+[32/41] Compiling cmark-gfm arena.c
+[33/41] Write sources
+[34/41] Compiling cmark-gfm-extensions autolink.c
+[35/43] Compiling cmark-gfm blocks.c
+[36/43] Compiling cmark-gfm inlines.c
+[37/43] Compiling cmark-gfm utf8.c
+[38/43] Compiling cmark-gfm scanners.c
+[40/43] Compiling NetworkImage Deprecations.swift
+[41/44] Compiling SQLite Backup.swift
+[42/44] Compiling MarkdownUI Blockquote.swift
+[43/45] Compiling VeloxClip VeloxClipApp.swift
+/Users/y.zhang/work/selfwork/VeloxClip/VeloxClip/App/VeloxClipApp.swift:91:41: warning: 'activateIgnoringOtherApps' was deprecated in macOS 14.0: ignoringOtherApps is deprecated in macOS 14 and will have no effect. [#DeprecatedDeclaration]
+ 89 |                app.processIdentifier != ProcessInfo.processInfo.processIdentifier {
+ 90 |                 // Activate the existing instance
+ 91 |                 app.activate(options: [.activateIgnoringOtherApps])
+    |                                         `- warning: 'activateIgnoringOtherApps' was deprecated in macOS 14.0: ignoringOtherApps is deprecated in macOS 14 and will have no effect. [#DeprecatedDeclaration]
+ 92 |                 break
+ 93 |             }
+
+/Users/y.zhang/work/selfwork/VeloxClip/VeloxClip/App/WindowManager.swift:94:32: warning: 'activateIgnoringOtherApps' was deprecated in macOS 14.0: ignoringOtherApps is deprecated in macOS 14 and will have no effect. [#DeprecatedDeclaration]
+ 92 |         
+ 93 |         // 4. Return focus to the target app explicitly
+ 94 |         app.activate(options: .activateIgnoringOtherApps)
+    |                                `- warning: 'activateIgnoringOtherApps' was deprecated in macOS 14.0: ignoringOtherApps is deprecated in macOS 14 and will have no effect. [#DeprecatedDeclaration]
+ 95 |         
+ 96 |         // 5. Targeted Event Injection (PID-based)
+
+/Users/y.zhang/work/selfwork/VeloxClip/VeloxClip/App/WindowManager.swift:107:40: warning: 'activateIgnoringOtherApps' was deprecated in macOS 14.0: ignoringOtherApps is deprecated in macOS 14 and will have no effect. [#DeprecatedDeclaration]
+105 |             // If another app became frontmost, try to reactivate target app
+106 |             if currentFrontmost?.processIdentifier != targetPID {
+107 |                 app.activate(options: .activateIgnoringOtherApps)
+    |                                        `- warning: 'activateIgnoringOtherApps' was deprecated in macOS 14.0: ignoringOtherApps is deprecated in macOS 14 and will have no effect. [#DeprecatedDeclaration]
+108 |                 // Wait a bit more before injecting
+109 |                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+
+/Users/y.zhang/work/selfwork/VeloxClip/VeloxClip/Services/AIService.swift:8:16: error: static property 'shared' is not concurrency-safe because non-'Sendable' type 'AIService' may have shared mutable state [#MutableGlobalVariable]
+  5 | import Accelerate
+  6 | 
+  7 | class AIService {
+    |       `- note: class 'AIService' does not conform to the 'Sendable' protocol
+  8 |     static let shared = AIService()
+    |                |- error: static property 'shared' is not concurrency-safe because non-'Sendable' type 'AIService' may have shared mutable state [#MutableGlobalVariable]
+    |                |- note: add '@MainActor' to make static property 'shared' part of global actor 'MainActor'
+    |                `- note: disable concurrency-safety checks if accesses are protected by an external synchronization mechanism
+  9 |     
+ 10 |     // Sentence embedding model for semantic search
+
+/Users/y.zhang/work/selfwork/VeloxClip/VeloxClip/Services/AIService.swift:123:30: warning: capture of 'self' with non-Sendable type 'AIService?' in a '@Sendable' closure [#SendableClosureCaptures]
+  5 | import Accelerate
+  6 | 
+  7 | class AIService {
+    |       `- note: class 'AIService' does not conform to the 'Sendable' protocol
+  8 |     static let shared = AIService()
+  9 |     
+    :
+121 |         // Cache the result (Thread-safe)
+122 |         cacheQueue.async(flags: .barrier) { [weak self] in
+123 |             guard let self = self else { return }
+    |                              `- warning: capture of 'self' with non-Sendable type 'AIService?' in a '@Sendable' closure [#SendableClosureCaptures]
+124 |             if self.embeddingCache.count >= self.maxCacheSize {
+125 |                 let keysToRemove = Array(self.embeddingCache.keys.prefix(self.maxCacheSize / 5))
+
+/Users/y.zhang/work/selfwork/VeloxClip/VeloxClip/Services/AIService.swift:136:13: warning: capture of 'self' with non-Sendable type 'AIService?' in a '@Sendable' closure [#SendableClosureCaptures]
+  5 | import Accelerate
+  6 | 
+  7 | class AIService {
+    |       `- note: class 'AIService' does not conform to the 'Sendable' protocol
+  8 |     static let shared = AIService()
+  9 |     
+    :
+134 |     func clearEmbeddingCache() {
+135 |         cacheQueue.async(flags: .barrier) { [weak self] in
+136 |             self?.embeddingCache.removeAll()
+    |             `- warning: capture of 'self' with non-Sendable type 'AIService?' in a '@Sendable' closure [#SendableClosureCaptures]
+137 |         }
+138 |     }
+
+/Users/y.zhang/work/selfwork/VeloxClip/VeloxClip/Services/ClipboardMonitor.swift:51:25: error: main actor-isolated instance method 'isHexColor' cannot be called from outside of the actor
+ 49 |             // 1. Check for Text
+ 50 |             if let text = stringContent {
+ 51 |                 if self.isHexColor(text) {
+    |                         `- error: main actor-isolated instance method 'isHexColor' cannot be called from outside of the actor
+ 52 |                     await self.saveItemAsync(type: "color", content: text, sourceApp: sourceApp)
+ 53 |                 } else {
+
+/Users/y.zhang/work/selfwork/VeloxClip/VeloxClip/Services/ClipboardMonitor.swift:99:17: warning: variable 'newItem' was never mutated; consider changing to 'let' constant
+ 97 |             }
+ 98 |             
+ 99 |             var newItem = ClipboardItem(type: type, content: content, data: data, sourceApp: sourceApp)
+    |                 `- warning: variable 'newItem' was never mutated; consider changing to 'let' constant
+100 |             
+101 |             // Heavy background analysis
+
+/Users/y.zhang/work/selfwork/VeloxClip/VeloxClip/Services/ClipboardMonitor.swift:108:46: error: main actor-isolated instance method 'detectTags(in:)' cannot be called from outside of the actor
+106 |                 var analyzedItem = capturedNewItem
+107 |                 if let text = capturedContent {
+108 |                     analyzedItem.tags = self.detectTags(in: text)
+    |                                              `- error: main actor-isolated instance method 'detectTags(in:)' cannot be called from outside of the actor
+109 |                     
+110 |                     if text.count >= 3 && text.count <= 2000 {
+
+/Users/y.zhang/work/selfwork/VeloxClip/VeloxClip/Services/ContentDetectionService.swift:18:16: error: static property 'shared' is not concurrency-safe because non-'Sendable' type 'ContentDetectionService' may have shared mutable state [#MutableGlobalVariable]
+ 15 | }
+ 16 | 
+ 17 | class ContentDetectionService {
+    |       `- note: class 'ContentDetectionService' does not conform to the 'Sendable' protocol
+ 18 |     static let shared = ContentDetectionService()
+    |                |- error: static property 'shared' is not concurrency-safe because non-'Sendable' type 'ContentDetectionService' may have shared mutable state [#MutableGlobalVariable]
+    |                |- note: add '@MainActor' to make static property 'shared' part of global actor 'MainActor'
+    |                `- note: disable concurrency-safety checks if accesses are protected by an external synchronization mechanism
+ 19 |     
+ 20 |     private var cache: [UUID: DetectedContentType] = [:]
+
+/Users/y.zhang/work/selfwork/VeloxClip/VeloxClip/Services/ContentDetectionService.swift:34:16: warning: capture of 'self' with non-Sendable type 'ContentDetectionService' in a '@Sendable' closure [#SendableClosureCaptures]
+ 15 | }
+ 16 | 
+ 17 | class ContentDetectionService {
+    |       `- note: class 'ContentDetectionService' does not conform to the 'Sendable' protocol
+ 18 |     static let shared = ContentDetectionService()
+ 19 |     
+    :
+ 32 |         
+ 33 |         queue.async(flags: .barrier) {
+ 34 |             if self.cache.count >= self.maxCacheSize {
+    |                `- warning: capture of 'self' with non-Sendable type 'ContentDetectionService' in a '@Sendable' closure [#SendableClosureCaptures]
+ 35 |                 // Simple FIFO-ish removal
+ 36 |                 if let firstKey = self.cache.keys.first {
+
+/Users/y.zhang/work/selfwork/VeloxClip/VeloxClip/Services/ContentDetectionService.swift:146:13: warning: capture of 'self' with non-Sendable type 'ContentDetectionService' in a '@Sendable' closure [#SendableClosureCaptures]
+ 15 | }
+ 16 | 
+ 17 | class ContentDetectionService {
+    |       `- note: class 'ContentDetectionService' does not conform to the 'Sendable' protocol
+ 18 |     static let shared = ContentDetectionService()
+ 19 |     
+    :
+144 |     func clearCache() {
+145 |         queue.async(flags: .barrier) {
+146 |             self.cache.removeAll()
+    |             `- warning: capture of 'self' with non-Sendable type 'ContentDetectionService' in a '@Sendable' closure [#SendableClosureCaptures]
+147 |         }
+148 |     }
+
+/Users/y.zhang/work/selfwork/VeloxClip/VeloxClip/Services/PasteImageService.swift:130:20: warning: call to main actor-isolated instance method 'orderOut' in a synchronous nonisolated context [#ActorIsolatedCall]
+128 |             window.animator().alphaValue = 0.0
+129 |         } completionHandler: {
+130 |             window.orderOut(nil) // Hide window instead of closing to prevent app termination
+    |                    `- warning: call to main actor-isolated instance method 'orderOut' in a synchronous nonisolated context [#ActorIsolatedCall]
+131 |             window.close()
+132 |         }
+
+AppKit.NSWindow.orderOut:2:22: note: calls to instance method 'orderOut' from outside of its actor context are implicitly asynchronous
+1 | class NSWindow {
+2 | @MainActor open func orderOut(_ sender: Any?)}
+  |                      |- note: calls to instance method 'orderOut' from outside of its actor context are implicitly asynchronous
+  |                      `- note: main actor isolation inferred from inheritance from class 'NSResponder'
+3 | 
+
+/Users/y.zhang/work/selfwork/VeloxClip/VeloxClip/Services/PasteImageService.swift:131:20: warning: call to main actor-isolated instance method 'close()' in a synchronous nonisolated context [#ActorIsolatedCall]
+129 |         } completionHandler: {
+130 |             window.orderOut(nil) // Hide window instead of closing to prevent app termination
+131 |             window.close()
+    |                    `- warning: call to main actor-isolated instance method 'close()' in a synchronous nonisolated context [#ActorIsolatedCall]
+132 |         }
+133 |         pasteImageWindows.remove(window)
+
+AppKit.NSWindow.close:2:22: note: calls to instance method 'close()' from outside of its actor context are implicitly asynchronous
+1 | class NSWindow {
+2 | @MainActor open func close()}
+  |                      |- note: calls to instance method 'close()' from outside of its actor context are implicitly asynchronous
+  |                      `- note: main actor isolation inferred from inheritance from class 'NSResponder'
+3 | 
+
+/Users/y.zhang/work/selfwork/VeloxClip/VeloxClip/Services/PasteImageService.swift:180:30: warning: 'onChange(of:perform:)' was deprecated in macOS 14.0: Use `onChange` with a two or zero parameter action closure instead. [#DeprecatedDeclaration]
+178 |                         Slider(value: $opacity, in: 0.3...1.0)
+179 |                             .frame(width: 100)
+180 |                             .onChange(of: opacity) { newValue in
+    |                              `- warning: 'onChange(of:perform:)' was deprecated in macOS 14.0: Use `onChange` with a two or zero parameter action closure instead. [#DeprecatedDeclaration]
+181 |                                 // Update window opacity
+182 |                                 PasteImageService.shared.setWindowOpacity(newValue, for: window)
+
+/Users/y.zhang/work/selfwork/VeloxClip/VeloxClip/Services/ScreenshotEditor/ScreenshotEditorView.swift:192:26: warning: 'onChange(of:perform:)' was deprecated in macOS 14.0: Use `onChange` with a two or zero parameter action closure instead. [#DeprecatedDeclaration]
+190 |                             }
+191 |                         }
+192 |                         .onChange(of: editorState.currentTool) { _ in
+    |                          `- warning: 'onChange(of:perform:)' was deprecated in macOS 14.0: Use `onChange` with a two or zero parameter action closure instead. [#DeprecatedDeclaration]
+193 |                             // Update cursor when tool changes
+194 |                             setCursorForTool(editorState.currentTool)
+
+/Users/y.zhang/work/selfwork/VeloxClip/VeloxClip/Services/ScreenshotService.swift:55:41: warning: main actor-isolated property 'isWaitingForScreenshot' can not be referenced from a Sendable closure
+  6 |     static let shared = ScreenshotService()
+  7 |     
+  8 |     private var isWaitingForScreenshot = false
+    |                 `- note: property declared here
+  9 |     private var previousChangeCount: Int = 0
+ 10 |     private var monitoringTimer: Timer?
+    :
+ 53 |         // Monitor clipboard changes to detect screenshot completion
+ 54 |         monitoringTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { [weak self] timer in
+ 55 |             guard let self = self, self.isWaitingForScreenshot else {
+    |                                         `- warning: main actor-isolated property 'isWaitingForScreenshot' can not be referenced from a Sendable closure
+ 56 |                 timer.invalidate()
+ 57 |                 return
+
+/Users/y.zhang/work/selfwork/VeloxClip/VeloxClip/Views/ClipboardListView.swift:23:14: warning: 'onChange(of:perform:)' was deprecated in macOS 14.0: Use `onChange` with a two or zero parameter action closure instead. [#DeprecatedDeclaration]
+ 21 |             }
+ 22 |             .listStyle(.sidebar)
+ 23 |             .onChange(of: selectedItem) { newItem in
+    |              `- warning: 'onChange(of:perform:)' was deprecated in macOS 14.0: Use `onChange` with a two or zero parameter action closure instead. [#DeprecatedDeclaration]
+ 24 |                 if let newItem = newItem {
+ 25 |                     withAnimation(.easeInOut(duration: 0.15)) {
+
+/Users/y.zhang/work/selfwork/VeloxClip/VeloxClip/Views/MainView.swift:238:10: warning: 'onChange(of:perform:)' was deprecated in macOS 14.0: Use `onChange` with a two or zero parameter action closure instead. [#DeprecatedDeclaration]
+236 |             store.loadFavorites()
+237 |         }
+238 |         .onChange(of: viewMode) { _ in
+    |          `- warning: 'onChange(of:perform:)' was deprecated in macOS 14.0: Use `onChange` with a two or zero parameter action closure instead. [#DeprecatedDeclaration]
+239 |             // Update selected item or trigger search if query exists
+240 |             if !searchText.isEmpty {
+
+/Users/y.zhang/work/selfwork/VeloxClip/VeloxClip/Views/MainView.swift:248:10: warning: 'onChange(of:perform:)' was deprecated in macOS 14.0: Use `onChange` with a two or zero parameter action closure instead. [#DeprecatedDeclaration]
+246 |             }
+247 |         }
+248 |         .onChange(of: searchText) { _ in
+    |          `- warning: 'onChange(of:perform:)' was deprecated in macOS 14.0: Use `onChange` with a two or zero parameter action closure instead. [#DeprecatedDeclaration]
+249 |             updateSearchResults()
+250 |         }
+
+/Users/y.zhang/work/selfwork/VeloxClip/VeloxClip/Views/PreviewComponents/CodePreviewView.swift:239:13: warning: initialization of immutable value 'keywords' was never used; consider replacing with assignment to '_' or removing it [#no-usage]
+237 |     private func highlightSyntax(line: String, language: String) -> AttributedString {
+238 |         var attr = AttributedString(line)
+239 |         let keywords = Self.languageKeywords[language] ?? []
+    |             `- warning: initialization of immutable value 'keywords' was never used; consider replacing with assignment to '_' or removing it [#no-usage]
+240 |         let nsLine = line as NSString
+241 |         let fullRange = NSRange(location: 0, length: nsLine.length)
+
+/Users/y.zhang/work/selfwork/VeloxClip/VeloxClip/Views/ShortcutRecorder.swift:35:9: warning: call to main actor-isolated instance method 'stopMonitoring()' in a synchronous nonisolated context [#ActorIsolatedCall]
+ 33 |     
+ 34 |     deinit {
+ 35 |         stopMonitoring()
+    |         `- warning: call to main actor-isolated instance method 'stopMonitoring()' in a synchronous nonisolated context [#ActorIsolatedCall]
+ 36 |     }
+ 37 |     
+    :
+118 |     }
+119 |     
+120 |     private func stopMonitoring() {
+    |                  |- note: calls to instance method 'stopMonitoring()' from outside of its actor context are implicitly asynchronous
+    |                  `- note: main actor isolation inferred from inheritance from class 'NSView'
+121 |         if let monitor = eventMonitor {
+122 |             NSEvent.removeMonitor(monitor)
+
+[#ActorIsolatedCall]: <https://docs.swift.org/compiler/documentation/diagnostics/actor-isolated-call>
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[#MutableGlobalVariable]: <https://docs.swift.org/compiler/documentation/diagnostics/mutable-global-variable>
+[#SendableClosureCaptures]: <https://docs.swift.org/compiler/documentation/diagnostics/sendable-closure-captures>
+❌ Build failed with exit code 1!

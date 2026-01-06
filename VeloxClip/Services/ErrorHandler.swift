@@ -20,7 +20,7 @@ class ErrorHandler: ObservableObject {
                 message: llmError.localizedDescription,
                 details: error.localizedDescription
             )
-        } else if let aiError = error as? AIService.AIServiceError {
+        } else if let aiError = error as? AIServiceError {
             appError = AppError(
                 title: "AI Service Error",
                 message: aiError.localizedDescription,

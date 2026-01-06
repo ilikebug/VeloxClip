@@ -58,7 +58,7 @@ struct GeneralSettingsView: View {
                             // Explicitly save when user presses Enter
                             saveAPIKey(settings.openRouterAPIKey)
                         }
-                        .onChange(of: settings.openRouterAPIKey) { newValue in
+                        .onChange(of: settings.openRouterAPIKey) { _, newValue in
                             // Save immediately when changed
                             print("🔑 OpenRouter API Key changed, length: \(newValue.count)")
                             saveAPIKey(newValue)
@@ -87,7 +87,12 @@ struct GeneralSettingsView: View {
                 .help("Language for AI responses (summary, code explanation, etc.)")
             }
             
-            Section {
+            Section("Maintenance") {
+                Button("Clear Image & Analysis Caches") {
+                    CacheManager.shared.clearAllCaches()
+                }
+                .help("Clear background caches for OCR, embeddings, and content detection. Doesn't delete your history.")
+                
                 Button("Clear All History") {
                     ClipboardStore.shared.clearAll()
                 }
@@ -142,13 +147,13 @@ struct ShortcutsSettingsView: View {
         }
         .padding()
         .formStyle(.grouped)
-        .onChange(of: settings.globalShortcut) { newValue in
+        .onChange(of: settings.globalShortcut) { _, newValue in
             ShortcutManager.shared.updateShortcut(newValue)
         }
-        .onChange(of: settings.screenshotShortcut) { newValue in
+        .onChange(of: settings.screenshotShortcut) { _, newValue in
             ShortcutManager.shared.updateScreenshotShortcut(newValue)
         }
-        .onChange(of: settings.pasteImageShortcut) { newValue in
+        .onChange(of: settings.pasteImageShortcut) { _, newValue in
             ShortcutManager.shared.updatePasteImageShortcut(newValue)
         }
     }

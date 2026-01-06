@@ -6,6 +6,7 @@ struct ImagePreviewView: View {
     let imageData: Data
     @State private var zoomLevel: CGFloat = 1.0
     @State private var imageInfo: ImageInfo?
+    @State private var displayImage: NSImage?
     
     struct ImageInfo {
         let size: NSSize
@@ -20,171 +21,125 @@ struct ImagePreviewView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if isLoading {
-                VStack(spacing: 12) {
-                    ProgressView()
-                    Text("Loading image...")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 40)
-            } else if let nsImage = NSImage(data: imageData) {
-                // Image display with zoom
-                ScrollView([.horizontal, .vertical], showsIndicators: true) {
-                    Image(nsImage: nsImage)
-                        .resizable()
-                        .scaledToFit()
-                        .scaleEffect(zoomLevel)
-                        .frame(maxWidth: .infinity, maxHeight: 500)
-                }
-                .frame(maxHeight: 500)
-                .background(Color(white: 0.95))
-                .cornerRadius(8)
-                
-                // Zoom controls
-                HStack {
-                    Button(action: { zoomLevel = max(0.25, zoomLevel - 0.25) }) {
-                        Image(systemName: "minus.magnifyingglass")
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    
-                    Text("\(Int(zoomLevel * 100))%")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .frame(width: 60)
-                    
-                    Button(action: { zoomLevel = min(3.0, zoomLevel + 0.25) }) {
-                        Image(systemName: "plus.magnifyingglass")
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    
-                    Button(action: { zoomLevel = 1.0 }) {
-                        Text("Fit")
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    
-                    Button(action: { zoomLevel = 1.0 }) {
-                        Text("1:1")
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    
-                    Spacer()
-                }
-                
-                // Image info
-                if let info = imageInfo {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Image Information")
-                            .font(.headline)
-                        
-                        Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
-                            GridRow {
-                                Text("Dimensions:")
-                                    .foregroundColor(.secondary)
-                                Text("\(Int(info.size.width)) × \(Int(info.size.height)) px")
-                            }
-                            
-                            GridRow {
-                                Text("File Size:")
-                                    .foregroundColor(.secondary)
-                                Text(formatFileSize(info.fileSize))
-                            }
-                            
-                            GridRow {
-                                Text("Format:")
-                                    .foregroundColor(.secondary)
-                                Text(info.format)
-                            }
-                            
-                            if let colorSpace = info.colorSpace {
-                                GridRow {
-                                    Text("Color Space:")
-                                        .foregroundColor(.secondary)
-                                    Text(colorSpace)
-                                }
-                            }
-                            
-                            GridRow {
-                                Text("Has Alpha:")
-                                    .foregroundColor(.secondary)
-                                Text(info.hasAlpha ? "Yes" : "No")
-                            }
-                        }
-                        .font(.caption)
-                    }
-                    .padding(12)
-                    .background(Color(white: 0.95))
-                    .cornerRadius(8)
-                }
+                loadingPlaceholder
+            } else if let nsImage = displayImage {
+                imageDisplay(nsImage)
+                zoomControls
+                infoSection
             } else {
-                Text("Unable to load image")
-                    .foregroundColor(.secondary)
+                Text("Unable to load image").foregroundColor(.secondary)
             }
         }
-        .task {
-            await loadImageInfoAsync()
+        .task(id: imageData) {
+            await loadImageAsync()
         }
     }
     
-    private func loadImageInfoAsync() async {
+    private var loadingPlaceholder: some View {
+        VStack(spacing: 12) {
+            ProgressView()
+            Text("Loading image...").font(.caption).foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity).padding(.vertical, 40)
+    }
+    
+    @ViewBuilder
+    private func imageDisplay(_ nsImage: NSImage) -> some View {
+        Image(nsImage: nsImage)
+            .resizable()
+            .scaledToFit()
+            .scaleEffect(zoomLevel)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding()
+            .background(Color.secondary.opacity(0.05))
+    }
+    
+    private var zoomControls: some View {
+        HStack {
+            Button(action: { zoomLevel = max(0.25, zoomLevel - 0.25) }) {
+                Image(systemName: "minus.magnifyingglass")
+            }
+            .buttonStyle(.bordered).controlSize(.small)
+            
+            Text("\(Int(zoomLevel * 100))%")
+                .font(.caption).foregroundColor(.secondary).frame(width: 60)
+            
+            Button(action: { zoomLevel = min(3.0, zoomLevel + 0.25) }) {
+                Image(systemName: "plus.magnifyingglass")
+            }
+            .buttonStyle(.bordered).controlSize(.small)
+            
+            Button("Fit") { zoomLevel = 1.0 }.buttonStyle(.bordered).controlSize(.small)
+            
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+    }
+    
+    @ViewBuilder
+    private var infoSection: some View {
+        if let info = imageInfo {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Information").font(.headline)
+                Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 8) {
+                    imageInfoRow(label: "Dimensions", value: "\(Int(info.size.width)) × \(Int(info.size.height)) px")
+                    imageInfoRow(label: "File Size", value: formatFileSize(info.fileSize))
+                    imageInfoRow(label: "Format", value: info.format)
+                }
+            }
+            .padding(16)
+            .background(Color.secondary.opacity(0.05))
+            .cornerRadius(12)
+            .padding(.horizontal, 16)
+        }
+    }
+    
+    private func imageInfoRow(label: String, value: String) -> some View {
+        GridRow {
+            Text(label)
+                .font(.caption.bold())
+                .foregroundColor(.secondary)
+            Text(value)
+                .font(.caption)
+        }
+    }
+    
+    private func loadImageAsync() async {
         isLoading = true
         
-        // Load image info on background thread
-        await Task.detached(priority: .userInitiated) { @Sendable () async -> Void in
+        let result = await Task.detached(priority: .userInitiated) { @Sendable in
             guard let nsImage = NSImage(data: imageData),
                   let imageRep = nsImage.representations.first else {
-                await MainActor.run {
-                    isLoading = false
-                }
-                return
+                return (nil, nil) as (NSImage?, ImageInfo?)
             }
             
             let size = imageRep.size
             let fileSize = imageData.count
-            
             var format = "Unknown"
             var colorSpace: String? = nil
             var hasAlpha = false
             
             if let bitmapRep = imageRep as? NSBitmapImageRep {
-                format = bitmapRep.bitmapFormat.contains(.alphaFirst) || bitmapRep.bitmapFormat.contains(.alphaNonpremultiplied) ? "PNG" : "JPEG"
-                // Get color space name
+                format = bitmapRep.bitmapFormat.contains(.alphaFirst) ? "PNG" : "JPEG"
                 colorSpace = bitmapRep.colorSpace.localizedName
                 hasAlpha = bitmapRep.hasAlpha
-            } else if imageRep is NSPDFImageRep {
-                format = "PDF"
             }
             
-            // Try to detect format from data
             if format == "Unknown" {
-                if imageData.starts(with: [0x89, 0x50, 0x4E, 0x47]) {
-                    format = "PNG"
-                } else if imageData.starts(with: [0xFF, 0xD8, 0xFF]) {
-                    format = "JPEG"
-                } else if imageData.starts(with: [0x47, 0x49, 0x46]) {
-                    format = "GIF"
-                } else if imageData.starts(with: [0x52, 0x49, 0x46, 0x46]) {
-                    format = "WebP"
-                }
+                if imageData.starts(with: [0x89, 0x50, 0x4E, 0x47]) { format = "PNG" }
+                else if imageData.starts(with: [0xFF, 0xD8, 0xFF]) { format = "JPEG" }
+                else if imageData.starts(with: [0x52, 0x49, 0x46, 0x46]) { format = "WebP" }
             }
             
-            let info = ImageInfo(
-                size: size,
-                fileSize: fileSize,
-                format: format,
-                colorSpace: colorSpace,
-                hasAlpha: hasAlpha
-            )
-            
-            await MainActor.run {
-                imageInfo = info
-                isLoading = false
-            }
+            let info = ImageInfo(size: size, fileSize: fileSize, format: format, colorSpace: colorSpace, hasAlpha: hasAlpha)
+            return (nsImage, info)
         }.value
+        
+        await MainActor.run {
+            self.displayImage = result.0
+            self.imageInfo = result.1
+            self.isLoading = false
+        }
     }
     
     private func formatFileSize(_ bytes: Int) -> String {
@@ -194,4 +149,5 @@ struct ImagePreviewView: View {
         return formatter.string(fromByteCount: Int64(bytes))
     }
 }
+
 

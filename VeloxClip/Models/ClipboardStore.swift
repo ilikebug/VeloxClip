@@ -14,8 +14,31 @@ class ClipboardStore: ObservableObject {
     }
     
     func addItem(_ item: ClipboardItem) {
-        // Check if item already exists in local array to avoid duplicates
-        if items.contains(where: { $0.id == item.id }) {
+        // Content-based Deduplication: Check if an item with the same content/data already exists
+        if let existingIndex = items.firstIndex(where: { 
+            ($0.content != nil && $0.content == item.content) || 
+            ($0.data != nil && $0.data == item.data) 
+        }) {
+            // Move existing item to top
+            var existingItem = items[existingIndex]
+            existingItem.createdAt = Date() // Move to top
+            
+            // UI Update: Move to start of array
+            self.items.remove(at: existingIndex)
+            self.items.insert(existingItem, at: 0)
+            
+            // Sync favorites list if needed
+            if existingItem.isFavorite {
+                if let favIndex = favoriteItems.firstIndex(where: { $0.id == existingItem.id }) {
+                    favoriteItems.remove(at: favIndex)
+                    favoriteItems.insert(existingItem, at: 0)
+                }
+            }
+            
+            // Persist update
+            Task {
+                try? await dbManager.updateClipboardItem(existingItem)
+            }
             return
         }
         
@@ -142,6 +165,20 @@ class ClipboardStore: ObservableObject {
                 }
             }
         }
+    }
+    
+    func addTag(_ tag: String, to item: ClipboardItem) {
+        var updatedTags = item.tags
+        if !updatedTags.contains(tag) {
+            updatedTags.append(tag)
+            updateTags(id: item.id, tags: updatedTags)
+        }
+    }
+    
+    func removeTag(_ tag: String, from item: ClipboardItem) {
+        var updatedTags = item.tags
+        updatedTags.removeAll { $0 == tag }
+        updateTags(id: item.id, tags: updatedTags)
     }
     
     func deleteItems(at offsets: IndexSet) {

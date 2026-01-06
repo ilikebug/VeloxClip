@@ -10,6 +10,13 @@ struct TextSummaryView: View {
     @State private var showFullText = false
     @State private var isGeneratingSummary = false
     
+    // Lazy loading state for long text
+    @State private var loadedParagraphs: [String] = []
+    @State private var loadMoreTask: Task<Void, Never>?
+    @State private var isLoadingMore = false
+    
+    private let paragraphsPerPage = 20
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Statistics
@@ -19,9 +26,9 @@ struct TextSummaryView: View {
                 StatItem(icon: "line.3.horizontal", label: "Lines", value: "\(lineCount)")
                 StatItem(icon: "paragraph", label: "Paragraphs", value: "\(paragraphCount)")
             }
-            .padding(12)
-            .background(Color(white: 0.95))
-            .cornerRadius(8)
+            .padding(16)
+            .background(Color.secondary.opacity(0.05))
+            .cornerRadius(12)
             
             // Summary section
             if let summary = summary {
@@ -44,9 +51,9 @@ struct TextSummaryView: View {
                         .foregroundColor(.secondary)
                         .textSelection(.enabled)
                 }
-                .padding(12)
-                .background(Color(white: 0.95))
-                .cornerRadius(8)
+                .padding(16)
+                .background(Color.secondary.opacity(0.05))
+                .cornerRadius(12)
             } else if isGeneratingSummary {
                 HStack {
                     ProgressView()
@@ -65,25 +72,25 @@ struct TextSummaryView: View {
             
             // Keywords
             if !keywords.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 12) {
                     Text("Keywords")
                         .font(.headline)
                     
                     FlowLayout(spacing: 8) {
                         ForEach(keywords, id: \.self) { keyword in
                             Text(keyword)
-                                .font(.caption)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
+                                .font(.caption.bold())
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
                                 .background(Color.blue.opacity(0.1))
                                 .foregroundColor(.blue)
-                                .cornerRadius(4)
+                                .cornerRadius(8)
                         }
                     }
                 }
-                .padding(12)
-                .background(Color(white: 0.95))
-                .cornerRadius(8)
+                .padding(16)
+                .background(Color.secondary.opacity(0.05))
+                .cornerRadius(12)
             }
             
             // Full text toggle
@@ -95,31 +102,68 @@ struct TextSummaryView: View {
             }
             
             // Text content
-            if showFullText {
-                ScrollView {
-                    Text(text)
-                        .font(.body)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .frame(maxHeight: 300)
-                .padding(12)
-                .background(Color(white: 0.95))
-                .cornerRadius(8)
-            } else {
-                ScrollView {
+            Group {
+                if showFullText {
+                    if text.count > 2000 {
+                        // Use lazy loading for very long text
+                        LazyVStack(alignment: .leading, spacing: 8) {
+                            ForEach(Array(loadedParagraphs.enumerated()), id: \.offset) { index, paragraph in
+                                Text(paragraph)
+                                    .font(.body)
+                                    .textSelection(.enabled)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            
+                            // Load more trigger
+                            if loadedParagraphs.count < allParagraphs.count {
+                                loadMoreIndicator
+                                    .onAppear {
+                                        loadMoreWithDebounce()
+                                    }
+                            }
+                        }
+                        .padding(16)
+                        .background(Color.white)
+                        .cornerRadius(12)
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.secondary.opacity(0.1), lineWidth: 1))
+                    } else {
+                        // Short text, render directly
+                        Text(text)
+                            .font(.body)
+                            .textSelection(.enabled)
+                            .padding(16)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.white)
+                            .cornerRadius(12)
+                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.secondary.opacity(0.1), lineWidth: 1))
+                    }
+                } else {
                     Text(text.prefix(500) + (text.count > 500 ? "..." : ""))
                         .font(.body)
                         .textSelection(.enabled)
+                        .padding(16)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.white)
+                        .cornerRadius(12)
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.secondary.opacity(0.1), lineWidth: 1))
                 }
-                .frame(maxHeight: 300)
-                .padding(12)
-                .background(Color(white: 0.95))
-                .cornerRadius(8)
+            }
+            .onAppear {
+                if text.count > 2000 && loadedParagraphs.isEmpty {
+                    loadInitialParagraphs()
+                }
+            }
+            .onChange(of: text) { _, _ in
+                // Reset state when text changes
+                loadedParagraphs = []
+                loadMoreTask?.cancel()
+                isLoadingMore = false
+                if text.count > 2000 {
+                    loadInitialParagraphs()
+                }
             }
         }
-        .task {
+        .task(id: text) {
             await extractKeywordsAsync()
         }
     }
@@ -189,6 +233,52 @@ struct TextSummaryView: View {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
+    }
+    
+    private var allParagraphs: [String] {
+        text.components(separatedBy: "\n\n")
+            .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+    }
+    
+    private func loadInitialParagraphs() {
+        let paragraphs = allParagraphs
+        let initialCount = min(paragraphsPerPage, paragraphs.count)
+        loadedParagraphs = Array(paragraphs.prefix(initialCount))
+    }
+    
+    private var loadMoreIndicator: some View {
+        HStack {
+            if isLoadingMore {
+                ProgressView()
+                    .scaleEffect(0.7)
+                Text("Loading more paragraphs...")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+    }
+    
+    private func loadMoreWithDebounce() {
+        guard !isLoadingMore && loadedParagraphs.count < allParagraphs.count else { return }
+        
+        loadMoreTask?.cancel()
+        loadMoreTask = Task {
+            isLoadingMore = true
+            try? await Task.sleep(nanoseconds: 300_000_000) // 300ms debounce
+            
+            if !Task.isCancelled {
+                await MainActor.run {
+                    let paragraphs = allParagraphs
+                    let nextCount = min(loadedParagraphs.count + paragraphsPerPage, paragraphs.count)
+                    loadedParagraphs = Array(paragraphs.prefix(nextCount))
+                    isLoadingMore = false
+                }
+            } else {
+                isLoadingMore = false
+            }
+        }
     }
 }
 

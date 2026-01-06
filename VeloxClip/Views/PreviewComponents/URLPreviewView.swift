@@ -17,8 +17,10 @@ struct URLPreviewView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             // URL display
-            HStack {
-                Image(systemName: "link")
+            HStack(spacing: 12) {
+                Image(systemName: "link.circle.fill")
+                    .resizable()
+                    .frame(width: 32, height: 32)
                     .foregroundColor(.blue)
                 
                 Text(urlString)
@@ -28,14 +30,14 @@ struct URLPreviewView: View {
                 
                 Spacer()
             }
-            .padding(12)
-            .background(Color(white: 0.95))
-            .cornerRadius(8)
+            .padding(16)
+            .background(Color.secondary.opacity(0.05))
+            .cornerRadius(12)
             
             // URL info
             if let info = urlInfo {
                 if info.isValid {
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 12) {
                         if let title = info.title, !title.isEmpty {
                             Text(title)
                                 .font(.headline)
@@ -48,9 +50,9 @@ struct URLPreviewView: View {
                                 .lineLimit(3)
                         }
                     }
-                    .padding(12)
-                    .background(Color(white: 0.95))
-                    .cornerRadius(8)
+                    .padding(16)
+                    .background(Color.secondary.opacity(0.05))
+                    .cornerRadius(12)
                 } else {
                     HStack {
                         Image(systemName: "exclamationmark.triangle.fill")

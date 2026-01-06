@@ -32,3 +32,31 @@ struct ClipboardItem: Identifiable, Codable, Hashable, Equatable {
         self.sourceApp = sourceApp
     }
 }
+
+import AppKit
+
+extension ClipboardItem {
+    func copyToPasteboard() {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        
+        if type == "image", let d = data {
+            pasteboard.setData(d, forType: .tiff)
+            pasteboard.setData(d, forType: .png)
+            return
+        }
+        
+        if type == "color", let c = content {
+            pasteboard.setString(c, forType: .string)
+            return
+        }
+        
+        if let c = content {
+            pasteboard.setString(c, forType: .string)
+        } else if let d = data {
+            if type == "rtf" {
+                pasteboard.setData(d, forType: .rtf)
+            }
+        }
+    }
+}

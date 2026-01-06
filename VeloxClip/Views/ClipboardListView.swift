@@ -10,48 +10,17 @@ struct ClipboardListView: View {
         ScrollViewReader { proxy in
             List(selection: $selectedItem) {
                 ForEach(items) { item in
-                    HStack(spacing: 16) {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(typeColor(for: item.type).opacity(0.15))
-                                .frame(width: 36, height: 36)
-                            
-                            typeIcon(for: item.type)
-                                .foregroundColor(typeColor(for: item.type))
-                                .font(.system(size: 16, weight: .semibold))
-                        }
-                        
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(displayContent(for: item))
-                                .lineLimit(1)
-                                .font(.system(.body, design: .rounded))
-                            
-                            HStack {
-                                Text(item.sourceApp ?? "Unknown")
-                                    .fontWeight(.medium)
-                                Text("•")
-                                Text(item.createdAt, style: .time)
-                            }
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                        }
-                        
-                        Spacer() // Push content to the left
-                    }
-                    .padding(.vertical, 8)
-                    .padding(.horizontal, 8)
-                    .frame(maxWidth: .infinity, alignment: .leading) // Fill width
-                    .background(
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(selectedItem?.id == item.id ? Color.accentColor.opacity(0.15) : Color.clear)
+                    ClipboardItemRow(
+                        item: item,
+                        isSelected: selectedItem?.id == item.id
                     )
                     .tag(item)
-                    .id(item.id) // Needed for ScrollViewReader
+                    .id(item.id)
                 }
                 .onDelete(perform: deleteItems)
             }
             .listStyle(.sidebar)
-            .onChange(of: selectedItem) { newItem in
+            .onChange(of: selectedItem) { _, newItem in
                 if let newItem = newItem {
                     withAnimation(.easeInOut(duration: 0.15)) {
                         proxy.scrollTo(newItem.id, anchor: .center)
@@ -59,6 +28,55 @@ struct ClipboardListView: View {
                 }
             }
         }
+    }
+    
+    private func deleteItems(offsets: IndexSet) {
+        withAnimation {
+            store.deleteItems(at: offsets)
+        }
+    }
+}
+
+struct ClipboardItemRow: View {
+    let item: ClipboardItem
+    let isSelected: Bool
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(typeColor(for: item.type).opacity(0.15))
+                    .frame(width: 36, height: 36)
+                
+                typeIcon(for: item.type)
+                    .foregroundColor(typeColor(for: item.type))
+                    .font(.system(size: 16, weight: .semibold))
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(displayContent(for: item))
+                    .lineLimit(1)
+                    .font(.system(.body, design: .rounded))
+                
+                HStack {
+                    Text(item.sourceApp ?? "Unknown")
+                        .fontWeight(.medium)
+                    Text("•")
+                    Text(item.createdAt, style: .time)
+                }
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            }
+            
+            Spacer()
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
+        )
     }
     
     private func typeColor(for type: String) -> Color {
@@ -94,11 +112,5 @@ struct ClipboardListView: View {
             return "Rich Text"
         }
         return "Unknown Content"
-    }
-    
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            store.deleteItems(at: offsets)
-        }
     }
 }

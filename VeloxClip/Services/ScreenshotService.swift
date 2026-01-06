@@ -51,13 +51,12 @@ class ScreenshotService {
         stopClipboardMonitoring()
         
         // Monitor clipboard changes to detect screenshot completion
-        monitoringTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { [weak self] timer in
-            guard let self = self, self.isWaitingForScreenshot else {
-                timer.invalidate()
-                return
-            }
-            
+        monitoringTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { [weak self] _ in
             Task { @MainActor in
+                guard let self = self, self.isWaitingForScreenshot else {
+                    self?.stopClipboardMonitoring()
+                    return
+                }
                 self.checkClipboard()
             }
         }

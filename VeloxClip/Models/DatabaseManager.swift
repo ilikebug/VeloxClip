@@ -81,8 +81,13 @@ actor DatabaseManager {
                 t.column(key, primaryKey: true)
                 t.column(self.value)
             })
+            
+            // Optimization: Add indexes for frequently queried/sorted columns
+            try db.run(clipboardItems.createIndex(createdAt, ifNotExists: true))
+            try db.run(clipboardItems.createIndex(isFavorite, ifNotExists: true))
+            
         } catch {
-            print("Failed to create tables: \(error)")
+            print("Failed to create tables or indexes: \(error)")
             Task { @MainActor in
                 ErrorHandler.shared.handle(error)
             }

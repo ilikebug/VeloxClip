@@ -16,34 +16,42 @@ struct DateTimePreviewView: View {
         VStack(alignment: .leading, spacing: 12) {
             if parsedDate != nil {
                 // Date display
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 12) {
                     Text("Date/Time Formats")
                         .font(.headline)
+                        .padding(.bottom, 4)
                     
-                    ForEach(Array(formats.enumerated()), id: \.offset) { index, format in
-                        HStack {
-                            Text(format.name + ":")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .frame(width: 120, alignment: .trailing)
-                            
-                            Text(format.value)
-                                .font(.system(.body, design: .monospaced))
-                                .textSelection(.enabled)
-                            
-                            Spacer()
-                            
-                            Button(action: { copyFormat(format.value) }) {
-                                Image(systemName: "doc.on.doc")
-                                    .font(.caption)
+                    VStack(spacing: 8) {
+                        ForEach(Array(formats.enumerated()), id: \.offset) { index, format in
+                            HStack {
+                                Text(format.name)
+                                    .font(.caption.bold())
+                                    .foregroundColor(.secondary)
+                                    .frame(width: 120, alignment: .leading)
+                                
+                                Text(format.value)
+                                    .font(.system(.body, design: .monospaced))
+                                    .textSelection(.enabled)
+                                
+                                Spacer()
+                                
+                                Button(action: { copyFormat(format.value) }) {
+                                    Image(systemName: "doc.on.doc")
+                                        .font(.caption)
+                                        .foregroundColor(.blue)
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
+                            .padding(.vertical, 4)
+                            if index < formats.count - 1 {
+                                Divider().opacity(0.5)
+                            }
                         }
                     }
                 }
-                .padding(12)
-                .background(Color(white: 0.95))
-                .cornerRadius(8)
+                .padding(16)
+                .background(Color.secondary.opacity(0.05))
+                .cornerRadius(12)
                 
                 // Quick actions
                 HStack {

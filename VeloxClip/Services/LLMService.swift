@@ -110,28 +110,32 @@ class LLMService: ObservableObject {
             
             var output = firstChoice.message.content.trimmingCharacters(in: .whitespacesAndNewlines)
             
-            // Clean up output - remove markdown code fences if present
-            if output.hasPrefix("```") {
-                let lines = output.components(separatedBy: .newlines)
-                var cleanedLines: [String] = []
-                var skipCodeFence = true
-                
-                for line in lines {
-                    if skipCodeFence && line.hasPrefix("```") {
-                        skipCodeFence = false
-                        continue
-                    }
-                    if !skipCodeFence {
-                        cleanedLines.append(line)
-                    }
+            // 1. Remove Thinking Tags (<think>...</think>) - Common in DeepSeek-R1
+            if let startRange = output.range(of: "<think>"), let endRange = output.range(of: "</think>") {
+                output.removeSubrange(startRange.lowerBound..<endRange.upperBound)
+                output = output.trimmingCharacters(in: .whitespacesAndNewlines)
+            } else if output.hasPrefix("<think>") && !output.contains("</think>") {
+                // If it's only a starting tag and no end tag (rare but possible in streaming/truncation)
+                if let startRange = output.range(of: "<think>") {
+                    output.removeSubrange(startRange.lowerBound..<output.endIndex)
+                    output = output.trimmingCharacters(in: .whitespacesAndNewlines)
                 }
-                
-                // Remove trailing code fence if present
-                if let lastLine = cleanedLines.last, lastLine.hasPrefix("```") {
-                    cleanedLines.removeLast()
+            }
+            
+            // 2. Clean up markdown code fences at start/end
+            // Using a simpler recursive approach or regex to remove starting ``` and ending ```
+            while output.hasPrefix("```") {
+                if let firstNewline = output.firstIndex(of: "\n") {
+                    output.removeSubrange(output.startIndex...firstNewline)
+                } else {
+                    output.removeSubrange(output.startIndex..<output.index(output.startIndex, offsetBy: 3))
                 }
-                
-                output = cleanedLines.joined(separator: "\n")
+                output = output.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            
+            if output.hasSuffix("```") {
+                output.removeLast(3)
+                output = output.trimmingCharacters(in: .whitespacesAndNewlines)
             }
             
             return output.isEmpty ? "[Empty response]" : output

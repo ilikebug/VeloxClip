@@ -25,71 +25,68 @@ struct ColorPreviewView: View {
                     )
                 
                 // Color formats
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 12) {
                     Text("Color Formats")
                         .font(.headline)
+                        .padding(.bottom, 4)
                     
-                    ForEach(Array(formats.enumerated()), id: \.offset) { index, format in
-                        HStack {
-                            Text(format.name + ":")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .frame(width: 80, alignment: .trailing)
-                            
-                            Text(format.value)
-                                .font(.system(.body, design: .monospaced))
-                                .textSelection(.enabled)
-                            
-                            Spacer()
-                            
-                            Button(action: { copyFormat(format.value) }) {
-                                Image(systemName: "doc.on.doc")
-                                    .font(.caption)
+                    VStack(spacing: 8) {
+                        ForEach(Array(formats.enumerated()), id: \.offset) { index, format in
+                            HStack {
+                                Text(format.name)
+                                    .font(.caption.bold())
+                                    .foregroundColor(.secondary)
+                                    .frame(width: 60, alignment: .leading)
+                                
+                                Text(format.value)
+                                    .font(.system(.body, design: .monospaced))
+                                    .textSelection(.enabled)
+                                
+                                Spacer()
+                                
+                                Button(action: { copyFormat(format.value) }) {
+                                    Image(systemName: "doc.on.doc")
+                                        .font(.caption)
+                                        .foregroundColor(.blue)
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
+                            .padding(.vertical, 4)
+                            if index < formats.count - 1 {
+                                Divider().opacity(0.5)
+                            }
                         }
                     }
                 }
-                .padding(12)
-                .background(Color(white: 0.95))
-                .cornerRadius(8)
+                .padding(16)
+                .background(Color.secondary.opacity(0.05))
+                .cornerRadius(12)
                 
                 // Color info
-                if let rgb = extractRGB(from: colorString) {
-                    VStack(alignment: .leading, spacing: 8) {
+                if let rgb = extractRGB(from: color) {
+                    VStack(alignment: .leading, spacing: 12) {
                         Text("Color Information")
                             .font(.headline)
                         
-                        Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
+                        Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 12) {
                             GridRow {
-                                Text("Red:")
-                                    .foregroundColor(.secondary)
-                                Text("\(rgb.r)")
+                                infoLabel("Red")
+                                Text("\(rgb.r)").font(.system(.body, design: .monospaced))
+                                infoLabel("Green")
+                                Text("\(rgb.g)").font(.system(.body, design: .monospaced))
                             }
                             
                             GridRow {
-                                Text("Green:")
-                                    .foregroundColor(.secondary)
-                                Text("\(rgb.g)")
-                            }
-                            
-                            GridRow {
-                                Text("Blue:")
-                                    .foregroundColor(.secondary)
-                                Text("\(rgb.b)")
-                            }
-                            
-                            GridRow {
-                                Text("Alpha:")
-                                    .foregroundColor(.secondary)
-                                Text(String(format: "%.2f", rgb.a))
+                                infoLabel("Blue")
+                                Text("\(rgb.b)").font(.system(.body, design: .monospaced))
+                                infoLabel("Alpha")
+                                Text(String(format: "%.2f", rgb.a)).font(.system(.body, design: .monospaced))
                             }
                         }
-                        .font(.caption)
                     }
-                    .padding(12)
-                    .background(Color(white: 0.95))
-                    .cornerRadius(8)
+                    .padding(16)
+                    .background(Color.secondary.opacity(0.05))
+                    .cornerRadius(12)
                 }
                 
                 // Quick actions
@@ -124,11 +121,24 @@ struct ColorPreviewView: View {
         }
     }
     
+    private func infoLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.caption.bold())
+            .foregroundColor(.secondary)
+    }
+    
     private func parseColor() {
-        // Try to parse as hex
-        var hexSanitized = colorString.trimmingCharacters(in: .whitespacesAndNewlines)
-        hexSanitized = hexSanitized.replacingOccurrences(of: "#", with: "")
+        let trimmed = colorString.trimmingCharacters(in: .whitespacesAndNewlines)
         
+        // 1. Try to parse as RGB/RGBA first
+        if let rgbColor = parseRGB(trimmed) {
+            color = rgbColor
+            generateFormats(from: rgbColor)
+            return
+        }
+        
+        // 2. Try to parse as hex
+        let hexSanitized = trimmed.replacingOccurrences(of: "#", with: "")
         var rgb: UInt64 = 0
         if Scanner(string: hexSanitized).scanHexInt64(&rgb) {
             let length = hexSanitized.count
@@ -151,15 +161,9 @@ struct ColorPreviewView: View {
                 return
             }
             
-            color = Color(.sRGB, red: r, green: g, blue: b, opacity: a)
-            generateFormats(from: colorString)
-            return
-        }
-        
-        // Try to parse as RGB
-        if let rgbColor = parseRGB(colorString) {
-            color = rgbColor
-            generateFormats(from: colorString)
+            let parsedColor = Color(.sRGB, red: r, green: g, blue: b, opacity: a)
+            color = parsedColor
+            generateFormats(from: parsedColor)
             return
         }
         
@@ -167,15 +171,15 @@ struct ColorPreviewView: View {
     }
     
     private func parseRGB(_ string: String) -> Color? {
-        // Try formats like "rgb(255, 87, 51)" or "255, 87, 51"
         let patterns = [
-            #"rgb\((\d+),\s*(\d+),\s*(\d+)\)"#,
-            #"(\d+),\s*(\d+),\s*(\d+)"#
+            #"rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)"#,
+            #"^(\d+),\s*(\d+),\s*(\d+)$"#
         ]
         
         for pattern in patterns {
-            if let regex = try? NSRegularExpression(pattern: pattern, options: []),
+            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
                let match = regex.firstMatch(in: string, range: NSRange(string.startIndex..., in: string)) {
+                
                 let rRange = Range(match.range(at: 1), in: string)!
                 let gRange = Range(match.range(at: 2), in: string)!
                 let bRange = Range(match.range(at: 3), in: string)!
@@ -183,32 +187,40 @@ struct ColorPreviewView: View {
                 if let r = Int(string[rRange]),
                    let g = Int(string[gRange]),
                    let b = Int(string[bRange]) {
-                    return Color(red: Double(r) / 255.0, green: Double(g) / 255.0, blue: Double(b) / 255.0)
+                    
+                    var alpha: Double = 1.0
+                    if match.numberOfRanges > 4 && match.range(at: 4).location != NSNotFound {
+                        let aRange = Range(match.range(at: 4), in: string)!
+                        alpha = Double(string[aRange]) ?? 1.0
+                    }
+                    
+                    return Color(red: Double(r) / 255.0, green: Double(g) / 255.0, blue: Double(b) / 255.0, opacity: alpha)
                 }
             }
         }
-        
         return nil
     }
     
-    private func generateFormats(from original: String) {
-        guard color != nil else { return }
-        
+    private func generateFormats(from color: Color) {
         var formats: [ColorFormat] = []
         
-        // HEX
-        if let hex = extractHEX(from: original) {
+        if let rgb = extractRGB(from: color) {
+            // HEX
+            let hex = String(format: "#%02X%02X%02X", rgb.r, rgb.g, rgb.b)
             formats.append(ColorFormat(name: "HEX", value: hex))
-        }
-        
-        // RGB
-        if let rgb = extractRGB(from: original) {
+            
+            if rgb.a < 1.0 {
+                let hexA = String(format: "#%02X%02X%02X%02X", rgb.r, rgb.g, rgb.b, Int(rgb.a * 255))
+                formats.append(ColorFormat(name: "HEXA", value: hexA))
+            }
+            
+            // RGB
             formats.append(ColorFormat(name: "RGB", value: "rgb(\(rgb.r), \(rgb.g), \(rgb.b))"))
-            formats.append(ColorFormat(name: "RGBA", value: "rgba(\(rgb.r), \(rgb.g), \(rgb.b), \(String(format: "%.2f", rgb.a)))"))
-        }
-        
-        // HSL (simplified conversion)
-        if let rgb = extractRGB(from: original) {
+            if rgb.a < 1.0 {
+                formats.append(ColorFormat(name: "RGBA", value: "rgba(\(rgb.r), \(rgb.g), \(rgb.b), \(String(format: "%.2f", rgb.a)))"))
+            }
+            
+            // HSL
             let hsl = rgbToHSL(rgb)
             formats.append(ColorFormat(name: "HSL", value: "hsl(\(Int(hsl.h)), \(Int(hsl.s * 100))%, \(Int(hsl.l * 100))%)"))
         }

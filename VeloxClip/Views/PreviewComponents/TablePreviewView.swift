@@ -38,15 +38,21 @@ struct TablePreviewView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
+            .padding(.horizontal, 16)
             .padding(.bottom, 8)
             
             // Table view
             if !parsedData.isEmpty {
                 ScrollView([.horizontal, .vertical], showsIndicators: true) {
-                    TableView(rows: filteredData, headers: headers)
+                    VStack(alignment: .leading, spacing: 0) {
+                        TableView(rows: filteredData, headers: headers)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxHeight: 400)
-            } else {
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.white)
+            }
+ else {
                 Text("No table data found")
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -54,6 +60,13 @@ struct TablePreviewView: View {
             }
         }
         .onAppear {
+            detectDelimiter()
+            parseData()
+        }
+        .onChange(of: content) { _, _ in
+            // Reset and reparse when content changes
+            parsedData = []
+            headers = []
             detectDelimiter()
             parseData()
         }
@@ -116,6 +129,13 @@ struct TableView: View {
     let rows: [[String]]
     let headers: [String]
     
+    // Lazy loading state
+    @State private var loadedRows: [(Int, [String])] = []
+    @State private var loadMoreTask: Task<Void, Never>?
+    @State private var isLoadingMore = false
+    
+    private let rowsPerPage = 50
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header row
@@ -129,22 +149,83 @@ struct TableView: View {
             
             Divider()
             
-            // Data rows
-            ForEach(Array(rows.enumerated()), id: \.offset) { rowIndex, row in
-                HStack(spacing: 0) {
-                    ForEach(Array(row.enumerated()), id: \.offset) { colIndex, cell in
-                        TableCell(content: cell, isHeader: false)
-                            .frame(width: 150)
+            // Data rows with lazy loading
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(loadedRows, id: \.0) { rowIndex, row in
+                    HStack(spacing: 0) {
+                        ForEach(Array(row.enumerated()), id: \.offset) { colIndex, cell in
+                            TableCell(content: cell, isHeader: false)
+                                .frame(width: 150)
+                        }
+                    }
+                    
+                    if rowIndex < rows.count - 1 {
+                        Divider()
                     }
                 }
                 
-                if rowIndex < rows.count - 1 {
-                    Divider()
+                if loadedRows.count < rows.count {
+                    loadMoreIndicator
+                        .onAppear {
+                            loadMoreWithDebounce()
+                        }
                 }
             }
         }
-        .background(Color(white: 0.95))
-        .cornerRadius(8)
+        .background(Color(white: 0.98))
+        .onAppear {
+            if loadedRows.isEmpty {
+                loadInitialRows()
+            }
+        }
+        .onChange(of: rows) { _, _ in
+            // Reset state when rows change
+            loadedRows = []
+            loadMoreTask?.cancel()
+            isLoadingMore = false
+            loadInitialRows()
+        }
+    }
+    
+    private func loadInitialRows() {
+        let allRows = rows.enumerated().map { ($0.offset, $0.element) }
+        let initialCount = min(rowsPerPage, allRows.count)
+        loadedRows = Array(allRows.prefix(initialCount))
+    }
+    
+    private var loadMoreIndicator: some View {
+        HStack {
+            if isLoadingMore {
+                ProgressView()
+                    .scaleEffect(0.7)
+                Text("Loading more rows...")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+    }
+    
+    private func loadMoreWithDebounce() {
+        guard !isLoadingMore && loadedRows.count < rows.count else { return }
+        
+        loadMoreTask?.cancel()
+        loadMoreTask = Task {
+            isLoadingMore = true
+            try? await Task.sleep(nanoseconds: 300_000_000) // 300ms debounce
+            
+            if !Task.isCancelled {
+                await MainActor.run {
+                    let allRows = rows.enumerated().map { ($0.offset, $0.element) }
+                    let nextCount = min(loadedRows.count + rowsPerPage, allRows.count)
+                    loadedRows = Array(allRows.prefix(nextCount))
+                    isLoadingMore = false
+                }
+            } else {
+                isLoadingMore = false
+            }
+        }
     }
 }
 
