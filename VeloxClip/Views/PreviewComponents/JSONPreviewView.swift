@@ -96,14 +96,15 @@ struct JSONPreviewView: View {
     }
     
     private var formattedView: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        LazyVStack(alignment: .leading, spacing: 0) {
             let lines = formattedJSON.components(separatedBy: .newlines)
-            ForEach(0..<lines.count, id: \.self) { i in
-                Text(lines[i])
+            ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
+                Text(line)
                     .font(.system(.body, design: .monospaced))
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
                     .padding(.trailing, 40)
+                    .padding(.vertical, 1)
             }
         }
         .padding(12)
@@ -215,234 +216,127 @@ struct JSONPreviewView: View {
 }
 
 
-// Tree view for JSON
+// Tree view for JSON - Postman Style
 struct JSONTreeView: View {
     let jsonObject: Any
     let level: Int
+    let key: String?
     @State private var isExpanded = true
     
-    // Lazy loading state for dictionaries and arrays
-    @State private var loadedKeys: [String] = []
-    @State private var loadedArrayItems: [(Int, Any)] = []
-    @State private var loadMoreTask: Task<Void, Never>?
-    @State private var isLoadingMore = false
-    
     private let indent: CGFloat = 20
-    private let itemsPerPage = 20
     
+    // Postman-like colors
+    private let keyColor = Color(hex: "#A626A4")!     // Purple
+    private let stringColor = Color(hex: "#50A14F")!  // Green
+    private let numberColor = Color(hex: "#986801")!  // Orange/Brown
+    private let keywordColor = Color(hex: "#0184BC")! // Blue
+    private let bracketColor = Color.secondary.opacity(0.8)
+    
+    init(jsonObject: Any, level: Int = 0, key: String? = nil) {
+        self.jsonObject = jsonObject
+        self.level = level
+        self.key = key
+    }
+
     var body: some View {
-        Group {
+        VStack(alignment: .leading, spacing: 2) {
             if let dict = jsonObject as? [String: Any] {
-                dictionaryView(dict)
+                collectionHeader(label: "{", count: dict.count, type: "keys")
+                if isExpanded {
+                    dictionaryContent(dict)
+                    Text("}").foregroundColor(bracketColor).font(.system(.body, design: .monospaced))
+                }
             } else if let array = jsonObject as? [Any] {
-                arrayView(array)
-            } else {
-                valueView(jsonObject)
-            }
-        }
-        .onAppear {
-            if let dict = jsonObject as? [String: Any], loadedKeys.isEmpty {
-                loadInitialKeys(from: dict)
-            } else if let array = jsonObject as? [Any], loadedArrayItems.isEmpty {
-                loadInitialArrayItems(from: array)
-            }
-        }
-    }
-    
-    private func loadInitialKeys(from dict: [String: Any]) {
-        let sortedKeys = Array(dict.keys.sorted())
-        let initialCount = min(itemsPerPage, sortedKeys.count)
-        loadedKeys = Array(sortedKeys.prefix(initialCount))
-    }
-    
-    private func loadInitialArrayItems(from array: [Any]) {
-        let initialCount = min(itemsPerPage, array.count)
-        loadedArrayItems = Array(array.enumerated().prefix(initialCount))
-    }
-    
-    private func dictionaryView(_ dict: [String: Any]) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 4) {
-                Button(action: { isExpanded.toggle() }) {
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+                collectionHeader(label: "[", count: array.count, type: "items")
+                if isExpanded {
+                    arrayContent(array)
+                    Text("]").foregroundColor(bracketColor).font(.system(.body, design: .monospaced))
                 }
-                .buttonStyle(.plain)
-                
-                Text("{")
-                    .font(.system(.body, design: .monospaced))
-                    .foregroundColor(.blue)
-                
-                Text("\(dict.count) keys")
-                    .font(.caption)
+            } else {
+                leafValue
+            }
+        }
+        .padding(.leading, level == 0 ? 0 : indent)
+        // Add a vertical guide line for nested items
+        .overlay(
+            Group {
+                if level > 0 && isExpanded {
+                    Rectangle()
+                        .fill(Color.secondary.opacity(0.1))
+                        .frame(width: 1)
+                        .padding(.leading, 4)
+                        .padding(.vertical, 4)
+                }
+            },
+            alignment: .leading
+        )
+    }
+    
+    @ViewBuilder
+    private var leafValue: some View {
+        HStack(alignment: .top, spacing: 4) {
+            if let key = key {
+                Text("\"\(key)\":").foregroundColor(keyColor).fontWeight(.medium)
+            }
+            valueView(jsonObject)
+        }
+        .font(.system(.body, design: .monospaced))
+    }
+
+    private func collectionHeader(label: String, count: Int, type: String) -> some View {
+        HStack(spacing: 4) {
+            Button(action: { isExpanded.toggle() }) {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .bold))
                     .foregroundColor(.secondary)
+                    .rotationEffect(isExpanded ? .zero : .degrees(-90))
+            }
+            .buttonStyle(.plain)
+            .frame(width: 12)
+            
+            if let key = key {
+                Text("\"\(key)\":").foregroundColor(keyColor).fontWeight(.medium)
             }
             
-            if isExpanded {
-                VStack(alignment: .leading, spacing: 2) {
-                    ForEach(loadedKeys, id: \.self) { key in
-                        HStack(alignment: .top, spacing: 4) {
-                            Text("\"\(key)\":")
-                                .font(.system(.body, design: .monospaced))
-                                .foregroundColor(.purple)
-                            
-                            JSONTreeView(jsonObject: dict[key]!, level: level + 1)
-                                .fixedSize(horizontal: true, vertical: false)
-                        }
-                        .padding(.leading, indent)
-                    }
-                    
-                    if loadedKeys.count < dict.count {
-                        loadMoreIndicator
-                            .onAppear {
-                                loadMoreKeys(from: dict)
-                            }
-                            .padding(.leading, indent)
-                    }
-                }
-                
-                Text("}")
-                    .font(.system(.body, design: .monospaced))
-                    .foregroundColor(.blue)
-            } else {
-                Text("...")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .padding(.leading, indent)
-            }
-        }
-    }
-    
-    private func arrayView(_ array: [Any]) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 4) {
-                Button(action: { isExpanded.toggle() }) {
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                }
-                .buttonStyle(.plain)
-                
-                Text("[")
-                    .font(.system(.body, design: .monospaced))
-                    .foregroundColor(.blue)
-                
-                Text("\(array.count) items")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
+            Text(label).foregroundColor(bracketColor)
             
-            if isExpanded {
-                VStack(alignment: .leading, spacing: 2) {
-                    ForEach(loadedArrayItems, id: \.0) { index, item in
-                        HStack(alignment: .top, spacing: 4) {
-                            Text("[\(index)]:")
-                                .font(.system(.body, design: .monospaced))
-                                .foregroundColor(.orange)
-                            
-                            JSONTreeView(jsonObject: item, level: level + 1)
-                                .fixedSize(horizontal: true, vertical: false)
-                        }
-                        .padding(.leading, indent)
-                    }
-                    
-                    if loadedArrayItems.count < array.count {
-                        loadMoreIndicator
-                            .onAppear {
-                                loadMoreArrayItems(from: array)
-                            }
-                            .padding(.leading, indent)
-                    }
-                }
-                
-                Text("]")
-                    .font(.system(.body, design: .monospaced))
-                    .foregroundColor(.blue)
-            } else {
-                Text("...")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .padding(.leading, indent)
+            if !isExpanded {
+                Text("... \(count) \(type) ...").font(.caption).padding(.horizontal, 4).background(Color.secondary.opacity(0.1)).cornerRadius(4)
+                Text(label == "{" ? "}" : "]").foregroundColor(bracketColor)
+            }
+        }
+        .font(.system(.body, design: .monospaced))
+    }
+
+    private func dictionaryContent(_ dict: [String: Any]) -> some View {
+        LazyVStack(alignment: .leading, spacing: 2) {
+            let sortedKeys = dict.keys.sorted()
+            ForEach(sortedKeys, id: \.self) { key in
+                JSONTreeView(jsonObject: dict[key]!, level: level + 1, key: key)
             }
         }
     }
-    
-    private var loadMoreIndicator: some View {
-        HStack {
-            if isLoadingMore {
-                ProgressView()
-                    .scaleEffect(0.6)
-                Text("Loading...")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            }
-        }
-        .padding(.vertical, 2)
-    }
-    
-    private func loadMoreKeys(from dict: [String: Any]) {
-        guard !isLoadingMore && loadedKeys.count < dict.count else { return }
-        
-        loadMoreTask?.cancel()
-        loadMoreTask = Task {
-            isLoadingMore = true
-            try? await Task.sleep(nanoseconds: 300_000_000) // 300ms debounce
-            
-            if !Task.isCancelled {
-                await MainActor.run {
-                    let sortedKeys = Array(dict.keys.sorted())
-                    let nextCount = min(loadedKeys.count + itemsPerPage, sortedKeys.count)
-                    loadedKeys = Array(sortedKeys.prefix(nextCount))
-                    isLoadingMore = false
-                }
-            } else {
-                isLoadingMore = false
+
+    private func arrayContent(_ array: [Any]) -> some View {
+        LazyVStack(alignment: .leading, spacing: 2) {
+            ForEach(Array(array.enumerated()), id: \.offset) { index, item in
+                JSONTreeView(jsonObject: item, level: level + 1)
             }
         }
     }
-    
-    private func loadMoreArrayItems(from array: [Any]) {
-        guard !isLoadingMore && loadedArrayItems.count < array.count else { return }
-        
-        loadMoreTask?.cancel()
-        loadMoreTask = Task {
-            isLoadingMore = true
-            try? await Task.sleep(nanoseconds: 300_000_000) // 300ms debounce
-            
-            if !Task.isCancelled {
-                await MainActor.run {
-                    let nextCount = min(loadedArrayItems.count + itemsPerPage, array.count)
-                    loadedArrayItems = Array(array.enumerated().prefix(nextCount))
-                    isLoadingMore = false
-                }
-            } else {
-                isLoadingMore = false
-            }
-        }
-    }
-    
+
     private func valueView(_ value: Any) -> some View {
-        let valueString: String
-        let color: Color
-        
-        if value is String {
-            valueString = "\"\(value)\""
-            color = .green
-        } else if value is Bool {
-            valueString = "\(value)"
-            color = .orange
+        if let str = value as? String {
+            return Text("\"\(str)\"").foregroundColor(stringColor)
+        } else if let bool = value as? Bool {
+            return Text("\(bool)").foregroundColor(keywordColor)
         } else if value is NSNull {
-            valueString = "null"
-            color = .gray
+            return Text("null").foregroundColor(keywordColor)
+        } else if let num = value as? NSNumber {
+            return Text("\(num)").foregroundColor(numberColor)
         } else {
-            valueString = "\(value)"
-            color = .blue
+            return Text("\(String(describing: value))").foregroundColor(.primary)
         }
-        
-        return Text(valueString)
-            .font(.system(.body, design: .monospaced))
-            .foregroundColor(color)
     }
 }
 

@@ -8,9 +8,6 @@ struct CodePreviewView: View {
     @State private var showLineNumbers = true
     @State private var fontSize: CGFloat = 13
     
-    @State private var loadedLines: [(Int, String)] = []
-    @State private var loadMoreTask: Task<Void, Never>?
-    @State private var isLoadingMore = false
     
     // Static shared cache to persist results between item switches
     private static var globalHighlightCache: [String: AttributedString] = [:]
@@ -28,7 +25,6 @@ struct CodePreviewView: View {
         return regexes
     }()
     
-    private let linesPerPage = 100
     
     static let languageKeywords: [String: [String]] = [
         "Swift": ["func", "class", "struct", "enum", "var", "let", "import", "extension", "protocol", "if", "else", "for", "while", "switch", "case", "return", "guard", "try", "catch", "async", "await"],
@@ -66,15 +62,11 @@ struct CodePreviewView: View {
         }
         .onAppear {
             detectLanguage()
-            if loadedLines.isEmpty { loadInitialLines() }
         }
         .onChange(of: detectedLanguage) { _, _ in Self.globalHighlightCache.removeAll() }
         .onChange(of: fontSize) { _, _ in Self.globalHighlightCache.removeAll() }
         .onChange(of: code) { _, _ in
-            loadedLines = []
-            loadMoreTask?.cancel()
-            isLoadingMore = false
-            loadInitialLines()
+            detectLanguage()
         }
     }
     
@@ -102,11 +94,34 @@ struct CodePreviewView: View {
         .padding(.bottom, 4)
     }
     
+    private func codeLines(for codeString: String) -> [String] {
+        codeString.components(separatedBy: .newlines)
+    }
+    
+    private var availableLanguages: [String] {
+        ["Plain Text"] + Self.languageKeywords.keys.sorted()
+    }
+
     private func codeScrollView(availableWidth: CGFloat) -> some View {
-        ScrollView([.horizontal, .vertical], showsIndicators: true) {
-            VStack(alignment: .leading, spacing: 0) {
-                if showLineNumbers { codeWithLineNumbers }
-                else { codeWithoutLineNumbers }
+        let lines = codeLines(for: code)
+        // Calculate a fixed width for the line number column based on total lines
+        let maxLineNumberWidth: CGFloat = CGFloat(String(lines.count).count) * 9 + 16
+        
+        return ScrollView([.horizontal, .vertical], showsIndicators: true) {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
+                    HStack(alignment: .top, spacing: 0) {
+                        if showLineNumbers {
+                            lineNumberCell(index: index, width: maxLineNumberWidth)
+                            
+                            Rectangle()
+                                .fill(Color.secondary.opacity(0.1))
+                                .frame(width: 1)
+                        }
+                        
+                        codeCell(line: line)
+                    }
+                }
             }
             .padding(.vertical, 12)
             .fixedSize(horizontal: true, vertical: false)
@@ -114,113 +129,31 @@ struct CodePreviewView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.white)
-        .scrollIndicators(.visible)
     }
     
-    private var codeWithLineNumbers: some View {
-        HStack(alignment: .top, spacing: 0) {
-            lineNumbersColumn
-            Rectangle()
-                .fill(Color.secondary.opacity(0.1))
-                .frame(width: 1)
-                .padding(.vertical, 4)
-            codeContentColumn.padding(.leading, 6)
-        }
+    @ViewBuilder
+    private func lineNumberCell(index: Int, width: CGFloat) -> some View {
+        Text("\(index + 1)")
+            .font(.system(size: fontSize, design: .monospaced))
+            .foregroundColor(.secondary.opacity(0.4))
+            .padding(.horizontal, 4)
+            .padding(.vertical, 2)
+            .frame(width: width, alignment: .trailing)
+            .background(Color(white: 0.98))
     }
     
-    private var lineNumbersColumn: some View {
-        VStack(alignment: .trailing, spacing: 0) {
-            ForEach(loadedLines, id: \.0) { index, _ in
-                Text("\(index + 1)")
-                    .font(.system(size: fontSize, design: .monospaced))
-                    .foregroundColor(.secondary.opacity(0.4))
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 2)
-            }
-            if loadedLines.count < codeLines.count {
-                Color.clear.frame(height: 1).onAppear { loadMoreWithDebounce() }
-            }
-        }
-        .padding(.vertical, 12)
-        .background(Color(white: 0.98))
+    @ViewBuilder
+    private func codeCell(line: String) -> some View {
+        highlightCode(line: line, language: detectedLanguage)
+            .font(.system(size: fontSize, design: .monospaced))
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+            .padding(.vertical, 2)
+            .padding(.leading, 6)
+            .padding(.trailing, 30)
     }
-    
-    private var codeContentColumn: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(loadedLines, id: \.0) { index, line in
-                highlightCode(line: line, language: detectedLanguage)
-                    .font(.system(size: fontSize, design: .monospaced))
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
-                    .padding(.vertical, 2)
-                    .padding(.trailing, 30) // Buffer for scroll
-            }
-            if loadedLines.count < codeLines.count {
-                loadMoreIndicator.onAppear { loadMoreWithDebounce() }
-            }
-        }
-        .padding(.vertical, 12)
-    }
-    
-    private var codeWithoutLineNumbers: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(loadedLines, id: \.0) { _, line in
-                highlightCode(line: line, language: detectedLanguage)
-                    .font(.system(size: fontSize, design: .monospaced))
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
-                    .padding(.vertical, 2)
-                    .padding(.trailing, 30)
-            }
-            if loadedLines.count < codeLines.count {
-                loadMoreIndicator.onAppear { loadMoreWithDebounce() }
-            }
-        }
-        .padding(12)
-    }
-    
-    private var loadMoreTrigger: some View {
-        loadMoreIndicator.onAppear { loadMoreWithDebounce() }
-    }
-    
-    private var loadMoreIndicator: some View {
-        HStack {
-            if isLoadingMore {
-                ProgressView().scaleEffect(0.6)
-                Text("Loading...").font(.caption2).foregroundColor(.secondary)
-            }
-        }
-        .padding(.vertical, 8)
-    }
-    
-    private func loadInitialLines() {
-        let lines = codeLines
-        let count = min(linesPerPage, lines.count)
-        loadedLines = Array(lines.enumerated().prefix(count).map { ($0.offset, $0.element) })
-    }
-    
-    private func loadMoreWithDebounce() {
-        guard !isLoadingMore && loadedLines.count < codeLines.count else { return }
-        loadMoreTask?.cancel()
-        loadMoreTask = Task {
-            isLoadingMore = true
-            try? await Task.sleep(nanoseconds: 200_000_000)
-            if Task.isCancelled { return }
-            await MainActor.run {
-                let lines = codeLines
-                let nextCount = min(loadedLines.count + linesPerPage, lines.count)
-                loadedLines = Array(lines.enumerated().prefix(nextCount).map { ($0.offset, $0.element) })
-                isLoadingMore = false
-            }
-        }
-    }
-    
-    private var codeLines: [String] { code.components(separatedBy: .newlines) }
-    
-    private var availableLanguages: [String] {
-        ["Plain Text"] + Self.languageKeywords.keys.sorted()
-    }
-    
+
+
     private func detectLanguage() {
         let lower = code.lowercased()
         var bestMatch: (lang: String, score: Int) = ("Plain Text", 0)
