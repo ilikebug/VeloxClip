@@ -196,36 +196,60 @@ struct MarkdownChunkView: View {
             }
             .markdownBlockStyle(\.heading1) { configuration in
                 configuration.label
+                    .markdownTextStyle {
+                        FontSize(.em(2.0))
+                        FontWeight(.bold)
+                    }
                     .font(.largeTitle.bold())
                     .padding(.top, 8)
                     .padding(.bottom, 4)
             }
             .markdownBlockStyle(\.heading2) { configuration in
                 configuration.label
+                    .markdownTextStyle {
+                        FontSize(.em(1.75))
+                        FontWeight(.bold)
+                    }
                     .font(.title.bold())
                     .padding(.top, 8)
                     .padding(.bottom, 4)
             }
             .markdownBlockStyle(\.heading3) { configuration in
                 configuration.label
+                    .markdownTextStyle {
+                        FontSize(.em(1.5))
+                        FontWeight(.bold)
+                    }
                     .font(.title2.bold())
                     .padding(.top, 8)
                     .padding(.bottom, 4)
             }
             .markdownBlockStyle(\.heading4) { configuration in
                 configuration.label
+                    .markdownTextStyle {
+                        FontSize(.em(1.25))
+                        FontWeight(.bold)
+                    }
                     .font(.title3.bold())
                     .padding(.top, 8)
                     .padding(.bottom, 4)
             }
             .markdownBlockStyle(\.heading5) { configuration in
                 configuration.label
+                    .markdownTextStyle {
+                        FontSize(.em(1.1))
+                        FontWeight(.bold)
+                    }
                     .font(.headline.bold())
                     .padding(.top, 8)
                     .padding(.bottom, 4)
             }
             .markdownBlockStyle(\.heading6) { configuration in
                 configuration.label
+                    .markdownTextStyle {
+                        FontSize(.em(1.0))
+                        FontWeight(.bold)
+                    }
                     .font(.subheadline.bold())
                     .padding(.top, 8)
                     .padding(.bottom, 4)
