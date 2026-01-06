@@ -25,7 +25,8 @@ A powerful, AI-enhanced clipboard manager for macOS that helps you manage, searc
 ### 🔍 Advanced Search
 - **Keyword Search**: Fast exact match search across content, type, source app, and tags
 - **Semantic Search**: AI-powered search that understands context and meaning
-- **Tag-based Search**: Search by custom tags or AI-detected tags (URL, Email, Code, JSON, etc.)
+- **Tag-based Search**: Search by custom tags or auto-detected content type tags (json, table, url, code, markdown, etc.)
+- **Content Type Tags**: Automatically generated tags based on detected content types for better organization
 - **Favorites Prioritization**: Favorite items appear first in search results
 - **Search Debouncing**: Optimized performance with intelligent caching
 - **Real-time Filtering**: Instant results as you type
@@ -33,6 +34,10 @@ A powerful, AI-enhanced clipboard manager for macOS that helps you manage, searc
 ### ⭐ Favorites & Organization
 - **Favorites View**: Toggle between favorites and full history with star button or Tab key
 - **Permanent Preservation**: Favorite items are never deleted by history limit
+- **Auto-Tagging**: Automatically detects content type and adds corresponding tags:
+  - Content types: `json`, `table`, `url`, `datetime`, `code`, `markdown`, `longtext`
+  - Item types: `image`, `file`, `color`
+  - Tags are added automatically when previewing items
 - **Custom Tags**: Add personalized tags to favorite items for better categorization
 - **Colorful Tags**: Custom tags automatically get vibrant, name-based colors for easy identification
 - **Tag Management**: Easily add or remove tags from favorite items in the preview pane
@@ -52,6 +57,18 @@ A powerful, AI-enhanced clipboard manager for macOS that helps you manage, searc
 
 ### 🎨 User Interface
 - **Spotlight-Style Overlay**: Beautiful, modern interface that appears over any application
+- **Enhanced Preview Components**: Specialized preview views for different content types:
+  - **JSON Preview**: Formatted JSON with syntax highlighting and validation
+  - **Table Preview**: Interactive table view with delimiter detection (CSV, TSV, etc.)
+  - **URL Preview**: Link preview with validation and quick actions (open, copy, QR code)
+  - **DateTime Preview**: Multiple date/time format display and conversion
+  - **Code Preview**: Syntax highlighting for 16+ languages with line numbers and formatting
+  - **Color Preview**: Visual color display with multiple format outputs (HEX, RGB, HSL, etc.)
+  - **File Preview**: File information display with quick actions (reveal, open)
+  - **Image Preview**: Enhanced image view with metadata (dimensions, format, size, color space)
+  - **Markdown Preview**: Rich Markdown rendering with full formatting support
+  - **Text Summary**: Intelligent text summarization for long content
+- **Auto-Tagging**: Automatically adds content type tags (json, table, url, code, markdown, etc.) when previewing items
 - **Markdown Rendering**: Rich Markdown support in preview pane
 - **Image Preview**: View images with OCR text extraction and copy functionality
 - **Keyboard Navigation**: Full keyboard support for efficient workflow
@@ -161,12 +178,23 @@ To enable AI features like summarization, translation, code explanation, and tex
 
 1. **Add to Favorites**: Click the star icon in the preview pane to favorite an item
 2. **View Favorites**: Click the star button in the search bar or press Tab to switch to favorites view
-3. **Add Custom Tags**: 
+3. **Auto-Tagging**: Content type tags are automatically added when previewing items:
+   - JSON content → `json` tag
+   - Table data → `table` tag
+   - URLs → `url` tag
+   - Date/time → `datetime` tag
+   - Code snippets → `code` tag
+   - Markdown → `markdown` tag
+   - Long text → `longtext` tag
+   - Images → `image` tag
+   - Files → `file` tag
+   - Colors → `color` tag
+4. **Add Custom Tags**: 
    - Favorite an item first
    - Click the edit button (pencil icon) in the Tags section
    - Type a tag name and press Enter or click the plus button
-4. **Remove Tags**: In edit mode, click the X button on any tag to remove it
-5. **Search by Tags**: Type a tag name in the search box to find all items with that tag
+5. **Remove Tags**: In edit mode, click the X button on any tag to remove it
+6. **Search by Tags**: Type a tag name in the search box to find all items with that tag
 
 ### AI Features
 
@@ -193,13 +221,39 @@ Configure:
 
 ## 🎯 Use Cases
 
-- **Developers**: Quick access to code snippets, error messages, and terminal outputs. Tag code snippets by language or project. Capture and annotate screenshots of bugs or UI issues
-- **Writers**: Manage quotes, references, and research snippets. Organize by topic with custom tags. Capture and highlight important text from documents
-- **Designers**: Track color codes, image assets, and design notes. Tag by project or color palette. Edit screenshots with annotations and highlights
-- **Researchers**: Organize copied text, citations, and notes. Use tags to categorize by research topic. Capture and annotate research materials
-- **Multilingual Users**: Translate and manage content in multiple languages. Tag by language or translation status
-- **Project Managers**: Keep important information organized with favorites and custom tags for different projects. Capture and annotate meeting notes or project screenshots
-- **Content Creators**: Capture screenshots, add annotations, and quickly paste images for social media or documentation
+- **Developers**: 
+  - Quick access to code snippets with syntax highlighting
+  - JSON and table data preview with formatted display
+  - Auto-tagged code snippets (`code`, `json` tags) for easy search
+  - Capture and annotate screenshots of bugs or UI issues
+- **Writers**: 
+  - Manage quotes, references, and research snippets
+  - Markdown preview for formatted text
+  - Auto-tagged long text (`longtext`, `markdown` tags)
+  - Capture and highlight important text from documents
+- **Designers**: 
+  - Track color codes with visual color preview and multiple format outputs
+  - Image assets with detailed metadata
+  - Auto-tagged colors (`color` tag) and images (`image` tag)
+  - Edit screenshots with annotations and highlights
+- **Researchers**: 
+  - Organize copied text, citations, and notes
+  - Table data preview for structured information
+  - Auto-tagged content types for easy categorization
+  - Capture and annotate research materials
+- **Multilingual Users**: 
+  - Translate and manage content in multiple languages
+  - URL preview for quick link access
+  - Auto-tagged URLs (`url` tag) for easy access
+- **Project Managers**: 
+  - Keep important information organized with favorites and custom tags
+  - DateTime preview for meeting schedules
+  - Auto-tagged content types for different projects
+  - Capture and annotate meeting notes or project screenshots
+- **Content Creators**: 
+  - Capture screenshots, add annotations, and quickly paste images
+  - File preview for asset management
+  - Auto-tagged files (`file` tag) for easy organization
 
 ## 🔧 Configuration
 
@@ -244,7 +298,21 @@ VeloxClip/
 │   │   ├── PasteImageService.swift
 │   │   ├── ShortcutManager.swift
 │   │   └── ErrorHandler.swift
-│   ├── Views/             # SwiftUI views (MainView, PreviewView, Settings)
+│   ├── Views/             # SwiftUI views
+│   │   ├── PreviewComponents/  # Enhanced preview components
+│   │   │   ├── CodePreviewView.swift      # Code syntax highlighting
+│   │   │   ├── ColorPreviewView.swift     # Color display and formats
+│   │   │   ├── DateTimePreviewView.swift  # Date/time formats
+│   │   │   ├── FilePreviewView.swift     # File information
+│   │   │   ├── ImagePreviewView.swift    # Enhanced image preview
+│   │   │   ├── JSONPreviewView.swift     # JSON formatting
+│   │   │   ├── TablePreviewView.swift    # Table data display
+│   │   │   ├── TextSummaryView.swift     # Text summarization
+│   │   │   └── URLPreviewView.swift      # URL preview and actions
+│   │   ├── MainView.swift
+│   │   ├── PreviewView.swift
+│   │   ├── SettingsView.swift
+│   │   └── ...
 │   └── Resources/         # App resources (icons, assets)
 ├── build_app.sh           # Build script
 ├── generate_icon.sh       # Icon generation script
