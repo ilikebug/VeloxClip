@@ -7,7 +7,7 @@ EXECUTABLE_NAME="VeloxClip"
 BUILD_CONFIG="release"
 BUILD_PATH=".build"
 
-echo "🚀 Building $APP_NAME in $BUILD_CONFIG mode..."
+echo "[Building] Building $APP_NAME in $BUILD_CONFIG mode..."
 
 # Get absolute paths to avoid permission issues
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -24,27 +24,27 @@ mkdir -p "$CLANG_MODULE_CACHE_PATH"
 # The compiler will use system temp directory, but module cache is redirected to avoid permission issues
 
 # Clean build directory if needed (optional, comment out if you want incremental builds)
-# echo "🧹 Cleaning build directory..."
+# echo "[Clean] Cleaning build directory..."
 # rm -rf "$ABS_BUILD_PATH"
 
 # 1. Build the project with explicit build path
-echo "📦 Building Swift package..."
+echo "[Package] Building Swift package..."
 swift build -c $BUILD_CONFIG --product $EXECUTABLE_NAME --build-path "$ABS_BUILD_PATH" 2>&1
 BUILD_STATUS=$?
 
 # Check if executable was created (warnings are OK, but we need the binary)
 if [ ! -f "$ABS_BUILD_PATH/$BUILD_CONFIG/$EXECUTABLE_NAME" ]; then
     if [ $BUILD_STATUS -ne 0 ]; then
-        echo "❌ Build failed with exit code $BUILD_STATUS!"
+        echo "[Error] Build failed with exit code $BUILD_STATUS!"
         exit 1
     else
-        echo "❌ Build completed but executable not found!"
+        echo "[Error] Build completed but executable not found!"
         exit 1
     fi
 fi
 
 if [ $BUILD_STATUS -ne 0 ]; then
-    echo "⚠️  Build completed with warnings (exit code $BUILD_STATUS), but executable exists. Continuing..."
+    echo "[Warning] Build completed with warnings (exit code $BUILD_STATUS), but executable exists. Continuing..."
 fi
 
 # 2. Setup Bundle Structure
@@ -53,21 +53,21 @@ CONTENTS_DIR="$APP_BUNDLE/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
 
-echo "📂 Creating app bundle structure..."
+echo "[Directory] Creating app bundle structure..."
 mkdir -p "$MACOS_DIR"
 mkdir -p "$RESOURCES_DIR"
 
 # 3. Copy Executable
 BINARY_PATH="$ABS_BUILD_PATH/$BUILD_CONFIG/$EXECUTABLE_NAME"
 if [ ! -f "$BINARY_PATH" ]; then
-    echo "❌ Executable not found at $BINARY_PATH"
+    echo "[Error] Executable not found at $BINARY_PATH"
     exit 1
 fi
 cp "$BINARY_PATH" "$MACOS_DIR/"
 
 # 3.1 Copy App Icon (if it exists)
 if [ -f "VeloxClip/Resources/AppIcon.icns" ]; then
-    echo "🎨 Copying app icon..."
+    echo "[Icon] Copying app icon..."
     cp "VeloxClip/Resources/AppIcon.icns" "$RESOURCES_DIR/"
     ICON_NAME="AppIcon"
 else
@@ -75,7 +75,7 @@ else
 fi
 
 # 4. Create Info.plist
-echo "📝 Generating Info.plist..."
+echo "[Info] Generating Info.plist..."
 {
     cat <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -115,11 +115,11 @@ EOF
 EOF
 } > "$CONTENTS_DIR/Info.plist"
 
-echo "✅ $APP_BUNDLE created successfully!"
-echo "👉 You can find it at: $(pwd)/$APP_BUNDLE"
+echo "[Success] $APP_BUNDLE created successfully!"
+echo "[Info] You can find it at: $(pwd)/$APP_BUNDLE"
 
 # 5. Create DMG package
-echo "📦 Creating DMG package..."
+echo "[Package] Creating DMG package..."
 DMG_NAME="${APP_NAME}.dmg"
 DMG_TEMP_DIR="dmg_temp"
 DMG_VOLUME_NAME="${APP_NAME}"
@@ -150,7 +150,7 @@ cat > "$DMG_TEMP_DIR/.DS_Store" <<'EOF'
 EOF
 
 # Create installation instructions file
-cat > "$DMG_TEMP_DIR/📖 Installation Instructions.txt" <<'INSTRUCTIONS'
+cat > "$DMG_TEMP_DIR/Installation Instructions.txt" <<'INSTRUCTIONS'
 ╔══════════════════════════════════════════════════════════════╗
 ║              VeloxClip Installation Instructions            ║
 ╚══════════════════════════════════════════════════════════════╝
@@ -171,7 +171,7 @@ rm -f "$DMG_TEMP" "$DMG_NAME"
 
 # Calculate app size for display
 APP_SIZE=$(du -sk "$DMG_TEMP_DIR" | cut -f1)
-echo "📊 App size: $((APP_SIZE / 1024))MB"
+echo "[Size] App size: $((APP_SIZE / 1024))MB"
 
 # Create temporary DMG (hdiutil will auto-calculate size from srcfolder)
 hdiutil create -srcfolder "$DMG_TEMP_DIR" -volname "$DMG_VOLUME_NAME" \
@@ -230,7 +230,7 @@ tell application "Finder"
         set position of item "$APP_BUNDLE" of container window to {180, 200}
         set position of item "Applications" of container window to {380, 200}
         try
-            set position of item "📖 Installation Instructions.txt" of container window to {280, 320}
+            set position of item "Installation Instructions.txt" of container window to {280, 320}
         end try
         -- Set background color (light gray)
         set background picture of viewOptions to none
@@ -259,6 +259,6 @@ hdiutil convert "$DMG_TEMP" -format UDZO -imagekey zlib-level=9 -o "$DMG_NAME"
 rm -rf "$DMG_TEMP_DIR"
 rm -f "$DMG_TEMP"
 
-echo "✅ DMG package created successfully!"
-echo "👉 DMG file: $(pwd)/$DMG_NAME"
-echo "📦 Users can drag $APP_NAME.app to Applications folder to install"
+echo "[Success] DMG package created successfully!"
+echo "[Info] DMG file: $(pwd)/$DMG_NAME"
+echo "[Package] Users can drag $APP_NAME.app to Applications folder to install"

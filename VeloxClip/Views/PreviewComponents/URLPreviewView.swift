@@ -82,17 +82,7 @@ struct URLPreviewView: View {
                         Label("Open in Browser", systemImage: "safari")
                     }
                     .buttonStyle(.borderedProminent)
-                    
-                    Button(action: { copyURL() }) {
-                        Label("Copy URL", systemImage: "doc.on.doc")
-                    }
-                    .buttonStyle(.bordered)
                 }
-                
-                Button(action: { generateQRCode() }) {
-                    Label("Generate QR Code", systemImage: "qrcode")
-                }
-                .buttonStyle(.bordered)
                 
                 Spacer()
             }
@@ -123,19 +113,6 @@ struct URLPreviewView: View {
     
     private func openURL(_ url: URL) {
         NSWorkspace.shared.open(url)
-    }
-    
-    private func copyURL() {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(urlString, forType: .string)
-    }
-    
-    private func generateQRCode() {
-        // Generate QR code for URL
-        // This would require CoreImage or a QR code library
-        // For now, just copy the URL
-        copyURL()
     }
 }
 

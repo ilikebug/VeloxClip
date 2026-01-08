@@ -1,4 +1,5 @@
 import SwiftUI
+import UserNotifications
 
 @main
 struct VeloxClipApp: App {
@@ -43,7 +44,7 @@ struct VeloxClipApp: App {
     }
 }
 
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Check if another instance is already running
         if isAnotherInstanceRunning() {
@@ -53,14 +54,68 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         
-        // Hide dock icon if desired, or keep it. 
-        // For a clipboard tool, usually we might hide it, but let's keep it consistent with the PRD.
+        // Setup notification center delegate FIRST, before requesting permission
+        let center = UNUserNotificationCenter.current()
+        center.delegate = self
+        
+        // Request notification permission after a short delay to ensure app is fully initialized
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.requestNotificationPermission()
+        }
         
         // Register all global shortcuts
         ShortcutManager.shared.registerAllShortcuts()
         
         // Note: Window will be shown when user presses the shortcut or clicks menu item
         // Removed auto-show on launch to avoid interrupting user workflow
+    }
+    
+    private func requestNotificationPermission() {
+        let center = UNUserNotificationCenter.current()
+        
+        // First check current authorization status
+        center.getNotificationSettings { [weak self] settings in
+            switch settings.authorizationStatus {
+            case .notDetermined:
+                // Request authorization
+                center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+                    DispatchQueue.main.async {
+                        if let error = error {
+                            print("Failed to request notification permission: \(error.localizedDescription)")
+                        } else if granted {
+                            print("✅ Notification permission granted")
+                        } else {
+                            print("⚠️ Notification permission denied")
+                        }
+                    }
+                }
+            case .authorized:
+                print("✅ Notification permission already granted")
+            case .denied:
+                print("⚠️ Notification permission denied by user")
+            case .provisional:
+                print("ℹ️ Notification permission is provisional")
+            @unknown default:
+                print("⚠️ Unknown notification authorization status")
+            }
+        }
+    }
+    
+    // Handle notification when app is in foreground
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        // Show notification even when app is in foreground
+        // Use .list for macOS 11+, fallback to .alert for older versions
+        if #available(macOS 11.0, *) {
+            completionHandler([.list, .sound, .badge])
+        } else {
+            completionHandler([.alert, .sound, .badge])
+        }
+    }
+    
+    // Handle user interaction with notification
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
+        // Handle notification tap if needed
+        completionHandler()
     }
     
     private func isAnotherInstanceRunning() -> Bool {

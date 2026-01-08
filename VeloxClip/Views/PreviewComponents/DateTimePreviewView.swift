@@ -73,18 +73,9 @@ struct DateTimePreviewView: View {
                     Spacer()
                 }
             } else {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Unable to parse date/time")
-                        .font(.headline)
-                        .foregroundColor(.orange)
-                    
-                    Text("Original: \(dateString)")
-                        .font(.system(.body, design: .monospaced))
-                        .foregroundColor(.secondary)
-                }
-                .padding(12)
-                .background(Color.orange.opacity(0.1))
-                .cornerRadius(8)
+                Text(dateString)
+                    .font(.body)
+                    .textSelection(.enabled)
             }
         }
         .onAppear {
