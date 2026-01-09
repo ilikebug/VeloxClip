@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VeloxClip - AI-Enhanced Clipboard Manager for macOS</title>
+    <meta name="description" content="A powerful, AI-enhanced clipboard manager for macOS with intelligent search, screenshot editing, and content transformation features.">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-color: #6366f1;
+            --primary-dark: #4f46e5;
+            --secondary-color: #8b5cf6;
+            --accent-color: #ec4899;
+            --bg-dark: #0f172a;
+            --bg-darker: #020617;
+            --text-primary: #f1f5f9;
+            --text-secondary: #cbd5e1;
+            --card-bg: #1e293b;
+            --card-border: #334155;
+            --gradient-1: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --gradient-2: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            --gradient-3: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            background: var(--bg-darker);
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        /* Smooth scrolling */
+        html {
+            scroll-behavior: smooth;
+        }
+
+        /* Navigation */
+        nav {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            padding: 1rem 0;
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        .nav-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 2rem;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: var(--gradient-1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+
+        .nav-links a:hover {
+            color: var(--primary-color);
+        }
+
+        /* Hero Section */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 8rem 2rem 4rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at 30% 50%, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
+                        radial-gradient(circle at 70% 80%, rgba(139, 92, 246, 0.15) 0%, transparent 50%);
+            z-index: -1;
+        }
+
+        .hero-content {
+            max-width: 900px;
+            z-index: 1;
+        }
+
+        .hero h1 {
+            font-size: clamp(2.5rem, 8vw, 5rem);
+            font-weight: 800;
+            margin-bottom: 1.5rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: fadeInUp 0.8s ease-out;
+        }
+
+        .hero .subtitle {
+            font-size: clamp(1.1rem, 3vw, 1.5rem);
+            color: var(--text-secondary);
+            margin-bottom: 2rem;
+            animation: fadeInUp 0.8s ease-out 0.2s both;
+        }
+
+        .hero .description {
+            font-size: clamp(1rem, 2vw, 1.2rem);
+            color: var(--text-secondary);
+            margin-bottom: 3rem;
+            line-height: 1.8;
+            animation: fadeInUp 0.8s ease-out 0.4s both;
+        }
+
+        .cta-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            animation: fadeInUp 0.8s ease-out 0.6s both;
+        }
+
+        .btn {
+            padding: 1rem 2rem;
+            border-radius: 0.5rem;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s;
+            display: inline-block;
+            border: none;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+
+        .btn-primary {
+            background: var(--gradient-1);
+            color: white;
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.6);
+        }
+
+        .btn-secondary {
+            background: var(--card-bg);
+            color: var(--text-primary);
+            border: 1px solid var(--card-border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--card-border);
+            transform: translateY(-2px);
+        }
+
+        /* Features Section */
+        .section {
+            padding: 6rem 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .section-title {
+            text-align: center;
+            font-size: clamp(2rem, 5vw, 3rem);
+            margin-bottom: 1rem;
+            background: var(--gradient-1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .section-subtitle {
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 1.2rem;
+            margin-bottom: 4rem;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-top: 3rem;
+        }
+
+        .feature-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 1rem;
+            padding: 2rem;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .feature-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--gradient-1);
+            transform: scaleX(0);
+            transition: transform 0.3s;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--primary-color);
+            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.2);
+        }
+
+        .feature-card:hover::before {
+            transform: scaleX(1);
+        }
+
+        .feature-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            display: block;
+        }
+
+        .feature-card h3 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+        }
+
+        .feature-card p {
+            color: var(--text-secondary);
+            line-height: 1.7;
+        }
+
+        /* Bilingual Text */
+        .bilingual {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .lang-en {
+            color: var(--text-primary);
+            font-weight: 500;
+            display: block; /* Shown by default (EN is default) */
+        }
+
+        .lang-zh {
+            color: var(--text-secondary);
+            font-size: 0.95em;
+            display: none; /* Hidden by default */
+        }
+        
+        /* Standalone bilingual paragraphs (not in .bilingual container) */
+        footer .lang-en {
+            display: block;
+        }
+        
+        footer .lang-zh {
+            display: none;
+        }
+
+        /* Tech Stack */
+        .tech-stack {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            justify-content: center;
+            margin-top: 2rem;
+        }
+
+        .tech-badge {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            padding: 0.5rem 1rem;
+            border-radius: 2rem;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            transition: all 0.3s;
+        }
+
+        .tech-badge:hover {
+            background: var(--primary-color);
+            color: white;
+            transform: scale(1.05);
+        }
+
+        /* Screenshots Section */
+        .screenshots {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-top: 3rem;
+        }
+
+        .screenshot-card {
+            background: var(--card-bg);
+            border-radius: 1rem;
+            overflow: hidden;
+            border: 1px solid var(--card-border);
+            transition: all 0.3s;
+        }
+
+        .screenshot-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.2);
+        }
+
+        .screenshot-placeholder {
+            width: 100%;
+            height: 200px;
+            background: var(--gradient-1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+            opacity: 0.7;
+        }
+
+        .screenshot-image {
+            width: 100%;
+            height: auto;
+            display: block;
+            object-fit: cover;
+            transition: transform 0.3s;
+        }
+
+        .screenshot-card:hover .screenshot-image {
+            transform: scale(1.05);
+        }
+
+        .screenshot-info {
+            padding: 1.5rem;
+        }
+
+        /* Installation Section */
+        .installation {
+            background: var(--card-bg);
+            border-radius: 1rem;
+            padding: 3rem;
+            margin-top: 3rem;
+            border: 1px solid var(--card-border);
+        }
+
+        .code-block {
+            background: var(--bg-darker);
+            border: 1px solid var(--card-border);
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            margin: 1rem 0;
+            overflow-x: auto;
+            font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+            font-size: 0.9rem;
+        }
+
+        .code-block code {
+            color: #a78bfa;
+        }
+
+        /* Footer */
+        footer {
+            background: var(--bg-dark);
+            border-top: 1px solid var(--card-border);
+            padding: 3rem 2rem;
+            text-align: center;
+            margin-top: 6rem;
+        }
+
+        .footer-content {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            margin: 2rem 0;
+            flex-wrap: wrap;
+        }
+
+        .footer-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+
+        .footer-links a:hover {
+            color: var(--primary-color);
+        }
+
+        /* Animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .fade-in {
+            animation: fadeInUp 0.8s ease-out both;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .nav-links {
+                display: none;
+            }
+
+            .top-right-controls {
+                top: 0.5rem;
+                right: 1rem;
+                gap: 0.5rem;
+            }
+
+            .github-link {
+                width: 2rem;
+                height: 2rem;
+                font-size: 1rem;
+            }
+
+            .lang-toggle {
+                padding: 0.25rem;
+            }
+
+            .lang-btn {
+                padding: 0.4rem 0.8rem;
+                font-size: 0.9rem;
+            }
+
+            .hero {
+                padding: 6rem 1rem 2rem;
+            }
+
+            .section {
+                padding: 4rem 1rem;
+            }
+
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Language Toggle */
+        .lang-toggle {
+            display: flex;
+            gap: 0.5rem;
+            background: var(--card-bg);
+            padding: 0.5rem;
+            border-radius: 0.5rem;
+            border: 1px solid var(--card-border);
+        }
+
+        .lang-btn {
+            padding: 0.5rem 1rem;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            border-radius: 0.25rem;
+            transition: all 0.3s;
+        }
+
+        .lang-btn.active {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .lang-btn:hover {
+            color: var(--text-primary);
+        }
+
+        /* Top Right Corner Container */
+        .top-right-controls {
+            position: fixed;
+            top: 0.5rem;
+            right: 2rem;
+            z-index: 1001;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .github-link {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 2.5rem;
+            height: 2.5rem;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 0.5rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: all 0.3s;
+            font-size: 1.25rem;
+        }
+
+        .github-link:hover {
+            background: var(--primary-color);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+        }
+    </style>
+</head>
+<body>
+    <!-- Top Right Controls -->
+    <div class="top-right-controls">
+        <a href="https://github.com/ilikebug/VeloxClip" target="_blank" rel="noopener noreferrer" class="github-link" title="GitHub">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+            </svg>
+        </a>
+        <div class="lang-toggle">
+            <button class="lang-btn" data-lang="zh" onclick="switchLang('zh', this)">中文</button>
+            <button class="lang-btn active" data-lang="en" onclick="switchLang('en', this)">EN</button>
+        </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav>
+        <div class="nav-container">
+            <div class="logo">📎 VeloxClip</div>
+            <ul class="nav-links">
+                <li><a href="#features" data-zh="功能" data-en="Features">Features</a></li>
+                <li><a href="#screenshots" data-zh="截图" data-en="Screenshots">Screenshots</a></li>
+                <li><a href="#installation" data-zh="安装" data-en="Installation">Installation</a></li>
+                <li><a href="#tech" data-zh="技术栈" data-en="Tech Stack">Tech Stack</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-content">
+            <h1>VeloxClip</h1>
+            <p class="subtitle" data-zh="强大的 AI 增强型 macOS 剪贴板管理器" data-en="Powerful AI-Enhanced Clipboard Manager for macOS">
+                Powerful AI-Enhanced Clipboard Manager for macOS
+            </p>
+            <p class="description" data-zh="智能管理、搜索和转换您的剪贴板历史记录。内置截图捕获和专业图像编辑工具，让您的工作流程更加高效。" data-en="Intelligently manage, search, and transform your clipboard history. Built-in screenshot capture and professional image editing tools to enhance your workflow.">
+                Intelligently manage, search, and transform your clipboard history. Built-in screenshot capture and professional image editing tools to enhance your workflow.
+            </p>
+            <div class="cta-buttons">
+                <a href="#installation" class="btn btn-primary" data-zh="开始使用" data-en="Get Started">Get Started</a>
+                <a href="https://github.com/ilikebug/VeloxClip" class="btn btn-secondary" data-zh="查看源码" data-en="View Source">View Source</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="section">
+        <h2 class="section-title" data-zh="核心功能" data-en="Core Features">Core Features</h2>
+        <p class="section-subtitle" data-zh="探索 VeloxClip 的强大功能" data-en="Discover the powerful features of VeloxClip">Discover the powerful features of VeloxClip</p>
+        
+        <div class="features-grid">
+            <div class="feature-card">
+                <span class="feature-icon">📋</span>
+                <h3 data-zh="智能剪贴板管理" data-en="Smart Clipboard Management">Smart Clipboard Management</h3>
+                <div class="bilingual">
+                    <p class="lang-en" data-zh="智能剪贴板管理" data-en="Automatic history tracking with smart deduplication. Track source apps and manage favorites with custom tags.">Automatic history tracking with smart deduplication. Track source apps and manage favorites with custom tags.</p>
+                    <p class="lang-zh" data-zh="自动历史记录跟踪，智能去重。跟踪来源应用，使用自定义标签管理收藏。" data-en="">自动历史记录跟踪，智能去重。跟踪来源应用，使用自定义标签管理收藏。</p>
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <span class="feature-icon">🤖</span>
+                <h3 data-zh="AI 增强功能" data-en="AI-Powered Features">AI-Powered Features</h3>
+                <div class="bilingual">
+                    <p class="lang-en" data-zh="AI 增强功能" data-en="OCR text recognition, text summarization, translation, code explanation, and semantic search powered by AI.">OCR text recognition, text summarization, translation, code explanation, and semantic search powered by AI.</p>
+                    <p class="lang-zh" data-zh="OCR 文字识别、文本摘要、翻译、代码解释和语义搜索，全部由 AI 驱动。" data-en="">OCR 文字识别、文本摘要、翻译、代码解释和语义搜索，全部由 AI 驱动。</p>
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <span class="feature-icon">🔍</span>
+                <h3 data-zh="高级搜索" data-en="Advanced Search">Advanced Search</h3>
+                <div class="bilingual">
+                    <p class="lang-en" data-zh="高级搜索" data-en="Keyword search, semantic search, and tag-based filtering. Find clipboard items by meaning, not just keywords.">Keyword search, semantic search, and tag-based filtering. Find clipboard items by meaning, not just keywords.</p>
+                    <p class="lang-zh" data-zh="关键词搜索、语义搜索和基于标签的过滤。通过含义查找剪贴板项目，不仅仅是关键词。" data-en="">关键词搜索、语义搜索和基于标签的过滤。通过含义查找剪贴板项目，不仅仅是关键词。</p>
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <span class="feature-icon">⭐</span>
+                <h3 data-zh="收藏与标签" data-en="Favorites & Tags">Favorites & Tags</h3>
+                <div class="bilingual">
+                    <p class="lang-en" data-zh="收藏与标签" data-en="Mark important items as favorites. Auto-tagging by content type and custom tags for better organization.">Mark important items as favorites. Auto-tagging by content type and custom tags for better organization.</p>
+                    <p class="lang-zh" data-zh="将重要项目标记为收藏。按内容类型自动标记和自定义标签，更好地组织内容。" data-en="">将重要项目标记为收藏。按内容类型自动标记和自定义标签，更好地组织内容。</p>
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <span class="feature-icon">📸</span>
+                <h3 data-zh="截图与编辑" data-en="Screenshot & Editing">Screenshot & Editing</h3>
+                <div class="bilingual">
+                    <p class="lang-en" data-zh="截图与编辑" data-en="Capture area screenshots and edit with professional tools: drawing, arrows, text, mosaic, and more.">Capture area screenshots and edit with professional tools: drawing, arrows, text, mosaic, and more.</p>
+                    <p class="lang-zh" data-zh="捕获区域截图并使用专业工具编辑：绘图、箭头、文本、马赛克等。" data-en="">捕获区域截图并使用专业工具编辑：绘图、箭头、文本、马赛克等。</p>
+                </div>
+            </div>
+
+            <div class="feature-card">
+                <span class="feature-icon">🎨</span>
+                <h3 data-zh="丰富预览" data-en="Rich Previews">Rich Previews</h3>
+                <div class="bilingual">
+                    <p class="lang-en" data-zh="丰富预览" data-en="Specialized previews for JSON, tables, URLs, code, colors, images, markdown, and more with syntax highlighting.">Specialized previews for JSON, tables, URLs, code, colors, images, markdown, and more with syntax highlighting.</p>
+                    <p class="lang-zh" data-zh="针对 JSON、表格、URL、代码、颜色、图像、Markdown 等的专业预览，支持语法高亮。" data-en="">针对 JSON、表格、URL、代码、颜色、图像、Markdown 等的专业预览，支持语法高亮。</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Screenshots Section -->
+    <section id="screenshots" class="section">
+        <h2 class="section-title" data-zh="应用截图" data-en="Screenshots">Screenshots</h2>
+        <p class="section-subtitle" data-zh="一睹 VeloxClip 的界面" data-en="Take a look at VeloxClip's interface">Take a look at VeloxClip's interface</p>
+        
+        <div class="screenshots">
+            <div class="screenshot-card">
+                <img src="screenshots/main.png" alt="Main Interface" class="screenshot-image" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                <div class="screenshot-placeholder" style="display: none;">🖥️</div>
+                <div class="screenshot-info">
+                    <h3 data-zh="主界面" data-en="Main Interface">Main Interface</h3>
+                    <p class="lang-en" data-zh="Spotlight 风格的现代化界面" data-en="Modern Spotlight-style interface">Modern Spotlight-style interface</p>
+                </div>
+            </div>
+            <div class="screenshot-card">
+                <img src="screenshots/image_editor.png" alt="Image Editor" class="screenshot-image" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                <div class="screenshot-placeholder" style="display: none;">🎨</div>
+                <div class="screenshot-info">
+                    <h3 data-zh="图片编辑" data-en="Image Editor">Image Editor</h3>
+                    <p class="lang-en" data-zh="专业的截图编辑工具" data-en="Professional screenshot editing tools">Professional screenshot editing tools</p>
+                </div>
+            </div>
+            <div class="screenshot-card">
+                <img src="screenshots/search.png" alt="Smart Search" class="screenshot-image" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                <div class="screenshot-placeholder" style="display: none;">🔍</div>
+                <div class="screenshot-info">
+                    <h3 data-zh="智能搜索" data-en="Smart Search">Smart Search</h3>
+                    <p class="lang-en" data-zh="语义搜索和标签过滤" data-en="Semantic search and tag filtering">Semantic search and tag filtering</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Installation Section -->
+    <section id="installation" class="section">
+        <h2 class="section-title" data-zh="安装指南" data-en="Installation">Installation</h2>
+        <p class="section-subtitle" data-zh="快速开始使用 VeloxClip" data-en="Get started with VeloxClip quickly">Get started with VeloxClip quickly</p>
+        
+        <div class="installation">
+            <h3 data-zh="从源码构建" data-en="Build from Source">Build from Source</h3>
+            <div class="bilingual">
+                <p class="lang-en" data-zh="从源码构建" data-en="Clone the repository and build the application:">Clone the repository and build the application:</p>
+                <p class="lang-zh" data-zh="克隆仓库并构建应用程序：" data-en="">克隆仓库并构建应用程序：</p>
+            </div>
+            <div class="code-block">
+                <code>git clone https://github.com/ilikebug/VeloxClip.git<br>
+cd VeloxClip<br>
+swift build -c release<br>
+./build_app.sh</code>
+            </div>
+
+            <h3 style="margin-top: 2rem;" data-zh="AI 功能配置" data-en="AI Features Setup">AI Features Setup</h3>
+            <div class="bilingual">
+                <p class="lang-en" data-zh="AI 功能配置" data-en="To enable AI features, configure your OpenRouter API key in Settings:">To enable AI features, configure your OpenRouter API key in Settings:</p>
+                <p class="lang-zh" data-zh="要启用 AI 功能，请在设置中配置您的 OpenRouter API 密钥：" data-en="">要启用 AI 功能，请在设置中配置您的 OpenRouter API 密钥：</p>
+            </div>
+            <div class="bilingual">
+                <p class="lang-en" data-zh="1. 访问 OpenRouter.ai 获取免费 API 密钥" data-en="1. Visit OpenRouter.ai to get a free API key">1. Visit OpenRouter.ai to get a free API key</p>
+                <p class="lang-zh" data-zh="1. 访问 OpenRouter.ai 获取免费 API 密钥" data-en="">1. 访问 OpenRouter.ai 获取免费 API 密钥</p>
+            </div>
+            <div class="bilingual">
+                <p class="lang-en" data-zh="2. 在应用中打开设置（Cmd+,）" data-en="2. Open Settings in the app (Cmd+,)">2. Open Settings in the app (Cmd+,)</p>
+                <p class="lang-zh" data-zh="2. 在应用中打开设置（Cmd+,）" data-en="">2. 在应用中打开设置（Cmd+,）</p>
+            </div>
+            <div class="bilingual">
+                <p class="lang-en" data-zh="3. 在 AI 设置中输入您的 API 密钥" data-en="3. Enter your API key in AI Settings">3. Enter your API key in AI Settings</p>
+                <p class="lang-zh" data-zh="3. 在 AI 设置中输入您的 API 密钥" data-en="">3. 在 AI 设置中输入您的 API 密钥</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Tech Stack Section -->
+    <section id="tech" class="section">
+        <h2 class="section-title" data-zh="技术栈" data-en="Technology Stack">Technology Stack</h2>
+        <p class="section-subtitle" data-zh="基于现代 macOS 技术构建" data-en="Built with modern macOS technologies">Built with modern macOS technologies</p>
+        
+        <div class="tech-stack">
+            <span class="tech-badge">Swift 6.0</span>
+            <span class="tech-badge">SwiftUI</span>
+            <span class="tech-badge">Apple Vision Framework</span>
+            <span class="tech-badge">Natural Language Framework</span>
+            <span class="tech-badge">OpenRouter API</span>
+            <span class="tech-badge">macOS 14.0+</span>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="footer-content">
+            <h3 data-zh="VeloxClip" data-en="VeloxClip">VeloxClip</h3>
+            <p class="lang-zh" data-zh="为重视生产力和隐私的 macOS 用户打造 ❤️" data-en="">为重视生产力和隐私的 macOS 用户打造 ❤️</p>
+            <p class="lang-en" data-zh="为重视生产力和隐私的 macOS 用户打造 ❤️" data-en="Made with ❤️ for macOS users who value productivity and privacy">Made with ❤️ for macOS users who value productivity and privacy</p>
+            <div class="footer-links">
+                <a href="https://github.com/ilikebug/VeloxClip" data-zh="GitHub" data-en="GitHub">GitHub</a>
+                <a href="#" data-zh="文档" data-en="Documentation">Documentation</a>
+                <a href="#" data-zh="问题反馈" data-en="Issues">Issues</a>
+            </div>
+            <p style="margin-top: 2rem; color: var(--text-secondary); font-size: 0.9rem;">
+                <span data-zh="MIT License" data-en="MIT License">MIT License</span>
+            </p>
+        </div>
+    </footer>
+
+    <script>
+        let currentLang = 'en';
+
+        function switchLang(lang, buttonElement) {
+            currentLang = lang;
+            
+            // Update toggle buttons
+            document.querySelectorAll('.lang-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            if (buttonElement) {
+                buttonElement.classList.add('active');
+            } else {
+                // Fallback: find button by data-lang attribute
+                document.querySelector(`.lang-btn[data-lang="${lang}"]`)?.classList.add('active');
+            }
+            
+            // Update all elements with data attributes (single language elements)
+            document.querySelectorAll('[data-zh][data-en]').forEach(el => {
+                // Skip bilingual sections - they are handled separately
+                if (el.closest('.bilingual')) {
+                    return;
+                }
+                
+                const text = lang === 'zh' ? el.getAttribute('data-zh') : el.getAttribute('data-en');
+                if (text) {
+                    el.textContent = text;
+                }
+            });
+            
+            // Update bilingual sections
+            document.querySelectorAll('.bilingual').forEach(section => {
+                const langEn = section.querySelector('.lang-en');
+                const langZh = section.querySelector('.lang-zh');
+                if (lang === 'zh') {
+                    if (langEn) langEn.style.display = 'none';
+                    if (langZh) langZh.style.display = 'block';
+                } else {
+                    if (langEn) langEn.style.display = 'block';
+                    if (langZh) langZh.style.display = 'none';
+                }
+            });
+            
+            // Update standalone bilingual paragraphs (like in footer)
+            document.querySelectorAll('.lang-en, .lang-zh').forEach(el => {
+                if (!el.closest('.bilingual')) {
+                    if (el.classList.contains('lang-en')) {
+                        el.style.display = lang === 'en' ? 'block' : 'none';
+                    } else if (el.classList.contains('lang-zh')) {
+                        el.style.display = lang === 'zh' ? 'block' : 'none';
+                    }
+                }
+            });
+            
+            // Update navigation links
+            document.querySelectorAll('.nav-links a').forEach(link => {
+                const text = lang === 'zh' ? link.getAttribute('data-zh') : link.getAttribute('data-en');
+                if (text) {
+                    link.textContent = text;
+                }
+            });
+            
+            // Update CTA buttons
+            document.querySelectorAll('.cta-buttons .btn').forEach(btn => {
+                const text = lang === 'zh' ? btn.getAttribute('data-zh') : btn.getAttribute('data-en');
+                if (text) {
+                    btn.textContent = text;
+                }
+            });
+        }
+
+        // Initialize language display
+        document.addEventListener('DOMContentLoaded', () => {
+            // Set initial language without button parameter
+            const enBtn = document.querySelector('.lang-btn[data-lang="en"]');
+            switchLang('en', enBtn);
+        });
+
+        // Smooth scroll for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+
+        // Intersection Observer for fade-in animations
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('fade-in');
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.feature-card, .screenshot-card').forEach(el => {
+            observer.observe(el);
+        });
+    </script>
+</body>
+</html>
