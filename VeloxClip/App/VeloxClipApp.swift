@@ -92,17 +92,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func applicationWillTerminate(_ notification: Notification) {
-        // Ensure API Key is saved before app terminates
-        Task {
-            let apiKey = await MainActor.run { AppSettings.shared.openRouterAPIKey }
-            if !apiKey.isEmpty {
-                do {
-                    try await DatabaseManager.shared.setSetting(key: "openRouterAPIKey", value: apiKey)
-                    print("✅ OpenRouter API Key saved on app termination")
-                } catch {
-                    print("❌ Failed to save OpenRouter API Key on termination: \(error)")
-                }
-            }
-        }
+        // App settings are saved immediately when changed, so no need for extra save here
     }
 }

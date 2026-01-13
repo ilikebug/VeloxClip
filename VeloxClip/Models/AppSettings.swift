@@ -11,6 +11,7 @@ class AppSettings: ObservableObject {
     
     @Published var historyLimit: Int {
         didSet {
+            guard !isInitializing else { return }
             Task {
                 try? await dbManager.setSetting(key: "historyLimit", value: String(historyLimit))
             }
@@ -19,6 +20,7 @@ class AppSettings: ObservableObject {
     
     @Published var launchAtLogin: Bool {
         didSet {
+            guard !isInitializing else { return }
             Task {
                 try? await dbManager.setSetting(key: "launchAtLogin", value: String(launchAtLogin))
             }
@@ -28,30 +30,40 @@ class AppSettings: ObservableObject {
     
     @Published var globalShortcut: String {
         didSet {
-            Task {
-                try? await dbManager.setSetting(key: "globalShortcut", value: globalShortcut)
+            if !isInitializing {
+                Task {
+                    try? await dbManager.setSetting(key: "globalShortcut", value: globalShortcut)
+                }
             }
+            ShortcutManager.shared.updateShortcut(globalShortcut)
         }
     }
     
     @Published var screenshotShortcut: String {
         didSet {
-            Task {
-                try? await dbManager.setSetting(key: "screenshotShortcut", value: screenshotShortcut)
+            if !isInitializing {
+                Task {
+                    try? await dbManager.setSetting(key: "screenshotShortcut", value: screenshotShortcut)
+                }
             }
+            ShortcutManager.shared.updateScreenshotShortcut(screenshotShortcut)
         }
     }
     
     @Published var pasteImageShortcut: String {
         didSet {
-            Task {
-                try? await dbManager.setSetting(key: "pasteImageShortcut", value: pasteImageShortcut)
+            if !isInitializing {
+                Task {
+                    try? await dbManager.setSetting(key: "pasteImageShortcut", value: pasteImageShortcut)
+                }
             }
+            ShortcutManager.shared.updatePasteImageShortcut(pasteImageShortcut)
         }
     }
     
     @Published var aiResponseLanguage: String {
         didSet {
+            guard !isInitializing else { return }
             Task {
                 try? await dbManager.setSetting(key: "aiResponseLanguage", value: aiResponseLanguage)
             }
