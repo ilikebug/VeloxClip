@@ -34,17 +34,24 @@ struct JSONPreviewView: View {
     private var header: some View {
         HStack {
             validationStatus
+            
             Spacer()
+            
             if !isLoading {
                 Picker("View", selection: $viewMode) {
                     Text("Formatted").tag(ViewMode.formatted)
                     Text("Minified").tag(ViewMode.minified)
                     Text("Tree").tag(ViewMode.tree)
                 }
-                .pickerStyle(.segmented).frame(width: 200)
+                .pickerStyle(.segmented)
+                .frame(width: 200)
+                .padding(.trailing, 30) // Move it a little bit to the left relative to the Copy button
                 
-                Button(action: copyJSON) { Label("Copy", systemImage: "doc.on.doc") }
-                .buttonStyle(.bordered).controlSize(.small)
+                Button(action: copyJSON) {
+                    Label("Copy", systemImage: "doc.on.doc")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
             }
         }
         .padding(.bottom, 8)
