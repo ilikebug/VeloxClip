@@ -77,16 +77,11 @@ struct JSONPreviewView: View {
                 } else if isValidJSON {
                     switch viewMode {
                     case .formatted: 
-                        formattedView
-                            .fixedSize(horizontal: true, vertical: false)
-                            .frame(minWidth: availableWidth, alignment: .leading)
+                        formattedView(availableWidth: availableWidth)
                     case .minified: 
-                        minifiedView
-                            .fixedSize(horizontal: true, vertical: false)
-                            .frame(minWidth: availableWidth, alignment: .leading)
+                        minifiedView(availableWidth: availableWidth)
                     case .tree: 
-                        treeView
-                            .frame(width: availableWidth, alignment: .leading)
+                        treeView(availableWidth: availableWidth)
                     }
                 } else {
                     errorView
@@ -109,8 +104,8 @@ struct JSONPreviewView: View {
         .padding(.vertical, 80)
     }
     
-    private var formattedView: some View {
-        LazyVStack(alignment: .leading, spacing: 0) {
+    private func formattedView(availableWidth: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
             let lines = formattedJSON.components(separatedBy: .newlines)
             ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
                 Text(line)
@@ -122,10 +117,11 @@ struct JSONPreviewView: View {
             }
         }
         .padding(12)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .fixedSize(horizontal: true, vertical: false)
+        .frame(minWidth: availableWidth, alignment: .topLeading)
     }
     
-    private var minifiedView: some View {
+    private func minifiedView(availableWidth: CGFloat) -> some View {
         Text(minifiedJSONText)
             .font(.system(.body, design: .monospaced))
             .lineLimit(1)
@@ -133,17 +129,18 @@ struct JSONPreviewView: View {
             .textSelection(.enabled)
             .padding(12)
             .padding(.trailing, 40)
-            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .frame(minWidth: availableWidth, alignment: .topLeading)
     }
     
-    private var treeView: some View {
+    private func treeView(availableWidth: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             if let jsonObject = parseJSON() {
                 JSONTreeView(jsonObject: jsonObject, level: 0)
             }
         }
         .padding(12)
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .padding(.trailing, 40)
+        .frame(minWidth: availableWidth, alignment: .topLeading)
     }
     
     private var errorView: some View {
@@ -268,6 +265,7 @@ struct JSONTreeView: View {
                 }
             } else {
                 leafValue
+                    .fixedSize(horizontal: true, vertical: false)
             }
         }
         .padding(.leading, level == 0 ? 0 : indent)
@@ -320,10 +318,11 @@ struct JSONTreeView: View {
             }
         }
         .font(.system(.body, design: .monospaced))
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     private func dictionaryContent(_ dict: [String: Any]) -> some View {
-        LazyVStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 2) {
             let sortedKeys = dict.keys.sorted()
             ForEach(sortedKeys, id: \.self) { key in
                 JSONTreeView(jsonObject: dict[key]!, level: level + 1, key: key)
@@ -332,7 +331,7 @@ struct JSONTreeView: View {
     }
 
     private func arrayContent(_ array: [Any]) -> some View {
-        LazyVStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 2) {
             ForEach(Array(array.enumerated()), id: \.offset) { index, item in
                 JSONTreeView(jsonObject: item, level: level + 1)
             }
@@ -343,13 +342,13 @@ struct JSONTreeView: View {
         if let str = value as? String {
             return Text("\"\(str)\"").foregroundColor(stringColor)
         } else if let bool = value as? Bool {
-            return Text("\(bool)").foregroundColor(keywordColor)
+            return Text(bool ? "true" : "false").foregroundColor(keywordColor)
         } else if value is NSNull {
             return Text("null").foregroundColor(keywordColor)
         } else if let num = value as? NSNumber {
-            return Text("\(num)").foregroundColor(numberColor)
+            return Text(num.stringValue).foregroundColor(numberColor)
         } else {
-            return Text("\(String(describing: value))").foregroundColor(.primary)
+            return Text(String(describing: value)).foregroundColor(.primary)
         }
     }
 }
