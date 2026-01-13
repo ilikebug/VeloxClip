@@ -1,10 +1,12 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VeloxClip - AI-Enhanced Clipboard Manager for macOS</title>
-    <meta name="description" content="A powerful, AI-enhanced clipboard manager for macOS with intelligent search, screenshot editing, and content transformation features.">
+    <meta name="description"
+        content="A powerful, AI-enhanced clipboard manager for macOS with intelligent search, screenshot editing, and content transformation features.">
     <style>
         * {
             margin: 0;
@@ -60,6 +62,7 @@
             justify-content: space-between;
             align-items: center;
             padding: 0 2rem;
+            width: 100%;
         }
 
         .logo {
@@ -75,6 +78,8 @@
             display: flex;
             gap: 2rem;
             list-style: none;
+            margin-left: auto;
+            margin-right: 2rem;
         }
 
         .nav-links a {
@@ -107,7 +112,7 @@
             right: 0;
             bottom: 0;
             background: radial-gradient(circle at 30% 50%, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
-                        radial-gradient(circle at 70% 80%, rgba(139, 92, 246, 0.15) 0%, transparent 50%);
+                radial-gradient(circle at 70% 80%, rgba(139, 92, 246, 0.15) 0%, transparent 50%);
             z-index: -1;
         }
 
@@ -346,20 +351,22 @@
         .lang-en {
             color: var(--text-primary);
             font-weight: 500;
-            display: block; /* Shown by default (EN is default) */
+            display: block;
+            /* Shown by default (EN is default) */
         }
 
         .lang-zh {
             color: var(--text-secondary);
             font-size: 0.95em;
-            display: none; /* Hidden by default */
+            display: none;
+            /* Hidden by default */
         }
-        
+
         /* Standalone bilingual paragraphs (not in .bilingual container) */
         footer .lang-en {
             display: block;
         }
-        
+
         footer .lang-zh {
             display: none;
         }
@@ -499,6 +506,7 @@
                 opacity: 0;
                 transform: translateY(30px);
             }
+
             to {
                 opacity: 1;
                 transform: translateY(0);
@@ -516,8 +524,6 @@
             }
 
             .top-right-controls {
-                top: 0.5rem;
-                right: 1rem;
                 gap: 0.5rem;
             }
 
@@ -578,12 +584,8 @@
             color: var(--text-primary);
         }
 
-        /* Top Right Corner Container */
+        /* Nav Controls Container */
         .top-right-controls {
-            position: fixed;
-            top: 0.5rem;
-            right: 2rem;
-            z-index: 1001;
             display: flex;
             align-items: center;
             gap: 1rem;
@@ -612,20 +614,8 @@
         }
     </style>
 </head>
-<body>
-    <!-- Top Right Controls -->
-    <div class="top-right-controls">
-        <a href="https://github.com/ilikebug/VeloxClip" target="_blank" rel="noopener noreferrer" class="github-link" title="GitHub">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
-            </svg>
-        </a>
-        <div class="lang-toggle">
-            <button class="lang-btn" data-lang="zh" onclick="switchLang('zh', this)">中文</button>
-            <button class="lang-btn active" data-lang="en" onclick="switchLang('en', this)">EN</button>
-        </div>
-    </div>
 
+<body>
     <!-- Navigation -->
     <nav>
         <div class="nav-container">
@@ -637,6 +627,22 @@
                 <li><a href="#download" data-zh="下载" data-en="Download">Download</a></li>
                 <li><a href="#tech" data-zh="技术栈" data-en="Tech Stack">Tech Stack</a></li>
             </ul>
+
+            <!-- Nav Controls -->
+            <div class="top-right-controls">
+                <a href="https://github.com/ilikebug/VeloxClip" target="_blank" rel="noopener noreferrer"
+                    class="github-link" title="GitHub">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"
+                        xmlns="http://www.w3.org/2000/svg">
+                        <path
+                            d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+                    </svg>
+                </a>
+                <div class="lang-toggle">
+                    <button class="lang-btn" data-lang="zh" onclick="switchLang('zh', this)">中文</button>
+                    <button class="lang-btn active" data-lang="en" onclick="switchLang('en', this)">EN</button>
+                </div>
+            </div>
         </div>
     </nav>
 
@@ -644,11 +650,14 @@
     <section class="hero">
         <div class="hero-content">
             <h1>VeloxClip</h1>
-            <p class="subtitle" data-zh="强大的 AI 增强型 macOS 剪贴板管理器" data-en="Powerful AI-Enhanced Clipboard Manager for macOS">
+            <p class="subtitle" data-zh="强大的 AI 增强型 macOS 剪贴板管理器"
+                data-en="Powerful AI-Enhanced Clipboard Manager for macOS">
                 Powerful AI-Enhanced Clipboard Manager for macOS
             </p>
-            <p class="description" data-zh="智能管理、搜索和转换您的剪贴板历史记录。内置截图捕获和专业图像编辑工具，让您的工作流程更加高效。" data-en="Intelligently manage, search, and transform your clipboard history. Built-in screenshot capture and professional image editing tools to enhance your workflow.">
-                Intelligently manage, search, and transform your clipboard history. Built-in screenshot capture and professional image editing tools to enhance your workflow.
+            <p class="description" data-zh="智能管理、搜索和转换您的剪贴板历史记录。内置截图捕获和专业图像编辑工具，让您的工作流程更加高效。"
+                data-en="Intelligently manage, search, and transform your clipboard history. Built-in screenshot capture and professional image editing tools to enhance your workflow.">
+                Intelligently manage, search, and transform your clipboard history. Built-in screenshot capture and
+                professional image editing tools to enhance your workflow.
             </p>
             <div class="cta-buttons">
                 <a href="#installation" class="btn btn-primary" data-zh="开始使用" data-en="Get Started">Get Started</a>
@@ -660,15 +669,20 @@
     <!-- Features Section -->
     <section id="features" class="section">
         <h2 class="section-title" data-zh="核心功能" data-en="Core Features">Core Features</h2>
-        <p class="section-subtitle" data-zh="探索 VeloxClip 的强大功能" data-en="Discover the powerful features of VeloxClip">Discover the powerful features of VeloxClip</p>
-        
+        <p class="section-subtitle" data-zh="探索 VeloxClip 的强大功能" data-en="Discover the powerful features of VeloxClip">
+            Discover the powerful features of VeloxClip</p>
+
         <div class="features-grid">
             <div class="feature-card">
                 <span class="feature-icon">📋</span>
                 <h3 data-zh="智能剪贴板管理" data-en="Smart Clipboard Management">Smart Clipboard Management</h3>
                 <div class="bilingual">
-                    <p class="lang-en" data-zh="智能剪贴板管理" data-en="Automatic history tracking with smart deduplication. Track source apps and manage favorites with custom tags.">Automatic history tracking with smart deduplication. Track source apps and manage favorites with custom tags.</p>
-                    <p class="lang-zh" data-zh="自动历史记录跟踪，智能去重。跟踪来源应用，使用自定义标签管理收藏。" data-en="">自动历史记录跟踪，智能去重。跟踪来源应用，使用自定义标签管理收藏。</p>
+                    <p class="lang-en" data-zh="智能剪贴板管理"
+                        data-en="Automatic history tracking with smart deduplication. Track source apps and manage favorites with custom tags.">
+                        Automatic history tracking with smart deduplication. Track source apps and manage favorites with
+                        custom tags.</p>
+                    <p class="lang-zh" data-zh="自动历史记录跟踪，智能去重。跟踪来源应用，使用自定义标签管理收藏。" data-en="">
+                        自动历史记录跟踪，智能去重。跟踪来源应用，使用自定义标签管理收藏。</p>
                 </div>
             </div>
 
@@ -676,8 +690,12 @@
                 <span class="feature-icon">🤖</span>
                 <h3 data-zh="AI 增强功能" data-en="AI-Powered Features">AI-Powered Features</h3>
                 <div class="bilingual">
-                    <p class="lang-en" data-zh="AI 增强功能" data-en="OCR text recognition, text summarization, translation, code explanation, and semantic search powered by AI.">OCR text recognition, text summarization, translation, code explanation, and semantic search powered by AI.</p>
-                    <p class="lang-zh" data-zh="OCR 文字识别、文本摘要、翻译、代码解释和语义搜索，全部由 AI 驱动。" data-en="">OCR 文字识别、文本摘要、翻译、代码解释和语义搜索，全部由 AI 驱动。</p>
+                    <p class="lang-en" data-zh="AI 增强功能"
+                        data-en="OCR text recognition, text summarization, translation, code explanation, and semantic search powered by AI.">
+                        OCR text recognition, text summarization, translation, code explanation, and semantic search
+                        powered by AI.</p>
+                    <p class="lang-zh" data-zh="OCR 文字识别、文本摘要、翻译、代码解释和语义搜索，全部由 AI 驱动。" data-en="">OCR
+                        文字识别、文本摘要、翻译、代码解释和语义搜索，全部由 AI 驱动。</p>
                 </div>
             </div>
 
@@ -685,8 +703,12 @@
                 <span class="feature-icon">🔍</span>
                 <h3 data-zh="高级搜索" data-en="Advanced Search">Advanced Search</h3>
                 <div class="bilingual">
-                    <p class="lang-en" data-zh="高级搜索" data-en="Keyword search, semantic search, and tag-based filtering. Find clipboard items by meaning, not just keywords.">Keyword search, semantic search, and tag-based filtering. Find clipboard items by meaning, not just keywords.</p>
-                    <p class="lang-zh" data-zh="关键词搜索、语义搜索和基于标签的过滤。通过含义查找剪贴板项目，不仅仅是关键词。" data-en="">关键词搜索、语义搜索和基于标签的过滤。通过含义查找剪贴板项目，不仅仅是关键词。</p>
+                    <p class="lang-en" data-zh="高级搜索"
+                        data-en="Keyword search, semantic search, and tag-based filtering. Find clipboard items by meaning, not just keywords.">
+                        Keyword search, semantic search, and tag-based filtering. Find clipboard items by meaning, not
+                        just keywords.</p>
+                    <p class="lang-zh" data-zh="关键词搜索、语义搜索和基于标签的过滤。通过含义查找剪贴板项目，不仅仅是关键词。" data-en="">
+                        关键词搜索、语义搜索和基于标签的过滤。通过含义查找剪贴板项目，不仅仅是关键词。</p>
                 </div>
             </div>
 
@@ -694,8 +716,12 @@
                 <span class="feature-icon">⭐</span>
                 <h3 data-zh="收藏与标签" data-en="Favorites & Tags">Favorites & Tags</h3>
                 <div class="bilingual">
-                    <p class="lang-en" data-zh="收藏与标签" data-en="Mark important items as favorites. Auto-tagging by content type and custom tags for better organization.">Mark important items as favorites. Auto-tagging by content type and custom tags for better organization.</p>
-                    <p class="lang-zh" data-zh="将重要项目标记为收藏。按内容类型自动标记和自定义标签，更好地组织内容。" data-en="">将重要项目标记为收藏。按内容类型自动标记和自定义标签，更好地组织内容。</p>
+                    <p class="lang-en" data-zh="收藏与标签"
+                        data-en="Mark important items as favorites. Auto-tagging by content type and custom tags for better organization.">
+                        Mark important items as favorites. Auto-tagging by content type and custom tags for better
+                        organization.</p>
+                    <p class="lang-zh" data-zh="将重要项目标记为收藏。按内容类型自动标记和自定义标签，更好地组织内容。" data-en="">
+                        将重要项目标记为收藏。按内容类型自动标记和自定义标签，更好地组织内容。</p>
                 </div>
             </div>
 
@@ -703,8 +729,12 @@
                 <span class="feature-icon">📸</span>
                 <h3 data-zh="截图与编辑" data-en="Screenshot & Editing">Screenshot & Editing</h3>
                 <div class="bilingual">
-                    <p class="lang-en" data-zh="截图与编辑" data-en="Capture area screenshots and edit with professional tools: drawing, arrows, text, mosaic, and more.">Capture area screenshots and edit with professional tools: drawing, arrows, text, mosaic, and more.</p>
-                    <p class="lang-zh" data-zh="捕获区域截图并使用专业工具编辑：绘图、箭头、文本、马赛克等。" data-en="">捕获区域截图并使用专业工具编辑：绘图、箭头、文本、马赛克等。</p>
+                    <p class="lang-en" data-zh="截图与编辑"
+                        data-en="Capture area screenshots and edit with professional tools: drawing, arrows, text, mosaic, and more.">
+                        Capture area screenshots and edit with professional tools: drawing, arrows, text, mosaic, and
+                        more.</p>
+                    <p class="lang-zh" data-zh="捕获区域截图并使用专业工具编辑：绘图、箭头、文本、马赛克等。" data-en="">
+                        捕获区域截图并使用专业工具编辑：绘图、箭头、文本、马赛克等。</p>
                 </div>
             </div>
 
@@ -712,8 +742,12 @@
                 <span class="feature-icon">🎨</span>
                 <h3 data-zh="丰富预览" data-en="Rich Previews">Rich Previews</h3>
                 <div class="bilingual">
-                    <p class="lang-en" data-zh="丰富预览" data-en="Specialized previews for JSON, tables, URLs, code, colors, images, markdown, and more with syntax highlighting.">Specialized previews for JSON, tables, URLs, code, colors, images, markdown, and more with syntax highlighting.</p>
-                    <p class="lang-zh" data-zh="针对 JSON、表格、URL、代码、颜色、图像、Markdown 等的专业预览，支持语法高亮。" data-en="">针对 JSON、表格、URL、代码、颜色、图像、Markdown 等的专业预览，支持语法高亮。</p>
+                    <p class="lang-en" data-zh="丰富预览"
+                        data-en="Specialized previews for JSON, tables, URLs, code, colors, images, markdown, and more with syntax highlighting.">
+                        Specialized previews for JSON, tables, URLs, code, colors, images, markdown, and more with
+                        syntax highlighting.</p>
+                    <p class="lang-zh" data-zh="针对 JSON、表格、URL、代码、颜色、图像、Markdown 等的专业预览，支持语法高亮。" data-en="">针对
+                        JSON、表格、URL、代码、颜色、图像、Markdown 等的专业预览，支持语法高亮。</p>
                 </div>
             </div>
         </div>
@@ -722,31 +756,38 @@
     <!-- Screenshots Section -->
     <section id="screenshots" class="section">
         <h2 class="section-title" data-zh="应用截图" data-en="Screenshots">Screenshots</h2>
-        <p class="section-subtitle" data-zh="一睹 VeloxClip 的界面" data-en="Take a look at VeloxClip's interface">Take a look at VeloxClip's interface</p>
-        
+        <p class="section-subtitle" data-zh="一睹 VeloxClip 的界面" data-en="Take a look at VeloxClip's interface">Take a
+            look at VeloxClip's interface</p>
+
         <div class="screenshots">
             <div class="screenshot-card">
-                <img src="screenshots/main.png" alt="Main Interface" class="screenshot-image" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                <img src="screenshots/main.png" alt="Main Interface" class="screenshot-image"
+                    onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
                 <div class="screenshot-placeholder" style="display: none;">🖥️</div>
                 <div class="screenshot-info">
                     <h3 data-zh="主界面" data-en="Main Interface">Main Interface</h3>
-                    <p class="lang-en" data-zh="Spotlight 风格的现代化界面" data-en="Modern Spotlight-style interface">Modern Spotlight-style interface</p>
+                    <p class="lang-en" data-zh="Spotlight 风格的现代化界面" data-en="Modern Spotlight-style interface">Modern
+                        Spotlight-style interface</p>
                 </div>
             </div>
             <div class="screenshot-card">
-                <img src="screenshots/image_editor.png" alt="Image Editor" class="screenshot-image" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                <img src="screenshots/image_editor.png" alt="Image Editor" class="screenshot-image"
+                    onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
                 <div class="screenshot-placeholder" style="display: none;">🎨</div>
                 <div class="screenshot-info">
                     <h3 data-zh="图片编辑" data-en="Image Editor">Image Editor</h3>
-                    <p class="lang-en" data-zh="专业的截图编辑工具" data-en="Professional screenshot editing tools">Professional screenshot editing tools</p>
+                    <p class="lang-en" data-zh="专业的截图编辑工具" data-en="Professional screenshot editing tools">Professional
+                        screenshot editing tools</p>
                 </div>
             </div>
             <div class="screenshot-card">
-                <img src="screenshots/search.png" alt="Smart Search" class="screenshot-image" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                <img src="screenshots/search.png" alt="Smart Search" class="screenshot-image"
+                    onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
                 <div class="screenshot-placeholder" style="display: none;">🔍</div>
                 <div class="screenshot-info">
                     <h3 data-zh="智能搜索" data-en="Smart Search">Smart Search</h3>
-                    <p class="lang-en" data-zh="语义搜索和标签过滤" data-en="Semantic search and tag filtering">Semantic search and tag filtering</p>
+                    <p class="lang-en" data-zh="语义搜索和标签过滤" data-en="Semantic search and tag filtering">Semantic search
+                        and tag filtering</p>
                 </div>
             </div>
         </div>
@@ -755,12 +796,14 @@
     <!-- Installation Section -->
     <section id="installation" class="section">
         <h2 class="section-title" data-zh="安装指南" data-en="Installation">Installation</h2>
-        <p class="section-subtitle" data-zh="快速开始使用 VeloxClip" data-en="Get started with VeloxClip quickly">Get started with VeloxClip quickly</p>
-        
+        <p class="section-subtitle" data-zh="快速开始使用 VeloxClip" data-en="Get started with VeloxClip quickly">Get started
+            with VeloxClip quickly</p>
+
         <div class="installation">
             <h3 data-zh="从源码构建" data-en="Build from Source">Build from Source</h3>
             <div class="bilingual">
-                <p class="lang-en" data-zh="从源码构建" data-en="Clone the repository and build the application:">Clone the repository and build the application:</p>
+                <p class="lang-en" data-zh="从源码构建" data-en="Clone the repository and build the application:">Clone the
+                    repository and build the application:</p>
                 <p class="lang-zh" data-zh="克隆仓库并构建应用程序：" data-en="">克隆仓库并构建应用程序：</p>
             </div>
             <div class="code-block">
@@ -772,19 +815,27 @@ swift build -c release<br>
 
             <h3 style="margin-top: 2rem;" data-zh="AI 功能配置" data-en="AI Features Setup">AI Features Setup</h3>
             <div class="bilingual">
-                <p class="lang-en" data-zh="AI 功能配置" data-en="To enable AI features, configure your OpenRouter API key in Settings:">To enable AI features, configure your OpenRouter API key in Settings:</p>
-                <p class="lang-zh" data-zh="要启用 AI 功能，请在设置中配置您的 OpenRouter API 密钥：" data-en="">要启用 AI 功能，请在设置中配置您的 OpenRouter API 密钥：</p>
+                <p class="lang-en" data-zh="AI 功能配置"
+                    data-en="To enable AI features, configure your OpenRouter API key in Settings:">To enable AI
+                    features, configure your OpenRouter API key in Settings:</p>
+                <p class="lang-zh" data-zh="要启用 AI 功能，请在设置中配置您的 OpenRouter API 密钥：" data-en="">要启用 AI 功能，请在设置中配置您的
+                    OpenRouter API 密钥：</p>
             </div>
             <div class="bilingual">
-                <p class="lang-en" data-zh="1. 访问 OpenRouter.ai 获取免费 API 密钥" data-en="1. Visit OpenRouter.ai to get a free API key">1. Visit OpenRouter.ai to get a free API key</p>
-                <p class="lang-zh" data-zh="1. 访问 OpenRouter.ai 获取免费 API 密钥" data-en="">1. 访问 OpenRouter.ai 获取免费 API 密钥</p>
+                <p class="lang-en" data-zh="1. 访问 OpenRouter.ai 获取免费 API 密钥"
+                    data-en="1. Visit OpenRouter.ai to get a free API key">1. Visit OpenRouter.ai to get a free API key
+                </p>
+                <p class="lang-zh" data-zh="1. 访问 OpenRouter.ai 获取免费 API 密钥" data-en="">1. 访问 OpenRouter.ai 获取免费 API 密钥
+                </p>
             </div>
             <div class="bilingual">
-                <p class="lang-en" data-zh="2. 在应用中打开设置（Cmd+,）" data-en="2. Open Settings in the app (Cmd+,)">2. Open Settings in the app (Cmd+,)</p>
+                <p class="lang-en" data-zh="2. 在应用中打开设置（Cmd+,）" data-en="2. Open Settings in the app (Cmd+,)">2. Open
+                    Settings in the app (Cmd+,)</p>
                 <p class="lang-zh" data-zh="2. 在应用中打开设置（Cmd+,）" data-en="">2. 在应用中打开设置（Cmd+,）</p>
             </div>
             <div class="bilingual">
-                <p class="lang-en" data-zh="3. 在 AI 设置中输入您的 API 密钥" data-en="3. Enter your API key in AI Settings">3. Enter your API key in AI Settings</p>
+                <p class="lang-en" data-zh="3. 在 AI 设置中输入您的 API 密钥" data-en="3. Enter your API key in AI Settings">3.
+                    Enter your API key in AI Settings</p>
                 <p class="lang-zh" data-zh="3. 在 AI 设置中输入您的 API 密钥" data-en="">3. 在 AI 设置中输入您的 API 密钥</p>
             </div>
         </div>
@@ -793,24 +844,31 @@ swift build -c release<br>
     <!-- Download Section -->
     <section id="download" class="section">
         <h2 class="section-title" data-zh="下载应用" data-en="Download">Download</h2>
-        <p class="section-subtitle" data-zh="获取最新版本的 VeloxClip" data-en="Get the latest version of VeloxClip">Get the latest version of VeloxClip</p>
-        
+        <p class="section-subtitle" data-zh="获取最新版本的 VeloxClip" data-en="Get the latest version of VeloxClip">Get the
+            latest version of VeloxClip</p>
+
         <div class="download-section">
             <div class="download-info">
                 <div class="version-badge" id="version-badge">
-                    <span class="loading" data-zh="正在获取版本信息..." data-en="Loading version info...">Loading version info...</span>
+                    <span class="loading" data-zh="正在获取版本信息..." data-en="Loading version info...">Loading version
+                        info...</span>
                 </div>
-                <p class="lang-en" data-zh="下载最新版本" data-en="Download the latest release">Download the latest release</p>
+                <p class="lang-en" data-zh="下载最新版本" data-en="Download the latest release">Download the latest release
+                </p>
                 <p class="lang-zh" data-zh="下载最新版本" data-en="">下载最新版本</p>
             </div>
             <div class="download-buttons" id="download-buttons">
-                <a href="https://github.com/ilikebug/VeloxClip/releases/latest" class="download-link" id="download-link" target="_blank" rel="noopener noreferrer">
+                <a href="https://github.com/ilikebug/VeloxClip/releases/latest" class="download-link" id="download-link"
+                    target="_blank" rel="noopener noreferrer">
                     <svg fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                        <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                        <path fill-rule="evenodd"
+                            d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"
+                            clip-rule="evenodd"></path>
                     </svg>
                     <span data-zh="下载最新版本" data-en="Download Latest">Download Latest</span>
                 </a>
-                <a href="https://github.com/ilikebug/VeloxClip/releases" class="btn btn-secondary" target="_blank" rel="noopener noreferrer" data-zh="查看所有版本" data-en="View All Releases">View All Releases</a>
+                <a href="https://github.com/ilikebug/VeloxClip/releases" class="btn btn-secondary" target="_blank"
+                    rel="noopener noreferrer" data-zh="查看所有版本" data-en="View All Releases">View All Releases</a>
             </div>
         </div>
     </section>
@@ -818,8 +876,9 @@ swift build -c release<br>
     <!-- Tech Stack Section -->
     <section id="tech" class="section">
         <h2 class="section-title" data-zh="技术栈" data-en="Technology Stack">Technology Stack</h2>
-        <p class="section-subtitle" data-zh="基于现代 macOS 技术构建" data-en="Built with modern macOS technologies">Built with modern macOS technologies</p>
-        
+        <p class="section-subtitle" data-zh="基于现代 macOS 技术构建" data-en="Built with modern macOS technologies">Built with
+            modern macOS technologies</p>
+
         <div class="tech-stack">
             <span class="tech-badge">Swift 6.0</span>
             <span class="tech-badge">SwiftUI</span>
@@ -835,7 +894,9 @@ swift build -c release<br>
         <div class="footer-content">
             <h3 data-zh="VeloxClip" data-en="VeloxClip">VeloxClip</h3>
             <p class="lang-zh" data-zh="为重视生产力和隐私的 macOS 用户打造 ❤️" data-en="">为重视生产力和隐私的 macOS 用户打造 ❤️</p>
-            <p class="lang-en" data-zh="为重视生产力和隐私的 macOS 用户打造 ❤️" data-en="Made with ❤️ for macOS users who value productivity and privacy">Made with ❤️ for macOS users who value productivity and privacy</p>
+            <p class="lang-en" data-zh="为重视生产力和隐私的 macOS 用户打造 ❤️"
+                data-en="Made with ❤️ for macOS users who value productivity and privacy">Made with ❤️ for macOS users
+                who value productivity and privacy</p>
             <div class="footer-links">
                 <a href="https://github.com/ilikebug/VeloxClip" data-zh="GitHub" data-en="GitHub">GitHub</a>
                 <a href="#" data-zh="文档" data-en="Documentation">Documentation</a>
@@ -852,7 +913,7 @@ swift build -c release<br>
 
         function switchLang(lang, buttonElement) {
             currentLang = lang;
-            
+
             // Update toggle buttons
             document.querySelectorAll('.lang-btn').forEach(btn => {
                 btn.classList.remove('active');
@@ -863,20 +924,20 @@ swift build -c release<br>
                 // Fallback: find button by data-lang attribute
                 document.querySelector(`.lang-btn[data-lang="${lang}"]`)?.classList.add('active');
             }
-            
+
             // Update all elements with data attributes (single language elements)
             document.querySelectorAll('[data-zh][data-en]').forEach(el => {
                 // Skip bilingual sections - they are handled separately
                 if (el.closest('.bilingual')) {
                     return;
                 }
-                
+
                 const text = lang === 'zh' ? el.getAttribute('data-zh') : el.getAttribute('data-en');
                 if (text) {
                     el.textContent = text;
                 }
             });
-            
+
             // Update bilingual sections
             document.querySelectorAll('.bilingual').forEach(section => {
                 const langEn = section.querySelector('.lang-en');
@@ -889,7 +950,7 @@ swift build -c release<br>
                     if (langZh) langZh.style.display = 'none';
                 }
             });
-            
+
             // Update standalone bilingual paragraphs (like in footer)
             document.querySelectorAll('.lang-en, .lang-zh').forEach(el => {
                 if (!el.closest('.bilingual')) {
@@ -900,7 +961,7 @@ swift build -c release<br>
                     }
                 }
             });
-            
+
             // Update navigation links
             document.querySelectorAll('.nav-links a').forEach(link => {
                 const text = lang === 'zh' ? link.getAttribute('data-zh') : link.getAttribute('data-en');
@@ -908,7 +969,7 @@ swift build -c release<br>
                     link.textContent = text;
                 }
             });
-            
+
             // Update CTA buttons
             document.querySelectorAll('.cta-buttons .btn').forEach(btn => {
                 const text = lang === 'zh' ? btn.getAttribute('data-zh') : btn.getAttribute('data-en');
@@ -916,7 +977,7 @@ swift build -c release<br>
                     btn.textContent = text;
                 }
             });
-            
+
             // Update download section text
             const downloadLink = document.getElementById('download-link');
             if (downloadLink) {
@@ -938,20 +999,20 @@ swift build -c release<br>
                     throw new Error('Failed to fetch release');
                 }
                 const release = await response.json();
-                
+
                 // Update version badge
                 const versionBadge = document.getElementById('version-badge');
                 if (versionBadge) {
                     versionBadge.innerHTML = release.tag_name;
                 }
-                
+
                 // Find macOS asset (look for .dmg, .zip, or .app)
-                const macAsset = release.assets.find(asset => 
-                    asset.name.includes('.dmg') || 
-                    asset.name.includes('.zip') || 
+                const macAsset = release.assets.find(asset =>
+                    asset.name.includes('.dmg') ||
+                    asset.name.includes('.zip') ||
                     asset.name.includes('.app')
                 );
-                
+
                 // Update download link
                 const downloadLink = document.getElementById('download-link');
                 if (downloadLink && macAsset) {
@@ -961,7 +1022,7 @@ swift build -c release<br>
                     // Fallback to release page if no asset found
                     downloadLink.href = release.html_url;
                 }
-                
+
                 // Update download info text
                 const downloadInfo = document.querySelector('.download-info p.lang-en');
                 if (downloadInfo && release.published_at) {
@@ -969,7 +1030,7 @@ swift build -c release<br>
                     const dateStr = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
                     downloadInfo.textContent = `Released on ${dateStr}`;
                 }
-                
+
             } catch (error) {
                 console.error('Error fetching release:', error);
                 // Fallback: show version badge with link to releases page
@@ -985,7 +1046,7 @@ swift build -c release<br>
             // Set initial language without button parameter
             const enBtn = document.querySelector('.lang-btn[data-lang="en"]');
             switchLang('en', enBtn);
-            
+
             // Fetch latest release info
             fetchLatestRelease();
         });
@@ -1023,4 +1084,5 @@ swift build -c release<br>
         });
     </script>
 </body>
+
 </html>

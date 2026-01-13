@@ -29,15 +29,47 @@ actor DatabaseManager {
     let value = Expression<String>("value")
     
     init() {
-        // Get Application Support directory
-        let appSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let veloxURL = appSupportURL.appendingPathComponent("Velox")
+        let fileManager = FileManager.default
+        let appSupportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         
-        // Create directory if it doesn't exist
-        try? FileManager.default.createDirectory(at: veloxURL, withIntermediateDirectories: true, attributes: nil)
+        // Target paths
+        let targetURL = appSupportURL.appendingPathComponent("VeloxClip")
+        let targetDBPath = targetURL.appendingPathComponent("veloxclip.db")
         
-        // Database file path
-        dbPath = veloxURL.appendingPathComponent("velox.db")
+        // Migration: Handle legacy paths
+        let legacyPaths = [
+            (appSupportURL.appendingPathComponent("Velox"), "velox.db"),
+            (appSupportURL.appendingPathComponent("Velo"), "velo.db")
+        ]
+        
+        if !fileManager.fileExists(atPath: targetDBPath.path) {
+            for (legacyDir, legacyFile) in legacyPaths {
+                let legacyDB = legacyDir.appendingPathComponent(legacyFile)
+                if fileManager.fileExists(atPath: legacyDB.path) {
+                    do {
+                        // Create target directory
+                        try fileManager.createDirectory(at: targetURL, withIntermediateDirectories: true)
+                        
+                        // Move legacy database to new location with new name
+                        try fileManager.moveItem(at: legacyDB, to: targetDBPath)
+                        print("✅ Migrated database from \(legacyDB.lastPathComponent) to \(targetDBPath.path)")
+                        
+                        // Try to remove legacy directory if empty
+                        try? fileManager.removeItem(at: legacyDir)
+                        break // Migrated successfully from first found legacy
+                    } catch {
+                        print("⚠️ Migration failed from \(legacyDB.path): \(error)")
+                    }
+                }
+            }
+        }
+        
+        // Finalize path and ensure directory exists
+        if !fileManager.fileExists(atPath: targetURL.path) {
+            try? fileManager.createDirectory(at: targetURL, withIntermediateDirectories: true)
+        }
+        
+        dbPath = targetDBPath
     }
     
     // Initialize database on first access (lazy initialization)
