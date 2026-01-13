@@ -96,7 +96,7 @@ struct JSONPreviewView: View {
             .padding(.vertical, 12)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.white)
+        .background(Color.clear)
         .scrollIndicators(.visible)
     }
 

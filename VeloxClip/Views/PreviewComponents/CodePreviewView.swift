@@ -128,7 +128,7 @@ struct CodePreviewView: View {
             .frame(minWidth: availableWidth, alignment: .leading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.white)
+        .background(Color.clear)
     }
     
     @ViewBuilder
@@ -139,7 +139,7 @@ struct CodePreviewView: View {
             .padding(.horizontal, 4)
             .padding(.vertical, 2)
             .frame(width: width, alignment: .trailing)
-            .background(Color(white: 0.98))
+            .background(Color.secondary.opacity(0.05))
     }
     
     @ViewBuilder

@@ -50,7 +50,7 @@ struct TablePreviewView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color.white)
+                .background(Color.clear)
             }
  else {
                 Text("No table data found")
@@ -145,7 +145,7 @@ struct TableView: View {
                         .frame(width: 150)
                 }
             }
-            .background(Color(white: 0.9))
+            .background(Color.secondary.opacity(0.1))
             
             Divider()
             
@@ -172,7 +172,7 @@ struct TableView: View {
                 }
             }
         }
-        .background(Color(white: 0.98))
+        .background(Color.secondary.opacity(0.05))
         .onAppear {
             if loadedRows.isEmpty {
                 loadInitialRows()
