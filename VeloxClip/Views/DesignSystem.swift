@@ -7,17 +7,17 @@ struct DesignSystem {
         endPoint: .bottomTrailing
     )
     
-    static let backgroundBlur = VisualEffectView(material: .fullScreenUI, blendingMode: .behindWindow)
+    static let backgroundBlur = VisualEffectView(material: .underWindowBackground, blendingMode: .behindWindow)
     
     struct Card: ViewModifier {
         func body(content: Content) -> some View {
             content
                 .padding()
-                .background(Color.white.opacity(0.05))
+                .background(Color.white.opacity(0.12))
                 .cornerRadius(12)
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                        .stroke(Color.white.opacity(0.15), lineWidth: 1)
                 )
         }
     }

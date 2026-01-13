@@ -75,7 +75,7 @@ struct ClipboardItemRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
+                .fill(isSelected ? Color.accentColor.opacity(0.25) : Color.clear)
         )
     }
     

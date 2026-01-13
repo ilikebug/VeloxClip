@@ -208,7 +208,7 @@ struct MainView: View {
                     ClipboardListView(selectedItem: $selectedItem, items: displayItems)
                 }
                 .frame(width: 320)
-                .background(Color.black.opacity(0.02))
+                .background(Color.primary.opacity(0.03))
                 
                 Divider()
                     .background(Color.white.opacity(0.1))
@@ -216,7 +216,7 @@ struct MainView: View {
                 // Right: Detail View (Preview)
                 PreviewView(item: selectedItem)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color.black.opacity(0.05))
+                    .background(Color.primary.opacity(0.08))
             }
         }
         .frame(width: 850, height: 600)
