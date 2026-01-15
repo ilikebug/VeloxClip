@@ -118,6 +118,34 @@ EOF
 echo "[Success] $APP_BUNDLE created successfully!"
 echo "[Info] You can find it at: $(pwd)/$APP_BUNDLE"
 
+# 4.5 Code Signing (Ad-hoc signing - free, no Apple Developer account needed)
+# This helps prevent "damaged" warnings and makes the app look more legitimate
+# Ad-hoc signing is free and doesn't require Apple Developer account
+echo "[Sign] Applying ad-hoc code signing (free, no Apple Developer account needed)..."
+codesign --force --deep --sign - \
+    --options runtime \
+    "$MACOS_DIR/$EXECUTABLE_NAME" 2>&1
+
+if [ $? -eq 0 ]; then
+    # Sign the entire app bundle
+    codesign --force --deep --sign - \
+        --options runtime \
+        "$APP_BUNDLE" 2>&1
+    
+    if [ $? -eq 0 ]; then
+        echo "[Sign] Ad-hoc signing successful!"
+        echo "[Sign] Note: Users may still need to Control+Click → Open the first time"
+    else
+        echo "[Warning] Failed to sign app bundle, continuing without signature..."
+    fi
+else
+    echo "[Warning] Failed to sign executable, continuing without signature..."
+fi
+
+# Remove quarantine attributes to prevent "damaged" warning
+echo "[Quarantine] Removing quarantine attributes..."
+xattr -cr "$APP_BUNDLE" 2>/dev/null || true
+
 # 5. Create DMG package
 echo "[Package] Creating DMG package..."
 DMG_NAME="${APP_NAME}.dmg"
@@ -130,6 +158,16 @@ mkdir -p "$DMG_TEMP_DIR"
 
 # Copy app to temp directory
 cp -R "$APP_BUNDLE" "$DMG_TEMP_DIR/"
+
+# Ensure the app in DMG is also signed and has no quarantine attributes
+# This ensures users can directly open the app after downloading from GitHub
+echo "[Sign] Re-signing app in DMG to ensure it's ready for distribution..."
+codesign --force --deep --sign - \
+    --options runtime \
+    "$DMG_TEMP_DIR/$APP_BUNDLE" 2>/dev/null || true
+
+# Remove quarantine from the copied app in DMG (critical for direct download use)
+xattr -cr "$DMG_TEMP_DIR/$APP_BUNDLE" 2>/dev/null || true
 
 # Create Applications link (shortcut)
 # Use macOS alias instead of symlink for better icon display
@@ -187,6 +225,16 @@ sleep 2
 
 # Set DMG window properties and fix Applications icon
 if [ -d "$MOUNT_DIR" ]; then
+    # Re-sign and remove quarantine from app in mounted DMG
+    # This ensures the app can be opened directly after download
+    if [ -d "$MOUNT_DIR/$APP_BUNDLE" ]; then
+        echo "[Sign] Ensuring app in mounted DMG is properly signed..."
+        codesign --force --deep --sign - \
+            --options runtime \
+            "$MOUNT_DIR/$APP_BUNDLE" 2>/dev/null || true
+        xattr -cr "$MOUNT_DIR/$APP_BUNDLE" 2>/dev/null || true
+    fi
+    
     # Set Applications folder icon using osascript
     # This is the most reliable method for setting folder icons in DMG
     APPLICATIONS_ICON_PATH="/System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/ApplicationsFolderIcon.icns"
@@ -255,6 +303,12 @@ fi
 # Convert to compressed read-only DMG
 hdiutil convert "$DMG_TEMP" -format UDZO -imagekey zlib-level=9 -o "$DMG_NAME"
 
+# Remove quarantine attributes from DMG to prevent "damaged" warning when downloading from GitHub
+# This is safe and commonly done by open-source projects
+echo "[Quarantine] Removing quarantine attributes from DMG..."
+xattr -cr "$DMG_NAME" 2>/dev/null || true
+echo "[Quarantine] Quarantine attributes removed (prevents 'damaged' warning when downloading)"
+
 # Clean up
 rm -rf "$DMG_TEMP_DIR"
 rm -f "$DMG_TEMP"
@@ -262,3 +316,4 @@ rm -f "$DMG_TEMP"
 echo "[Success] DMG package created successfully!"
 echo "[Info] DMG file: $(pwd)/$DMG_NAME"
 echo "[Package] Users can drag $APP_NAME.app to Applications folder to install"
+echo "[Info] Note: Users may need to Control+Click → Open the first time (macOS security)"

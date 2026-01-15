@@ -261,6 +261,43 @@
             font-style: italic;
         }
 
+        /* Security Warning */
+        .security-warning {
+            background: rgba(236, 72, 153, 0.1);
+            border: 1px solid rgba(236, 72, 153, 0.3);
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            margin-top: 2rem;
+            text-align: left;
+        }
+
+        .security-warning h4 {
+            color: var(--accent-color);
+            margin-bottom: 0.75rem;
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .security-warning ul {
+            margin: 1rem 0;
+            padding-left: 1.5rem;
+            color: var(--text-secondary);
+        }
+
+        .security-warning li {
+            margin: 0.5rem 0;
+            line-height: 1.6;
+        }
+
+        .security-warning code {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-size: 0.9em;
+        }
+
         /* Features Section */
         .section {
             padding: 6rem 2rem;
@@ -869,6 +906,47 @@ swift build -c release<br>
                 </a>
                 <a href="https://github.com/ilikebug/VeloxClip/releases" class="btn btn-secondary" target="_blank"
                     rel="noopener noreferrer" data-zh="查看所有版本" data-en="View All Releases">View All Releases</a>
+            </div>
+
+            <!-- Security Warning -->
+            <div class="security-warning">
+                <h4>
+                    <span>⚠️</span>
+                    <span data-zh="如果遇到安全警告" data-en="If you see a security warning">If you see a security warning</span>
+                </h4>
+                <div class="bilingual">
+                    <p class="lang-en" data-zh="如果遇到安全警告"
+                        data-en="If you see 'damaged', 'unidentified developer', or '危险应用' (dangerous app) warning after downloading:">
+                        If you see 'damaged', 'unidentified developer', or '危险应用' (dangerous app) warning after downloading:
+                    </p>
+                    <p class="lang-zh" data-zh="如果下载后看到'已损坏'、'未识别的开发者'或'危险应用'警告：" data-en="">
+                        如果下载后看到'已损坏'、'未识别的开发者'或'危险应用'警告：</p>
+                </div>
+                <ul>
+                    <li>
+                        <strong data-zh="方法 1（推荐）" data-en="Method 1 (Recommended)">Method 1 (Recommended)</strong>:
+                        <span data-zh="Control+Click（或右键）应用 → 选择'打开'" data-en="Control+Click (or right-click) the app → Select 'Open'">Control+Click (or right-click) the app → Select 'Open'</span>
+                    </li>
+                    <li>
+                        <strong data-zh="方法 2（如果看到'危险应用'警告）" data-en="Method 2 (If you see '危险应用' warning)">Method 2 (If you see '危险应用' warning)</strong>:
+                        <span data-zh="打开系统设置 → 隐私与安全性 → 安全性 → 点击'仍要打开'按钮" data-en="Open System Settings → Privacy & Security → Security → Click '仍要打开' (Still Open) button">Open System Settings → Privacy & Security → Security → Click '仍要打开' (Still Open) button</span>
+                    </li>
+                    <li>
+                        <strong data-zh="方法 3" data-en="Method 3">Method 3</strong>:
+                        <span data-zh="在终端运行" data-en="Run in Terminal">Run in Terminal</span>:
+                        <code>xattr -cr VeloxClip.app</code>
+                    </li>
+                </ul>
+                <div class="bilingual">
+                    <p class="lang-en" style="margin-top: 1rem; font-size: 0.9em; color: var(--text-secondary);"
+                        data-zh="这是开源应用的正常情况，应用是安全的，macOS 只需要您首次确认。"
+                        data-en="This is normal for open-source apps. The app is safe - macOS just needs your confirmation the first time.">
+                        This is normal for open-source apps. The app is safe - macOS just needs your confirmation the first time.
+                    </p>
+                    <p class="lang-zh" style="margin-top: 1rem; font-size: 0.9em; color: var(--text-secondary);"
+                        data-zh="这是开源应用的正常情况，应用是安全的，macOS 只需要您首次确认。" data-en="">
+                        这是开源应用的正常情况，应用是安全的，macOS 只需要您首次确认。</p>
+                </div>
             </div>
         </div>
     </section>

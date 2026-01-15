@@ -123,6 +123,30 @@ swift build -c release
 cp -R VeloxClip.app /Applications/
 ```
 
+### Download from GitHub Releases
+
+If you downloaded the app from GitHub and see a "damaged", "unidentified developer", or "危险应用" (dangerous app) warning:
+
+**Method 1: Control+Click (Recommended)**
+1. **Control+Click** (or right-click) on `VeloxClip.app`
+2. Select **"Open"**
+3. Click **"Open"** in the security dialog
+
+**Method 2: System Settings (If you see "危险应用" warning)**
+1. Open **System Settings** (系统设置)
+2. Go to **Privacy & Security** (隐私与安全性)
+3. Scroll down to the **Security** (安全性) section
+4. You should see a message about VeloxClip being blocked
+5. Click **"仍要打开"** (Still Open) or **"Open Anyway"** button
+
+**Method 3: Terminal Command**
+Run this command in Terminal:
+```bash
+xattr -cr VeloxClip.app
+```
+
+**Note:** This is normal for open-source apps without paid Apple Developer certificates. The app is safe - macOS just needs your confirmation the first time.
+
 ### AI Setup (Required for AI features)
 
 To enable AI features like summarization, translation, code explanation, and text polishing, you need to configure an OpenRouter API key:
