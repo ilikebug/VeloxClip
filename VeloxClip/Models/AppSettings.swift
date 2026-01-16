@@ -88,6 +88,15 @@ class AppSettings: ObservableObject {
         }
     }
     
+    @Published var openRouterModel: String {
+        didSet {
+            guard !isInitializing else { return }
+            Task {
+                try? await dbManager.setSetting(key: "openRouterModel", value: openRouterModel)
+            }
+        }
+    }
+    
     private var isInitializing = true
     
     private init() {
@@ -99,6 +108,7 @@ class AppSettings: ObservableObject {
         self.pasteImageShortcut = "f3"
         self.aiResponseLanguage = "Chinese"
         self.openRouterAPIKey = ""
+        self.openRouterModel = "tngtech/deepseek-r1t2-chimera:free"
         
         // Load settings from database asynchronously
         Task {
@@ -201,6 +211,15 @@ class AppSettings: ObservableObject {
             // Just keep the default empty string in memory
             // This prevents overwriting a valid key if database read fails
             print("ℹ️ OpenRouter API Key not found in database, keeping default empty value (not writing to DB)")
+        }
+        
+        // Load openRouterModel
+        if let model = await dbManager.getSetting(key: "openRouterModel") {
+            await MainActor.run {
+                self.openRouterModel = model
+            }
+        } else {
+            try? await dbManager.setSetting(key: "openRouterModel", value: "tngtech/deepseek-r1t2-chimera:free")
         }
     }
     

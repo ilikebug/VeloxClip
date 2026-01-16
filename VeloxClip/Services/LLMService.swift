@@ -2,13 +2,43 @@ import Foundation
 import Combine
 import NaturalLanguage
 
+// MARK: - OpenRouter Model Data Structures
+
+struct OpenRouterModel: Identifiable, Codable {
+    let id: String
+    let name: String
+    let description: String?
+    let contextLength: Int?
+    let pricing: ModelPricing?
+    
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case description
+        case contextLength = "context_length"
+        case pricing
+    }
+}
+
+struct ModelPricing: Codable {
+    let prompt: String?
+    let completion: String?
+}
+
+struct OpenRouterModelsResponse: Codable {
+    let data: [OpenRouterModel]
+}
+
 @MainActor
 class LLMService: ObservableObject {
     static let shared = LLMService()
     
     // OpenRouter API Configuration
     private let openRouterURL = URL(string: "https://openrouter.ai/api/v1/chat/completions")!
-    private let modelName = "tngtech/deepseek-r1t2-chimera:free" // Free DeepSeek model
+    private let modelsURL = URL(string: "https://openrouter.ai/api/v1/models")!
+    
+    @Published var availableModels: [OpenRouterModel] = []
+    @Published var isLoadingModels = false
     
     func performAction(_ action: AIAction, content: String) async throws -> String {
         // Check if API key is configured
@@ -53,9 +83,11 @@ class LLMService: ObservableObject {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("VeloxClip/1.0", forHTTPHeaderField: "HTTP-Referer")
-        request.setValue("https://github.com/antigravity/veloxclip", forHTTPHeaderField: "X-Title")
+        request.setValue("https://github.com/ilikebug/VeloxClip", forHTTPHeaderField: "HTTP-Referer")
+        request.setValue("VeloxClip", forHTTPHeaderField: "X-Title")
         request.timeoutInterval = 60 // 60 seconds timeout
+        
+        let modelName = AppSettings.shared.openRouterModel
         
         let body: [String: Any] = [
             "model": modelName,
@@ -141,6 +173,56 @@ class LLMService: ObservableObject {
             return output.isEmpty ? "[Empty response]" : output
         } catch {
             print("Failed to decode OpenRouter response: \(error)")
+            throw LLMError.decodingError
+        }
+    }
+    
+    // MARK: - Fetch Models
+    
+    func fetchAvailableModels(apiKey: String) async throws {
+        guard !apiKey.isEmpty else {
+            throw LLMError.apiKeyNotConfigured
+        }
+        
+        isLoadingModels = true
+        defer { isLoadingModels = false }
+        
+        var request = URLRequest(url: modelsURL)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("https://github.com/ilikebug/VeloxClip", forHTTPHeaderField: "HTTP-Referer")
+        request.setValue("VeloxClip", forHTTPHeaderField: "X-Title")
+        request.timeoutInterval = 30
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw LLMError.invalidResponse
+        }
+        
+        guard httpResponse.statusCode == 200 else {
+            if httpResponse.statusCode == 401 {
+                throw LLMError.invalidAPIKey
+            } else {
+                let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
+                throw LLMError.apiError(statusCode: httpResponse.statusCode, message: errorMessage)
+            }
+        }
+        
+        do {
+            let modelsResponse = try JSONDecoder().decode(OpenRouterModelsResponse.self, from: data)
+            // Sort models: free models first, then by name
+            availableModels = modelsResponse.data.sorted { model1, model2 in
+                let isFree1 = model1.id.contains(":free") || (model1.pricing?.prompt == "0" && model1.pricing?.completion == "0")
+                let isFree2 = model2.id.contains(":free") || (model2.pricing?.prompt == "0" && model2.pricing?.completion == "0")
+                
+                if isFree1 != isFree2 {
+                    return isFree1 // Free models first
+                }
+                return model1.name < model2.name
+            }
+        } catch {
+            print("Failed to decode models response: \(error)")
             throw LLMError.decodingError
         }
     }
