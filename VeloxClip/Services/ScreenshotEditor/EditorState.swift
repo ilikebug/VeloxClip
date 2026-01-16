@@ -205,9 +205,13 @@ class EditorState: ObservableObject {
             // Draw arrow line
             path.move(to: start)
             path.addLine(to: end)
-            // Add arrowhead
+            
+            // Add arrowhead (solid triangle)
             let angle = atan2(end.y - start.y, end.x - start.x)
-            let arrowLength: CGFloat = 15
+            let length = sqrt(pow(end.x - start.x, 2) + pow(end.y - start.y, 2))
+            
+            // Scaled arrow head based on line width but capped
+            let arrowLength: CGFloat = min(max(lineWidth * 4, 15), length * 0.5)
             let arrowAngle: CGFloat = .pi / 6
             
             let arrowPoint1 = CGPoint(
@@ -221,8 +225,8 @@ class EditorState: ObservableObject {
             
             path.move(to: end)
             path.addLine(to: arrowPoint1)
-            path.move(to: end)
             path.addLine(to: arrowPoint2)
+            path.closeSubpath()
             
         case .rectangle:
             let rect = CGRect(
@@ -279,20 +283,46 @@ class EditorState: ObservableObject {
     
     // Remove elements that intersect with eraser path
     func eraseElements(at point: CGPoint, radius: CGFloat) {
-        saveState()
-        let eraseRect = CGRect(
-            x: point.x - radius,
-            y: point.y - radius,
-            width: radius * 2,
-            height: radius * 2
-        )
+        let eraseRadius = max(radius, 10) // Minimum interactive area
         
-        elements.removeAll { element in
-            if let elementRect = element.rect {
-                return eraseRect.intersects(elementRect)
+        let shouldRemove = elements.contains { element in
+            // Check bounding box first for optimization
+            let boundingBox = element.path.boundingBox
+            let expandedBox = boundingBox.insetBy(dx: -eraseRadius, dy: -eraseRadius)
+            if !expandedBox.contains(point) {
+                return false
             }
-            // For path-based elements, check if start or end point is in erase area
-            return eraseRect.contains(element.startPoint) || eraseRect.contains(element.endPoint)
+            
+            // For mosaic/rect/circle, check if point is inside
+            if element.type == .mosaic || element.type == .rectangle || element.type == .circle {
+                if let rect = element.rect {
+                    return rect.insetBy(dx: -eraseRadius, dy: -eraseRadius).contains(point)
+                }
+                return element.path.contains(point)
+            }
+            
+            // For line-based elements, check distance to path
+            // We create a stroked path and check if it contains the point
+            let strokedPath = element.path.copy(strokingWithWidth: max(element.lineWidth, eraseRadius * 2), lineCap: .round, lineJoin: .round, miterLimit: 10)
+            return strokedPath.contains(point)
+        }
+        
+        if shouldRemove {
+            saveState()
+            elements.removeAll { element in
+                let boundingBox = element.path.boundingBox
+                let expandedBox = boundingBox.insetBy(dx: -eraseRadius, dy: -eraseRadius)
+                if !expandedBox.contains(point) { return false }
+                
+                if element.type == .mosaic || element.type == .rectangle || element.type == .circle {
+                    if let rect = element.rect {
+                        return rect.insetBy(dx: -eraseRadius, dy: -eraseRadius).contains(point)
+                    }
+                }
+                
+                let strokedPath = element.path.copy(strokingWithWidth: max(element.lineWidth, eraseRadius * 2), lineCap: .round, lineJoin: .round, miterLimit: 10)
+                return strokedPath.contains(point)
+            }
         }
     }
 }
