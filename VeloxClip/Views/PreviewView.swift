@@ -250,11 +250,11 @@ struct PreviewView: View {
     private func ocrSection(for item: ClipboardItem) -> some View {
         if let ocrText = item.content, !ocrText.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                HStack {
+                HStack(spacing: 8) {
                     Image(systemName: "text.viewfinder").foregroundColor(.blue)
                     Text("OCR Text").font(.headline)
-                    Spacer()
                     Button("Copy") { viewModel.copyTransformedText(ocrText) }
+                    Spacer()
                 }
                 Text(ocrText).font(.system(.body, design: .monospaced))
                     .padding(8).background(Color.secondary.opacity(0.1)).cornerRadius(8)

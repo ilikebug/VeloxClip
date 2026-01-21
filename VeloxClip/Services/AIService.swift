@@ -21,18 +21,47 @@ enum AIServiceError: LocalizedError, Sendable {
     }
 }
 
-actor AIService {
+// Thread-safe cache for embeddings using actor
+private actor EmbeddingCache {
+    private var cache: [String: [Double]] = [:]
+    private let maxSize: Int
+    
+    init(maxSize: Int = 200) {
+        self.maxSize = maxSize
+    }
+    
+    func get(_ key: String) -> [Double]? {
+        return cache[key]
+    }
+    
+    func set(_ key: String, value: [Double]) {
+        if cache.count >= maxSize {
+            // Remove oldest entry (simple FIFO for now)
+            if let firstKey = cache.keys.first {
+                cache.removeValue(forKey: firstKey)
+            }
+        }
+        cache[key] = value
+    }
+    
+    func clear() {
+        cache.removeAll()
+    }
+}
+
+class AIService {
     static let shared = AIService()
     
-    // Sentence embedding model for semantic search
+    // Sentence embedding model for semantic search (thread-safe)
     private let sentenceEmbedding = NLEmbedding.sentenceEmbedding(for: .english)
     
-    // Embedding cache
-    private var embeddingCache: [String: [Double]] = [:]
-    private let maxCacheSize = 200
+    // Thread-safe embedding cache using actor
+    private let embeddingCache = EmbeddingCache(maxSize: 200)
+    
+    private init() {}
     
     // OCR using Apple Vision
-    nonisolated func performOCR(on imageData: Data, completion: @escaping @Sendable (String?) -> Void) {
+    func performOCR(on imageData: Data, completion: @escaping @Sendable (String?) -> Void) {
         Task.detached(priority: .userInitiated) {
             guard let image = NSImage(data: imageData),
                   let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
@@ -94,7 +123,7 @@ actor AIService {
         }
     }
     
-    func generateEmbedding(for text: String) -> [Double]? {
+    func generateEmbedding(for text: String) async -> [Double]? {
         guard let embedding = sentenceEmbedding else { return nil }
         
         let normalizedText = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -105,25 +134,31 @@ actor AIService {
             ? String(normalizedText.prefix(maxLength)) 
             : normalizedText
         
-        if let cached = embeddingCache[textToEmbed] {
+        // Check cache
+        if let cached = await embeddingCache.get(textToEmbed) {
             return cached
         }
         
-        guard let vector = embedding.vector(for: textToEmbed) else { return nil }
-        
-        if embeddingCache.count >= maxCacheSize {
-            embeddingCache.removeValue(forKey: embeddingCache.keys.first!)
-        }
-        embeddingCache[textToEmbed] = vector
-        
-        return vector
+        // Generate embedding (this is CPU-intensive, run on background)
+        return await Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self = self,
+                  let embedding = self.sentenceEmbedding,
+                  let vector = embedding.vector(for: textToEmbed) else {
+                return nil
+            }
+            
+            // Cache the result
+            await self.embeddingCache.set(textToEmbed, value: vector)
+            
+            return vector
+        }.value
     }
     
-    func clearEmbeddingCache() {
-        embeddingCache.removeAll()
+    func clearEmbeddingCache() async {
+        await embeddingCache.clear()
     }
     
-    nonisolated func calculateSimilarity(_ vector1: [Double], _ vector2: [Double]) -> Double {
+    func calculateSimilarity(_ vector1: [Double], _ vector2: [Double]) -> Double {
         let n = vDSP_Length(vector1.count)
         guard n > 0 && vector1.count == vector2.count else { return 0 }
         
@@ -143,7 +178,7 @@ actor AIService {
         return denominator == 0 ? 0 : dotProduct / denominator
     }
     
-    nonisolated func formatJSON(_ text: String) -> String? {
+    func formatJSON(_ text: String) -> String? {
         guard let data = text.data(using: .utf8),
               let jsonObject = try? JSONSerialization.jsonObject(with: data),
               let prettyData = try? JSONSerialization.data(withJSONObject: jsonObject, options: [.prettyPrinted, .sortedKeys]),
@@ -153,7 +188,7 @@ actor AIService {
         return formatted
     }
     
-    nonisolated func convertCase(_ text: String, to caseType: TextCaseType) -> String {
+    func convertCase(_ text: String, to caseType: TextCaseType) -> String {
         switch caseType {
         case .uppercase: return text.uppercased()
         case .lowercase: return text.lowercased()
@@ -166,7 +201,7 @@ actor AIService {
         }
     }
     
-    nonisolated func cleanupText(_ text: String) -> String {
+    func cleanupText(_ text: String) -> String {
         text.components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
