@@ -152,15 +152,24 @@ class ScreenshotEditorService {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         
+        // Primary method: Write NSImage object directly (most compatible)
+        let writeSuccess = pasteboard.writeObjects([image])
+        print("✅ Edited image copied to clipboard: \(writeSuccess)")
+        
+        // Backup: Also set TIFF representation for compatibility
         if let tiffData = image.tiffRepresentation {
             pasteboard.setData(tiffData, forType: .tiff)
-            pasteboard.setData(tiffData, forType: .png)
-            print("✅ Edited image copied to clipboard")
             
-            // Show brief feedback
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                // The clipboard monitor will detect the change and add to history
+            // Convert to PNG properly
+            if let bitmapRep = NSBitmapImageRep(data: tiffData),
+               let pngData = bitmapRep.representation(using: .png, properties: [:]) {
+                pasteboard.setData(pngData, forType: .png)
             }
+        }
+        
+        // Show brief feedback
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            // The clipboard monitor will detect the change and add to history
         }
     }
     

@@ -506,15 +506,6 @@ struct ScreenshotEditorView: View {
         return finalImage
     }
     
-    private func copyToClipboard(_ image: NSImage) {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        if let tiffData = image.tiffRepresentation {
-            pasteboard.setData(tiffData, forType: .tiff)
-            pasteboard.setData(tiffData, forType: .png)
-        }
-    }
-    
     private func drawMosaicEffectInCanvas(context: GraphicsContext, rect: CGRect, imageOrigin: CGPoint, scaleX: CGFloat, scaleY: CGFloat) {
         let imageRect = CGRect(
             x: (rect.origin.x - imageOrigin.x) / scaleX,
