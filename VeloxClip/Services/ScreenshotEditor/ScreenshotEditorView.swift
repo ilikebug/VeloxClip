@@ -15,6 +15,9 @@ struct ScreenshotEditorView: View {
     // UI State
     @State private var showPropertyToolbar = false
     
+    // Local text editing state (doesn't trigger Canvas redraw)
+    @State private var editingText: String = ""
+    
     var body: some View {
         ZStack {
             // Background Layer
@@ -148,6 +151,7 @@ struct ScreenshotEditorView: View {
                                 }
                             }
                         }
+                        .drawingGroup()  // Render Canvas to offscreen buffer to prevent redraws
                         .onHover { isHovering in
                             if isHovering {
                                 setCursorForTool(editorState.currentTool)
@@ -170,6 +174,7 @@ struct ScreenshotEditorView: View {
                                         if !editorState.isDrawing {
                                             editorState.textPosition = imagePoint
                                             editorState.isDrawing = true
+                                            editingText = ""  // Reset local text
                                         }
                                     case .eraser:
                                         editorState.eraseElements(at: imagePoint, radius: editorState.lineWidth * 2)
@@ -189,50 +194,38 @@ struct ScreenshotEditorView: View {
                         )
                     }
                     
-                    // Floating Input Layer
+                    // Floating Input Layer - isolated component
                     if editorState.currentTool == .text, let textPos = editorState.textPosition, editorState.isDrawing {
-                        let scaleX = displaySize.width / image.size.width
-                        let scaleY = displaySize.height / image.size.height
-                        let textPoint = CGPoint(
-                            x: imageOrigin.x + textPos.x * scaleX,
-                            y: imageOrigin.y + textPos.y * scaleY
+                        FloatingTextInput(
+                            textPos: textPos,
+                            editingText: $editingText,
+                            imageOrigin: imageOrigin,
+                            displaySize: displaySize,
+                            imageSize: image.size,
+                            fontSize: editorState.fontSize,
+                            textColor: editorState.currentColor,
+                            opacity: editorState.opacity,
+                            isTextFieldFocused: $isTextFieldFocused,
+                            onDragEnded: { deltaX, deltaY in
+                                let newX = textPos.x + deltaX
+                                let newY = textPos.y + deltaY
+                                let clampedX = max(0, min(image.size.width, newX))
+                                let clampedY = max(0, min(image.size.height, newY))
+                                editorState.textPosition = CGPoint(x: clampedX, y: clampedY)
+                            },
+                            onSubmit: {
+                                if !editingText.isEmpty {
+                                    editorState.textInput = editingText
+                                    editorState.finishDrawing()
+                                    editingText = ""
+                                } else {
+                                    editorState.textInput = ""
+                                    editorState.textPosition = nil
+                                    editorState.isDrawing = false
+                                    editingText = ""
+                                }
+                            }
                         )
-                        
-                        let fontSizeOffset = max(editorState.fontSize * scaleY, 20)
-                        let inputBoxOffset = fontSizeOffset + 30
-                        
-                        if !editorState.textInput.isEmpty {
-                            Text(editorState.textInput)
-                                .font(.system(size: editorState.fontSize * scaleX))
-                                .foregroundColor(editorState.currentColor.opacity(editorState.opacity))
-                                .position(textPoint)
-                        }
-                        
-                        VStack(alignment: .leading, spacing: 4) {
-                            TextField("Enter text", text: $editorState.textInput)
-                                .textFieldStyle(.plain)
-                                .font(.system(size: editorState.fontSize))
-                                .foregroundColor(editorState.currentColor)
-                                .padding(8)
-                                .background(VisualEffectView(material: .hudWindow, blendingMode: .withinWindow).cornerRadius(8))
-                                .frame(width: 200)
-                                .focused($isTextFieldFocused)
-                                .onSubmit {
-                                    if !editorState.textInput.isEmpty {
-                                        editorState.finishDrawing()
-                                    } else {
-                                        editorState.textInput = ""
-                                        editorState.textPosition = nil
-                                        editorState.isDrawing = false
-                                    }
-                                }
-                                .onAppear {
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                        isTextFieldFocused = true
-                                    }
-                                }
-                        }
-                        .position(x: textPoint.x, y: textPoint.y + inputBoxOffset)
                     }
                 }
             }
@@ -463,15 +456,29 @@ struct ScreenshotEditorView: View {
         let context = graphicsContext.cgContext
         context.saveGState()
         
+        // Flip coordinate system: SwiftUI uses top-down (Y=0 at top), Core Graphics uses bottom-up (Y=0 at bottom)
+        context.translateBy(x: 0, y: imageSize.height)
+        context.scaleBy(x: 1.0, y: -1.0)
+        
         for element in editorState.elements {
             switch element.type {
             case .text:
                 if let text = element.text, let fontSize = element.fontSize {
+                    // Text rendering requires special handling
+                    context.saveGState()
+                    
+                    // Move to text position
+                    context.translateBy(x: element.startPoint.x, y: element.startPoint.y)
+                    // Flip back so text appears right-side up
+                    context.scaleBy(x: 1.0, y: -1.0)
+                    
                     let textColor = NSColor(element.color.opacity(element.opacity))
                     let font = NSFont.systemFont(ofSize: fontSize)
                     let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: textColor]
                     let attributedString = NSAttributedString(string: text, attributes: attributes)
-                    attributedString.draw(at: element.startPoint)
+                    attributedString.draw(at: .zero)
+                    
+                    context.restoreGState()
                 }
             case .mosaic:
                 if let rect = element.rect {
@@ -541,7 +548,22 @@ struct ScreenshotEditorView: View {
     
     private func applyMosaicEffect(to context: CGContext, rect: CGRect, imageSize: CGSize) {
         if let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-            let croppedRect = CGRect(x: max(0, rect.origin.x), y: max(0, rect.origin.y), width: min(rect.width, imageSize.width - rect.origin.x), height: min(rect.height, imageSize.height - rect.origin.y))
+            // rect is in SwiftUI coordinate space (Y=0 at top)
+            // cgImage uses Core Graphics coordinate space (Y=0 at bottom)
+            // We need to convert rect to cgImage's coordinate space
+            let cgImageRect = CGRect(
+                x: rect.origin.x,
+                y: imageSize.height - rect.origin.y - rect.height,  // Flip Y coordinate
+                width: rect.width,
+                height: rect.height
+            )
+            
+            let croppedRect = CGRect(
+                x: max(0, cgImageRect.origin.x),
+                y: max(0, cgImageRect.origin.y),
+                width: min(cgImageRect.width, imageSize.width - cgImageRect.origin.x),
+                height: min(cgImageRect.height, imageSize.height - cgImageRect.origin.y)
+            )
             guard croppedRect.width > 0 && croppedRect.height > 0 else { return }
             
             if let croppedCGImage = cgImage.cropping(to: croppedRect) {
@@ -555,6 +577,7 @@ struct ScreenshotEditorView: View {
                     smallContext.draw(croppedCGImage, in: CGRect(origin: .zero, size: smallSize))
                     if let pixelatedImage = smallContext.makeImage() {
                         context.interpolationQuality = .none
+                        // Draw in the original rect position (in flipped coordinate space)
                         context.draw(pixelatedImage, in: rect)
                     }
                 }
@@ -568,6 +591,85 @@ struct ScreenshotEditorView: View {
         case .pen, .arrow, .line, .rectangle, .circle, .highlight, .mosaic: NSCursor.crosshair.push()
         case .text: NSCursor.iBeam.push()
         case .eraser: NSCursor.openHand.push()
+        }
+    }
+}
+
+// MARK: - Floating Text Input Component (Isolated)
+struct FloatingTextInput: View {
+    let textPos: CGPoint
+    @Binding var editingText: String
+    let imageOrigin: CGPoint
+    let displaySize: CGSize
+    let imageSize: CGSize
+    let fontSize: CGFloat
+    let textColor: Color
+    let opacity: Double
+    @GestureState private var localDragOffset: CGSize = .zero
+    @FocusState.Binding var isTextFieldFocused: Bool
+    let onDragEnded: (CGFloat, CGFloat) -> Void
+    let onSubmit: () -> Void
+    
+    var body: some View {
+        let scaleX = displaySize.width / imageSize.width
+        let scaleY = displaySize.height / imageSize.height
+        let textPoint = CGPoint(
+            x: imageOrigin.x + textPos.x * scaleX,
+            y: imageOrigin.y + textPos.y * scaleY
+        )
+        
+        let fontSizeOffset = max(fontSize * scaleY, 20)
+        let inputBoxOffset = fontSizeOffset + 30
+        
+        ZStack {
+            if !editingText.isEmpty {
+                Text(editingText)
+                    .font(.system(size: fontSize * scaleX))
+                    .foregroundColor(textColor.opacity(opacity))
+                    .position(textPoint)
+                    .offset(localDragOffset)
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 4) {
+                    // Drag handle
+                    Image(systemName: "line.3.horizontal")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+                        .frame(width: 20, height: 20)
+                        .background(Color.white.opacity(0.1))
+                        .cornerRadius(4)
+                        .highPriorityGesture(
+                            DragGesture(minimumDistance: 0)
+                                .updating($localDragOffset) { value, state, _ in
+                                    state = value.translation
+                                }
+                                .onEnded { value in
+                                    let deltaX = value.translation.width / scaleX
+                                    let deltaY = value.translation.height / scaleY
+                                    onDragEnded(deltaX, deltaY)
+                                }
+                        )
+                    
+                    TextField("Enter text", text: $editingText)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: fontSize))
+                        .foregroundColor(textColor)
+                        .padding(8)
+                        .frame(width: 180)
+                        .focused($isTextFieldFocused)
+                        .onSubmit(onSubmit)
+                        .onAppear {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                isTextFieldFocused = true
+                            }
+                        }
+                }
+                .padding(4)
+                .background(VisualEffectView(material: .hudWindow, blendingMode: .withinWindow).cornerRadius(8))
+            }
+            .position(x: textPoint.x, y: textPoint.y + inputBoxOffset)
+            .offset(localDragOffset)
         }
     }
 }

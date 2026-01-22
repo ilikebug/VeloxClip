@@ -50,7 +50,7 @@ private actor EmbeddingCache {
 }
 
 class AIService {
-    static let shared = AIService()
+    nonisolated(unsafe) static let shared = AIService()
     
     // Sentence embedding model for semantic search (thread-safe)
     private let sentenceEmbedding = NLEmbedding.sentenceEmbedding(for: .english)
@@ -124,7 +124,7 @@ class AIService {
     }
     
     func generateEmbedding(for text: String) async -> [Double]? {
-        guard let embedding = sentenceEmbedding else { return nil }
+        guard sentenceEmbedding != nil else { return nil }
         
         let normalizedText = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !normalizedText.isEmpty else { return nil }
@@ -139,19 +139,16 @@ class AIService {
             return cached
         }
         
-        // Generate embedding (this is CPU-intensive, run on background)
-        return await Task.detached(priority: .userInitiated) { [weak self] in
-            guard let self = self,
-                  let embedding = self.sentenceEmbedding,
-                  let vector = embedding.vector(for: textToEmbed) else {
-                return nil
-            }
-            
-            // Cache the result
-            await self.embeddingCache.set(textToEmbed, value: vector)
-            
-            return vector
-        }.value
+        // Generate embedding
+        guard let embedding = sentenceEmbedding,
+              let vector = embedding.vector(for: textToEmbed) else {
+            return nil
+        }
+        
+        // Cache the result
+        await embeddingCache.set(textToEmbed, value: vector)
+        
+        return vector
     }
     
     func clearEmbeddingCache() async {
