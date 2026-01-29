@@ -197,6 +197,10 @@ struct MainView: View {
                 }
                 return .ignored
             }
+            .onKeyPress(.escape) {
+                WindowManager.shared.toggleWindow()
+                return .handled
+            }
             
             Divider()
                 .background(Color.white.opacity(0.1))

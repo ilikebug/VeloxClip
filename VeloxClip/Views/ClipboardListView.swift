@@ -12,7 +12,10 @@ struct ClipboardListView: View {
                 ForEach(items) { item in
                     ClipboardItemRow(
                         item: item,
-                        isSelected: selectedItem?.id == item.id
+                        isSelected: selectedItem?.id == item.id,
+                        onDoubleClick: {
+                            WindowManager.shared.selectAndPaste(item)
+                        }
                     )
                     .tag(item)
                     .id(item.id)
@@ -40,6 +43,7 @@ struct ClipboardListView: View {
 struct ClipboardItemRow: View {
     let item: ClipboardItem
     let isSelected: Bool
+    let onDoubleClick: () -> Void
     
     var body: some View {
         HStack(spacing: 16) {
@@ -77,6 +81,9 @@ struct ClipboardItemRow: View {
             RoundedRectangle(cornerRadius: 8)
                 .fill(isSelected ? Color.accentColor.opacity(0.25) : Color.clear)
         )
+        .onTapGesture(count: 2) {
+            onDoubleClick()
+        }
     }
     
     private func typeColor(for type: String) -> Color {
