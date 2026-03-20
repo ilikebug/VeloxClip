@@ -5,12 +5,16 @@ import Combine
 class ClipboardStore: ObservableObject {
     @Published var items: [ClipboardItem] = []
     @Published var favoriteItems: [ClipboardItem] = []
-    private let dbManager = DatabaseManager.shared
+    private let dbManager: DatabaseManager
     
     static let shared = ClipboardStore()
     
-    init() {
-        load()
+    init(dbManager: DatabaseManager = DatabaseManager.shared, shouldLoad: Bool = true) {
+        self.dbManager = dbManager
+
+        if shouldLoad {
+            load()
+        }
     }
     
     func addItem(_ item: ClipboardItem) {
@@ -130,12 +134,24 @@ class ClipboardStore: ObservableObject {
     }
     
     func updateTags(id: UUID, tags: [String]) {
+        Task {
+            await updateMetadata(id: id, tags: tags)
+        }
+    }
+
+    func updateMetadata(id: UUID, tags: [String]? = nil, embedding: Data? = nil) async {
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
         
         var updatedItem = items[index]
         let originalItem = items[index] // Backup for rollback
         
-        updatedItem.tags = tags
+        if let tags {
+            updatedItem.tags = tags
+        }
+
+        if let embedding {
+            updatedItem.embedding = embedding
+        }
         
         // Optimistic UI update
         self.items[index] = updatedItem
@@ -146,24 +162,19 @@ class ClipboardStore: ObservableObject {
         }
         
         // Persist to database
-        Task {
-            do {
-                try await dbManager.updateClipboardItem(updatedItem)
-            } catch {
-                print("Failed to update tags: \(error)")
-                // Rollback to original state if database update failed
-                await MainActor.run {
-                    // Find item again by ID (index might have changed)
-                    if let currentIndex = self.items.firstIndex(where: { $0.id == id }) {
-                        self.items[currentIndex] = originalItem
-                    }
-                    // Also rollback favoriteItems
-                    if originalItem.isFavorite, let favIndex = self.favoriteItems.firstIndex(where: { $0.id == id }) {
-                        self.favoriteItems[favIndex] = originalItem
-                    }
-                    ErrorHandler.shared.handle(error)
-                }
+        do {
+            try await dbManager.updateClipboardItem(updatedItem)
+        } catch {
+            print("Failed to update metadata: \(error)")
+            // Rollback to original state if database update failed
+            if let currentIndex = self.items.firstIndex(where: { $0.id == id }) {
+                self.items[currentIndex] = originalItem
             }
+            // Also rollback favoriteItems
+            if originalItem.isFavorite, let favIndex = self.favoriteItems.firstIndex(where: { $0.id == id }) {
+                self.favoriteItems[favIndex] = originalItem
+            }
+            ErrorHandler.shared.handle(error)
         }
     }
     
@@ -181,24 +192,28 @@ class ClipboardStore: ObservableObject {
         updateTags(id: item.id, tags: updatedTags)
     }
     
-    func deleteItems(at offsets: IndexSet) {
-        let itemsToDelete = offsets.map { items[$0] }
-        
-        // Delete from database first
-        Task {
-            for item in itemsToDelete {
-                do {
-                    try await dbManager.deleteClipboardItem(id: item.id)
-                } catch {
-                    print("Failed to delete item \(item.id): \(error)")
-                }
-            }
-            
-            // Then remove from local array
-            await MainActor.run {
-                self.items.remove(atOffsets: offsets)
+    func deleteItems(at offsets: IndexSet, in visibleItems: [ClipboardItem]) async {
+        let idsToDelete: Set<UUID> = Set(offsets.compactMap { index in
+            guard visibleItems.indices.contains(index) else { return nil }
+            return visibleItems[index].id
+        })
+
+        guard !idsToDelete.isEmpty else { return }
+
+        var deletedIDs: Set<UUID> = []
+
+        for id in idsToDelete {
+            do {
+                try await dbManager.deleteClipboardItem(id: id)
+                deletedIDs.insert(id)
+            } catch {
+                print("Failed to delete item \(id): \(error)")
+                ErrorHandler.shared.handle(error)
             }
         }
+
+        items.removeAll { deletedIDs.contains($0.id) }
+        favoriteItems.removeAll { deletedIDs.contains($0.id) }
     }
     
     func clearAll() {

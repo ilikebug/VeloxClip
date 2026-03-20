@@ -97,37 +97,38 @@ class ClipboardMonitor: ObservableObject {
             }
             
             let newItem = ClipboardItem(type: type, content: content, data: data, sourceApp: sourceApp)
+            ClipboardStore.shared.addItem(newItem)
             
             // Heavy background analysis
             let capturedContent = content // Capturing for the task below
-            let capturedNewItem = newItem
+            let capturedItemID = newItem.id
             
             Task.detached(priority: .background) {
-                var analyzedItem = capturedNewItem
+                var detectedTags: [String] = []
+                var detectedEmbedding: Data?
+
                 if let text = capturedContent {
-                    analyzedItem.tags = self.detectTags(in: text)
+                    detectedTags = self.detectTags(in: text)
                     
                     if text.count >= 3 && text.count <= 2000 {
                         if let vector = await AIService.shared.generateEmbedding(for: text) {
                             if let vectorData = try? JSONEncoder().encode(vector) {
-                                analyzedItem.embedding = vectorData
+                                detectedEmbedding = vectorData
                             }
                         }
                     }
                     
                     // Update item with tags and embedding if changed
-                    if !analyzedItem.tags.isEmpty || analyzedItem.embedding != nil {
-                        await MainActor.run {
-                            // Potentially add a method to update tags/embedding in batch
-                            ClipboardStore.shared.updateTags(id: analyzedItem.id, tags: analyzedItem.tags)
-                            // Note: updateTags currently only updates tags, we might need an updateMetadata
-                            // For simplicity, let's just make sure the initial addItem has what we can get quickly
-                        }
+                    if !detectedTags.isEmpty || detectedEmbedding != nil {
+                        await ClipboardStore.shared.updateMetadata(
+                            id: capturedItemID,
+                            tags: detectedTags,
+                            embedding: detectedEmbedding
+                        )
                     }
                 }
             }
             
-            ClipboardStore.shared.addItem(newItem)
             return newItem
         }
     }

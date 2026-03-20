@@ -7,6 +7,8 @@ actor DatabaseManager {
     private var db: Connection?
     private let dbPath: URL
     private var isInitialized = false
+    private let fileManager: FileManager
+    private let legacyDatabaseURLs: [URL]
     
     // Clipboard items table
     let clipboardItems = Table("clipboard_items")
@@ -35,41 +37,52 @@ actor DatabaseManager {
         // Target paths
         let targetURL = appSupportURL.appendingPathComponent("VeloxClip")
         let targetDBPath = targetURL.appendingPathComponent("veloxclip.db")
-        
-        // Migration: Handle legacy paths
-        let legacyPaths = [
-            (appSupportURL.appendingPathComponent("Velox"), "velox.db"),
-            (appSupportURL.appendingPathComponent("Velo"), "velo.db")
+        let legacyDatabaseURLs = [
+            appSupportURL.appendingPathComponent("Velox").appendingPathComponent("velox.db"),
+            appSupportURL.appendingPathComponent("Velo").appendingPathComponent("velo.db"),
         ]
-        
-        if !fileManager.fileExists(atPath: targetDBPath.path) {
-            for (legacyDir, legacyFile) in legacyPaths {
-                let legacyDB = legacyDir.appendingPathComponent(legacyFile)
-                if fileManager.fileExists(atPath: legacyDB.path) {
-                    do {
-                        // Create target directory
-                        try fileManager.createDirectory(at: targetURL, withIntermediateDirectories: true)
-                        
-                        // Move legacy database to new location with new name
-                        try fileManager.moveItem(at: legacyDB, to: targetDBPath)
-                        print("✅ Migrated database from \(legacyDB.lastPathComponent) to \(targetDBPath.path)")
-                        
-                        // Try to remove legacy directory if empty
-                        try? fileManager.removeItem(at: legacyDir)
-                        break // Migrated successfully from first found legacy
-                    } catch {
-                        print("⚠️ Migration failed from \(legacyDB.path): \(error)")
-                    }
+
+        dbPath = targetDBPath
+        self.fileManager = fileManager
+        self.legacyDatabaseURLs = legacyDatabaseURLs
+        Self.prepareDatabaseLocation(
+            dbPath: targetDBPath,
+            legacyDatabaseURLs: legacyDatabaseURLs,
+            fileManager: fileManager
+        )
+    }
+
+    init(databaseURL: URL, legacyDatabaseURLs: [URL] = [], fileManager: FileManager = .default) {
+        self.dbPath = databaseURL
+        self.fileManager = fileManager
+        self.legacyDatabaseURLs = legacyDatabaseURLs
+        Self.prepareDatabaseLocation(
+            dbPath: databaseURL,
+            legacyDatabaseURLs: legacyDatabaseURLs,
+            fileManager: fileManager
+        )
+    }
+
+    private static func prepareDatabaseLocation(dbPath: URL, legacyDatabaseURLs: [URL], fileManager: FileManager) {
+        let targetDirectory = dbPath.deletingLastPathComponent()
+
+        if !fileManager.fileExists(atPath: dbPath.path) {
+            for legacyDB in legacyDatabaseURLs where fileManager.fileExists(atPath: legacyDB.path) {
+                do {
+                    try fileManager.createDirectory(at: targetDirectory, withIntermediateDirectories: true)
+                    try fileManager.moveItem(at: legacyDB, to: dbPath)
+                    print("✅ Migrated database from \(legacyDB.lastPathComponent) to \(dbPath.path)")
+                    try? fileManager.removeItem(at: legacyDB.deletingLastPathComponent())
+                    break
+                } catch {
+                    print("⚠️ Migration failed from \(legacyDB.path): \(error)")
                 }
             }
         }
-        
-        // Finalize path and ensure directory exists
-        if !fileManager.fileExists(atPath: targetURL.path) {
-            try? fileManager.createDirectory(at: targetURL, withIntermediateDirectories: true)
+
+        if !fileManager.fileExists(atPath: targetDirectory.path) {
+            try? fileManager.createDirectory(at: targetDirectory, withIntermediateDirectories: true)
         }
-        
-        dbPath = targetDBPath
     }
     
     // Initialize database on first access (lazy initialization)
@@ -113,6 +126,8 @@ actor DatabaseManager {
                 t.column(key, primaryKey: true)
                 t.column(self.value)
             })
+
+            try migrateClipboardItemsTableIfNeeded()
             
             // Optimization: Add indexes for frequently queried/sorted columns
             try db.run(clipboardItems.createIndex(createdAt, ifNotExists: true))
@@ -123,6 +138,27 @@ actor DatabaseManager {
             Task { @MainActor in
                 ErrorHandler.shared.handle(error)
             }
+        }
+    }
+
+    private func migrateClipboardItemsTableIfNeeded() throws {
+        guard let db = db else { return }
+
+        let existingColumns = Set(try db.prepare("PRAGMA table_info(clipboard_items)").compactMap { row in
+            row[1] as? String
+        })
+
+        let requiredColumns: [(name: String, definition: String)] = [
+            ("tags", #"TEXT NOT NULL DEFAULT '[]'"#),
+            ("summary", "TEXT"),
+            ("isSensitive", "BOOLEAN NOT NULL DEFAULT 0"),
+            ("embedding", "BLOB"),
+            ("isFavorite", "BOOLEAN NOT NULL DEFAULT 0"),
+            ("favoritedAt", "DOUBLE"),
+        ]
+
+        for column in requiredColumns where !existingColumns.contains(column.name) {
+            try db.run("ALTER TABLE clipboard_items ADD COLUMN \(column.name) \(column.definition)")
         }
     }
     
@@ -350,4 +386,3 @@ enum DatabaseError: Error {
     case invalidData
     case operationFailed(String)
 }
-

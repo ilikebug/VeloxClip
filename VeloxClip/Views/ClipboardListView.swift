@@ -34,8 +34,8 @@ struct ClipboardListView: View {
     }
     
     private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            store.deleteItems(at: offsets)
+        Task {
+            await store.deleteItems(at: offsets, in: items)
         }
     }
 }

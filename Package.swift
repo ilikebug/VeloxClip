@@ -21,6 +21,13 @@ let package = Package(
                 .product(name: "MarkdownUI", package: "swift-markdown-ui"),
             ],
             path: "VeloxClip"
+        ),
+        .testTarget(
+            name: "VeloxClipTests",
+            dependencies: [
+                "VeloxClip",
+                .product(name: "SQLite", package: "SQLite.swift"),
+            ]
         )
     ]
 )
