@@ -69,9 +69,29 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         // Register all global shortcuts
         ShortcutManager.shared.registerAllShortcuts()
-        
-        // Note: Window will be shown when user presses the shortcut or clicks menu item
-        // Removed auto-show on launch to avoid interrupting user workflow
+
+        // Listen for "open settings" requests from a duplicate launch attempt.
+        DistributedNotificationCenter.default().addObserver(
+            forName: .veloxClipOpenSettings,
+            object: nil,
+            queue: .main
+        ) { _ in
+            NSApp.activate(ignoringOtherApps: true)
+            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        }
+
+        // Cold-start fallback: if the menu bar icon is hidden, the user has no visible
+        // entry point. Open Settings automatically so they can re-enable it or quit.
+        Task { @MainActor in
+            // Wait briefly so AppSettings has loaded its persisted value from disk.
+            try? await Task.sleep(nanoseconds: 200_000_000) // 200ms
+            if !AppSettings.shared.showMenuBarIcon {
+                NSApp.activate(ignoringOtherApps: true)
+                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+            }
+        }
+
+        // Note: Main window will be shown when user presses the shortcut or clicks the menu item.
     }
     
     private func isAnotherInstanceRunning() -> Bool {
