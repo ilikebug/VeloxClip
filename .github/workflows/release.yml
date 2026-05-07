@@ -15,7 +15,8 @@ permissions:
 
 jobs:
   build-and-release:
-    runs-on: macos-14
+    # macos-15 ships Xcode 16 / Swift 6; Package.swift requires swift-tools-version: 6.0.
+    runs-on: macos-15
     timeout-minutes: 30
     env:
       TAG: ${{ github.event.inputs.tag || github.ref_name }}
@@ -28,6 +29,20 @@ jobs:
           # if VERSION env is ever omitted; harmless otherwise.
           fetch-depth: 0
           ref: ${{ env.TAG }}
+
+      - name: Select Xcode 16 (Swift 6)
+        run: |
+          set -euo pipefail
+          # Pick the latest Xcode 16.x available on the runner; fail loudly if none.
+          XCODE_PATH=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$XCODE_PATH" ]; then
+            echo "::error::No Xcode 16.x found on runner. Available:"
+            ls -d /Applications/Xcode*.app 2>/dev/null || true
+            exit 1
+          fi
+          echo "Selecting $XCODE_PATH"
+          sudo xcode-select -s "$XCODE_PATH/Contents/Developer"
+          swift --version
 
       - name: Run release-notes script tests
         run: node --test scripts/build-release-notes.test.mjs
