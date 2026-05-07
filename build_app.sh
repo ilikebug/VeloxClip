@@ -7,7 +7,18 @@ EXECUTABLE_NAME="VeloxClip"
 BUILD_CONFIG="release"
 BUILD_PATH=".build"
 
-echo "[Building] Building $APP_NAME in $BUILD_CONFIG mode..."
+# Version: prefer explicit VERSION env var (CI passes ${{ github.ref_name }} stripped of `v`),
+# fall back to the latest local git tag, then to a hardcoded last-known release.
+if [ -z "${VERSION:-}" ]; then
+    if VERSION_FROM_TAG=$(git describe --tags --abbrev=0 2>/dev/null); then
+        VERSION="${VERSION_FROM_TAG#v}"
+    else
+        VERSION="1.1.16"
+    fi
+fi
+echo "[Version] Using version: $VERSION"
+
+echo "[Building] Building $APP_NAME $VERSION in $BUILD_CONFIG mode..."
 
 # Get absolute paths to avoid permission issues
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -93,7 +104,7 @@ echo "[Info] Generating Info.plist..."
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.1.16</string>
+    <string>$VERSION</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
     <key>NSHighResolutionCapable</key>

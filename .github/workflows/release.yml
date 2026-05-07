@@ -1,0 +1,95 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g. v1.1.17). Must already exist.'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: macos-14
+    timeout-minutes: 30
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Need full history so build_app.sh's git-tag fallback can read the tag
+          # if VERSION env is ever omitted; harmless otherwise.
+          fetch-depth: 0
+          ref: ${{ env.TAG }}
+
+      - name: Run release-notes script tests
+        run: node --test scripts/build-release-notes.test.mjs
+
+      - name: Build .app and .dmg
+        run: |
+          set -euo pipefail
+          # Strip the leading "v" so CFBundleShortVersionString stays
+          # like "1.1.16" — Apple's plist convention.
+          export VERSION="${TAG#v}"
+          echo "Building VeloxClip $VERSION (tag $TAG)"
+          ./build_app.sh
+
+      - name: Rename DMG with tag
+        run: |
+          set -euo pipefail
+          mv VeloxClip.dmg "VeloxClip-${TAG}.dmg"
+          ls -lh "VeloxClip-${TAG}.dmg"
+
+      - name: Render rich release body from CHANGELOG
+        id: notes
+        run: |
+          set -euo pipefail
+          # Exit 2 from the script means the CHANGELOG section is missing —
+          # surface that as a hard failure so we don't publish an empty body.
+          set +e
+          node scripts/build-release-notes.mjs "$TAG"
+          rc=$?
+          set -e
+          if [ "$rc" -eq 2 ]; then
+            echo "::error::CHANGELOG.md is missing the section for $TAG. Add it and re-tag, or fix the existing tag's CHANGELOG section before re-running."
+            exit 1
+          fi
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::build-release-notes.mjs failed with exit $rc"
+            exit "$rc"
+          fi
+          echo "Body preview:"
+          head -30 RELEASE_BODY.md
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG exists — updating notes and uploading asset."
+            gh release edit "$TAG" --notes-file RELEASE_BODY.md
+            gh release upload "$TAG" "VeloxClip-${TAG}.dmg" --clobber
+          else
+            echo "Creating release $TAG."
+            gh release create "$TAG" \
+              --title "Velox Clip $TAG" \
+              --notes-file RELEASE_BODY.md \
+              "VeloxClip-${TAG}.dmg"
+          fi
+
+      - name: Upload .app artifact (debug aid)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: VeloxClip-app-failed-${{ env.TAG }}
+          path: VeloxClip.app
+          if-no-files-found: ignore
+          retention-days: 7
