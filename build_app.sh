@@ -13,7 +13,7 @@ if [ -z "${VERSION:-}" ]; then
     if VERSION_FROM_TAG=$(git describe --tags --abbrev=0 2>/dev/null); then
         VERSION="${VERSION_FROM_TAG#v}"
     else
-        VERSION="1.1.16"
+        VERSION="1.1.17"
     fi
 fi
 echo "[Version] Using version: $VERSION"
