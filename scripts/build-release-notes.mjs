@@ -12,27 +12,35 @@
 //      before publishing instead of pushing a near-empty body.
 
 import { readFileSync, writeFileSync } from 'node:fs';
-import { argv, exit, stderr, stdout } from 'node:process';
+import { argv, env, exit, stderr, stdout } from 'node:process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const REPO = 'ilikebug/VeloxClip';
-const ASSET_BASE = `https://github.com/${REPO}/releases/download`;
+const FALLBACK_REPO = 'ilikebug/VeloxClip';
 
-function buildBody(rawTag, changelogText) {
+// Resolve owner/repo for asset and link URLs. GitHub Actions sets
+// GITHUB_REPOSITORY automatically (e.g. "Karl-Dai/VeloxClip"); local runs
+// fall back to the upstream repo.
+function resolveRepo() {
+  const fromEnv = env.GITHUB_REPOSITORY;
+  if (fromEnv && /^[^/]+\/[^/]+$/.test(fromEnv)) return fromEnv;
+  return FALLBACK_REPO;
+}
+
+function buildBody(rawTag, changelogText, repo = resolveRepo()) {
   const tag = rawTag.startsWith('v') ? rawTag : `v${rawTag}`;
   const version = tag.replace(/^v/, '');
 
   const section = extractSection(changelogText, version);
-  const downloadTable = renderDownloadTable(tag);
+  const downloadTable = renderDownloadTable(tag, repo);
 
   const header = `# Velox Clip ${tag}\n\n${downloadTable}\n`;
   const footer = [
     '',
     '---',
     '',
-    `**Full changelog:** [\`CHANGELOG.md\`](https://github.com/${REPO}/blob/${tag}/CHANGELOG.md)`,
-    `**All releases:** https://github.com/${REPO}/releases`,
+    `**Full changelog:** [\`CHANGELOG.md\`](https://github.com/${repo}/blob/${tag}/CHANGELOG.md)`,
+    `**All releases:** https://github.com/${repo}/releases`,
   ].join('\n');
 
   if (section === null) {
@@ -64,8 +72,8 @@ function extractSection(text, version) {
   return cleaned;
 }
 
-function renderDownloadTable(tag) {
-  const dmg = `${ASSET_BASE}/${tag}/VeloxClip-${tag}.dmg`;
+function renderDownloadTable(tag, repo = resolveRepo()) {
+  const dmg = `https://github.com/${repo}/releases/download/${tag}/VeloxClip-${tag}.dmg`;
   return [
     '## Downloads',
     '',
@@ -108,4 +116,4 @@ function main() {
 const isDirectRun = fileURLToPath(import.meta.url) === resolve(argv[1] ?? '');
 if (isDirectRun) main();
 
-export { buildBody, extractSection, renderDownloadTable };
+export { buildBody, extractSection, renderDownloadTable, resolveRepo };
