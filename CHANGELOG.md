@@ -43,4 +43,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 未发布。在 fork CI 上因 `macos-14` runner 缺 Swift 6 而构建失败,被 v1.1.17 替代,内容已合并 /
 Unreleased — CI build failed on `macos-14` (Swift 5.10) and was superseded by v1.1.17, which folds in the same content plus the runner fix.
 
-[1.1.17]: https://github.com/ilikebug/VeloxClip/releases/tag/v1.1.17
+[1.1.17]: https://github.com/Karl-Dai/VeloxClip/releases/tag/v1.1.17
