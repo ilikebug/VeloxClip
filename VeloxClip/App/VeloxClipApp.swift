@@ -1,21 +1,29 @@
 import SwiftUI
 
+extension Notification.Name {
+    static let veloxClipOpenSettings = Notification.Name("com.antigravity.veloxclip.openSettings")
+}
+
 @main
 struct VeloxClipApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var monitor = ClipboardMonitor()
-    
-    @Environment(\.openWindow) var openWindow
+    @StateObject private var settings = AppSettings.shared
     
     var body: some Scene {
-        // No WindowGroup for main app, but we need one for Settings
-        WindowGroup(id: "settings") {
+        // Standard Preferences scene — opens via the system "showSettingsWindow:" selector
+        // from anywhere (menu, AppDelegate, distributed-notification handler).
+        Settings {
             SettingsView()
         }
-        .windowResizability(.contentSize)
-        .defaultSize(width: 500, height: 350)
-        
-        MenuBarExtra("Velox Clip", systemImage: "paperclip.circle.fill") {
+
+        // On cold start, AppSettings loads asynchronously from SQLite; the icon may briefly
+        // appear with the default `true` before the persisted value is applied (~200ms).
+        MenuBarExtra(
+            "Velox Clip",
+            systemImage: "paperclip.circle.fill",
+            isInserted: $settings.showMenuBarIcon
+        ) {
             Button("Show Clipboard") {
                 WindowManager.shared.toggleWindow()
             }
@@ -28,8 +36,8 @@ struct VeloxClipApp: App {
             Divider()
             
             Button("Preferences...") {
-                openWindow(id: "settings")
                 NSApp.activate(ignoringOtherApps: true)
+                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
             }
             .keyboardShortcut(",", modifiers: .command)
             
@@ -49,15 +57,50 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if isAnotherInstanceRunning() {
             print("⚠️ Another instance of VeloxClip is already running. Activating it and quitting this instance.")
             activateExistingInstance()
+            DistributedNotificationCenter.default().postNotificationName(
+                .veloxClipOpenSettings,
+                object: nil,
+                userInfo: nil,
+                deliverImmediately: true
+            )
             NSApplication.shared.terminate(nil)
             return
         }
         
         // Register all global shortcuts
         ShortcutManager.shared.registerAllShortcuts()
-        
-        // Note: Window will be shown when user presses the shortcut or clicks menu item
-        // Removed auto-show on launch to avoid interrupting user workflow
+
+        // Listen for "open settings" requests from a duplicate launch attempt.
+        DistributedNotificationCenter.default().addObserver(
+            forName: .veloxClipOpenSettings,
+            object: nil,
+            queue: .main
+        ) { _ in
+            Task { @MainActor in
+                NSApp.activate(ignoringOtherApps: true)
+                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+            }
+        }
+
+        // Cold-start fallback: if the menu bar icon is hidden, the user has no visible
+        // entry point. Wait for AppSettings to finish its initial DB load (up to 5s),
+        // then open Settings so they can re-enable it or quit.
+        Task { @MainActor in
+            let deadline = Date().addingTimeInterval(5)
+            while !AppSettings.shared.isLoaded && Date() < deadline {
+                do {
+                    try await Task.sleep(nanoseconds: 50_000_000) // 50ms poll
+                } catch {
+                    return // task cancelled (app terminating); abort
+                }
+            }
+            if !AppSettings.shared.showMenuBarIcon {
+                NSApp.activate(ignoringOtherApps: true)
+                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+            }
+        }
+
+        // Note: Main window will be shown when user presses the shortcut or clicks the menu item.
     }
     
     private func isAnotherInstanceRunning() -> Bool {
