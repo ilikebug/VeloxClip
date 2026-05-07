@@ -8,7 +8,7 @@ struct ImagePreviewView: View {
     @State private var imageInfo: ImageInfo?
     @State private var displayImage: NSImage?
     
-    struct ImageInfo {
+    struct ImageInfo: Sendable {
         let size: NSSize
         let fileSize: Int
         let format: String
@@ -106,40 +106,42 @@ struct ImagePreviewView: View {
     
     private func loadImageAsync() async {
         isLoading = true
-        
-        let result = await Task.detached(priority: .userInitiated) { @Sendable in
-            guard let nsImage = NSImage(data: imageData),
+
+        // Decode metadata off-main; do not pass NSImage across actor boundaries
+        // (NSImage is not Sendable on Swift <= 6.1). We reconstruct it on the
+        // main actor below — NSImage(data:) is cheap; the heavy work was the
+        // bitmap-rep inspection that ran inside the detached task.
+        let data = imageData
+        let info = await Task.detached(priority: .userInitiated) { () -> ImageInfo? in
+            guard let nsImage = NSImage(data: data),
                   let imageRep = nsImage.representations.first else {
-                return (nil, nil) as (NSImage?, ImageInfo?)
+                return nil
             }
-            
+
             let size = imageRep.size
-            let fileSize = imageData.count
+            let fileSize = data.count
             var format = "Unknown"
             var colorSpace: String? = nil
             var hasAlpha = false
-            
+
             if let bitmapRep = imageRep as? NSBitmapImageRep {
                 format = bitmapRep.bitmapFormat.contains(.alphaFirst) ? "PNG" : "JPEG"
                 colorSpace = bitmapRep.colorSpace.localizedName
                 hasAlpha = bitmapRep.hasAlpha
             }
-            
+
             if format == "Unknown" {
-                if imageData.starts(with: [0x89, 0x50, 0x4E, 0x47]) { format = "PNG" }
-                else if imageData.starts(with: [0xFF, 0xD8, 0xFF]) { format = "JPEG" }
-                else if imageData.starts(with: [0x52, 0x49, 0x46, 0x46]) { format = "WebP" }
+                if data.starts(with: [0x89, 0x50, 0x4E, 0x47]) { format = "PNG" }
+                else if data.starts(with: [0xFF, 0xD8, 0xFF]) { format = "JPEG" }
+                else if data.starts(with: [0x52, 0x49, 0x46, 0x46]) { format = "WebP" }
             }
-            
-            let info = ImageInfo(size: size, fileSize: fileSize, format: format, colorSpace: colorSpace, hasAlpha: hasAlpha)
-            return (nsImage, info)
+
+            return ImageInfo(size: size, fileSize: fileSize, format: format, colorSpace: colorSpace, hasAlpha: hasAlpha)
         }.value
-        
-        await MainActor.run {
-            self.displayImage = result.0
-            self.imageInfo = result.1
-            self.isLoading = false
-        }
+
+        self.displayImage = NSImage(data: imageData)
+        self.imageInfo = info
+        self.isLoading = false
     }
     
     private func formatFileSize(_ bytes: Int) -> String {
