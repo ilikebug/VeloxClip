@@ -12,7 +12,9 @@ struct VeloxClipApp: App {
         Settings {
             SettingsView()
         }
-        
+
+        // On cold start, AppSettings loads asynchronously from SQLite; the icon may briefly
+        // appear with the default `true` before the persisted value is applied (~200ms).
         MenuBarExtra(
             "Velox Clip",
             systemImage: "paperclip.circle.fill",
