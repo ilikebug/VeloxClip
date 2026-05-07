@@ -68,6 +68,9 @@ struct GeneralSettingsView: View {
                 
                 Toggle("Launch at Login", isOn: $settings.launchAtLogin)
                     .help("Automatically start Velox Clip when you log in")
+
+                Toggle("Show menu bar icon", isOn: $settings.showMenuBarIcon)
+                    .help("When hidden, re-launch VeloxClip to open Preferences.")
             }
             
             Section("AI Settings") {
