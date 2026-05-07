@@ -105,7 +105,9 @@ class AppSettings: ObservableObject {
             }
         }
     }
-    
+
+    @Published private(set) var isLoaded: Bool = false
+
     private var isInitializing = true
     
     private init() {
@@ -239,6 +241,11 @@ class AppSettings: ObservableObject {
             }
         } else {
             try? await dbManager.setSetting(key: "openRouterModel", value: "tngtech/deepseek-r1t2-chimera:free")
+        }
+
+        // Signal that the initial DB load completed.
+        await MainActor.run {
+            self.isLoaded = true
         }
     }
     

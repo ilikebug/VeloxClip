@@ -83,10 +83,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // Cold-start fallback: if the menu bar icon is hidden, the user has no visible
-        // entry point. Open Settings automatically so they can re-enable it or quit.
+        // entry point. Wait for AppSettings to finish its initial DB load (up to 5s),
+        // then open Settings so they can re-enable it or quit.
         Task { @MainActor in
-            // Wait briefly so AppSettings has loaded its persisted value from disk.
-            try? await Task.sleep(nanoseconds: 200_000_000) // 200ms
+            let deadline = Date().addingTimeInterval(5)
+            while !AppSettings.shared.isLoaded && Date() < deadline {
+                do {
+                    try await Task.sleep(nanoseconds: 50_000_000) // 50ms poll
+                } catch {
+                    return // task cancelled (app terminating); abort
+                }
+            }
             if !AppSettings.shared.showMenuBarIcon {
                 NSApp.activate(ignoringOtherApps: true)
                 NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
