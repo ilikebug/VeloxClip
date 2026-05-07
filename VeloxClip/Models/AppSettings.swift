@@ -28,6 +28,15 @@ class AppSettings: ObservableObject {
         }
     }
     
+    @Published var showMenuBarIcon: Bool {
+        didSet {
+            guard !isInitializing else { return }
+            Task {
+                try? await dbManager.setSetting(key: "showMenuBarIcon", value: String(showMenuBarIcon))
+            }
+        }
+    }
+
     @Published var globalShortcut: String {
         didSet {
             if !isInitializing {
@@ -96,13 +105,16 @@ class AppSettings: ObservableObject {
             }
         }
     }
-    
+
+    @Published private(set) var isLoaded: Bool = false
+
     private var isInitializing = true
     
     private init() {
         // Initialize with default values first
         self.historyLimit = 100
         self.launchAtLogin = false
+        self.showMenuBarIcon = true
         self.globalShortcut = "cmd+shift+v"
         self.screenshotShortcut = "f1"
         self.pasteImageShortcut = "f3"
@@ -151,7 +163,16 @@ class AppSettings: ObservableObject {
         } else {
             try? await dbManager.setSetting(key: "launchAtLogin", value: "false")
         }
-        
+
+        // Load showMenuBarIcon
+        if let showMenuBarIconStr = await dbManager.getSetting(key: "showMenuBarIcon") {
+            await MainActor.run {
+                self.showMenuBarIcon = showMenuBarIconStr == "true"
+            }
+        } else {
+            try? await dbManager.setSetting(key: "showMenuBarIcon", value: "true")
+        }
+
         // Load globalShortcut
         if let shortcut = await dbManager.getSetting(key: "globalShortcut") {
             await MainActor.run {
@@ -220,6 +241,11 @@ class AppSettings: ObservableObject {
             }
         } else {
             try? await dbManager.setSetting(key: "openRouterModel", value: "tngtech/deepseek-r1t2-chimera:free")
+        }
+
+        // Signal that the initial DB load completed.
+        await MainActor.run {
+            self.isLoaded = true
         }
     }
     
