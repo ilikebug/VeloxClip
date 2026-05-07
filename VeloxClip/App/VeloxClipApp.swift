@@ -4,18 +4,20 @@ import SwiftUI
 struct VeloxClipApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var monitor = ClipboardMonitor()
-    
-    @Environment(\.openWindow) var openWindow
+    @StateObject private var settings = AppSettings.shared
     
     var body: some Scene {
-        // No WindowGroup for main app, but we need one for Settings
-        WindowGroup(id: "settings") {
+        // Standard Preferences scene — opens via the system "showSettingsWindow:" selector
+        // from anywhere (menu, AppDelegate, distributed-notification handler).
+        Settings {
             SettingsView()
         }
-        .windowResizability(.contentSize)
-        .defaultSize(width: 500, height: 350)
         
-        MenuBarExtra("Velox Clip", systemImage: "paperclip.circle.fill") {
+        MenuBarExtra(
+            "Velox Clip",
+            systemImage: "paperclip.circle.fill",
+            isInserted: $settings.showMenuBarIcon
+        ) {
             Button("Show Clipboard") {
                 WindowManager.shared.toggleWindow()
             }
@@ -28,8 +30,8 @@ struct VeloxClipApp: App {
             Divider()
             
             Button("Preferences...") {
-                openWindow(id: "settings")
                 NSApp.activate(ignoringOtherApps: true)
+                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
             }
             .keyboardShortcut(",", modifiers: .command)
             
