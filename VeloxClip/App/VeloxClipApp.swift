@@ -1,5 +1,9 @@
 import SwiftUI
 
+extension Notification.Name {
+    static let veloxClipOpenSettings = Notification.Name("com.antigravity.veloxclip.openSettings")
+}
+
 @main
 struct VeloxClipApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -53,6 +57,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if isAnotherInstanceRunning() {
             print("⚠️ Another instance of VeloxClip is already running. Activating it and quitting this instance.")
             activateExistingInstance()
+            DistributedNotificationCenter.default().postNotificationName(
+                .veloxClipOpenSettings,
+                object: nil,
+                userInfo: nil,
+                deliverImmediately: true
+            )
             NSApplication.shared.terminate(nil)
             return
         }
