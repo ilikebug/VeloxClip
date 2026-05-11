@@ -31,6 +31,7 @@
     <PackageReference Include="Serilog.Settings.Configuration" />
     <PackageReference Include="Serilog.Sinks.File" />
     <PackageReference Include="Serilog.Sinks.Debug" />
+    <PackageReference Include="H.NotifyIcon.WinUI" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\VeloxClip.Core\VeloxClip.Core.csproj" />
@@ -41,5 +42,10 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="Package.appxmanifest" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="Assets\app.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 </Project>

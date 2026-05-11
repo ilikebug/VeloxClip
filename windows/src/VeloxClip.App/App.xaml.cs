@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
 using Serilog;
 using VeloxClip.App.Hosting;
+using VeloxClip.App.Tray;
 
 namespace VeloxClip.App;
 
@@ -13,6 +14,7 @@ public partial class App : Application
     private IHost? _host;
     private ILogger<App>? _logger;
     private Window? _mainWindow;
+    private TrayIconHost? _tray;
 
     /// <summary>The DI container, available after <see cref="OnLaunched"/>.</summary>
     internal static IServiceProvider Services =>
@@ -38,6 +40,21 @@ public partial class App : Application
 
         _mainWindow = new MainWindow();
         _mainWindow.Activate();
+
+        _tray = new TrayIconHost();
+        _tray.ShowRequested += (_, _) =>
+        {
+            _mainWindow.DispatcherQueue.TryEnqueue(() =>
+            {
+                _mainWindow.Activate();
+                if (_mainWindow.AppWindow is { } appWindow)
+                {
+                    appWindow.Show();
+                    appWindow.MoveInZOrderAtTop();
+                }
+            });
+        };
+        _tray.QuitRequested += (_, _) => Shutdown();
     }
 
     private void OnActivatedFromSecondaryInstance(
@@ -72,6 +89,7 @@ public partial class App : Application
     internal void Shutdown()
     {
         _logger?.LogInformation("App stopping");
+        _tray?.Dispose();
         Log.CloseAndFlush();
         _host?.Dispose();
         Exit();

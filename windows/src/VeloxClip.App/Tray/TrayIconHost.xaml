@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="VeloxClip.App.Tray.TrayIconHost"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:tb="using:H.NotifyIcon">
+    <tb:TaskbarIcon
+        x:Name="Tray"
+        ToolTipText="VeloxClip"
+        IconSource="ms-appx:///Assets/app.ico"
+        NoLeftClickDelay="True"
+        LeftClickCommand="{x:Bind ShowCommand, Mode=OneTime}">
+        <tb:TaskbarIcon.ContextFlyout>
+            <MenuFlyout>
+                <MenuFlyoutItem Text="Show" Click="OnShowClicked" />
+                <MenuFlyoutItem Text="Settings" IsEnabled="False" />
+                <MenuFlyoutSeparator />
+                <MenuFlyoutItem Text="Quit" Click="OnQuitClicked" />
+            </MenuFlyout>
+        </tb:TaskbarIcon.ContextFlyout>
+    </tb:TaskbarIcon>
+</UserControl>
