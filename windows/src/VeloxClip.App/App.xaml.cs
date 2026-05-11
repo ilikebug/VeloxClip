@@ -35,6 +35,9 @@ public partial class App : Application
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
         _host = HostBuilderExtensions.BuildAppHost();
+        // Start synchronously so future IHostedService workers (P1+ clipboard
+        // monitor, hotkey listener, etc.) actually run.
+        _host.Start();
         _logger = _host.Services.GetRequiredService<ILogger<App>>();
         _logger.LogInformation("App starting (pid={Pid})", System.Environment.ProcessId);
 
@@ -90,6 +93,7 @@ public partial class App : Application
     {
         _logger?.LogInformation("App stopping");
         _tray?.Dispose();
+        _host?.StopAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
         Log.CloseAndFlush();
         _host?.Dispose();
         Exit();
