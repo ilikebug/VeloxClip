@@ -4,6 +4,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- NU1903 = transitive vulnerability advisory. Carved out so disclosure-window
+         CVE alerts don't block local builds; CI/GHAS surfaces them separately. -->
     <WarningsNotAsErrors>NU1903</WarningsNotAsErrors>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
