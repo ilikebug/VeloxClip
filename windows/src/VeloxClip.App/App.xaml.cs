@@ -1,19 +1,52 @@
+using System;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
+using Serilog;
+using VeloxClip.App.Hosting;
 
 namespace VeloxClip.App;
 
 public partial class App : Application
 {
+    private IHost? _host;
+    private ILogger<App>? _logger;
     private Window? _mainWindow;
+
+    /// <summary>The DI container, available after <see cref="OnLaunched"/>.</summary>
+    internal static IServiceProvider Services =>
+        ((App)Current)._host?.Services
+        ?? throw new InvalidOperationException("Host not built yet.");
 
     public App()
     {
         InitializeComponent();
+        UnhandledException += OnUnhandledException;
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        _host = HostBuilderExtensions.BuildAppHost();
+        _logger = _host.Services.GetRequiredService<ILogger<App>>();
+        _logger.LogInformation("App starting (pid={Pid})", System.Environment.ProcessId);
+
         _mainWindow = new MainWindow();
         _mainWindow.Activate();
+    }
+
+    private void OnUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
+    {
+        _logger?.LogError(e.Exception, "Unhandled exception in UI thread");
+        // Allow default WinUI handling to continue; we just record it.
+    }
+
+    /// <summary>Invoked by the tray "Quit" command. Flushes logs then exits.</summary>
+    internal void Shutdown()
+    {
+        _logger?.LogInformation("App stopping");
+        Log.CloseAndFlush();
+        _host?.Dispose();
+        Exit();
     }
 }
