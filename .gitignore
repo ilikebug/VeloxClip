@@ -71,3 +71,4 @@ windows/**/*.appxbundle
 windows/**/*.msix
 windows/**/*.msixbundle
 windows/**/PublishProfiles/local/
+windows/dist/
