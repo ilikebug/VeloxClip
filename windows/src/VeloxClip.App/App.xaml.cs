@@ -23,6 +23,11 @@ public partial class App : Application
     {
         InitializeComponent();
         UnhandledException += OnUnhandledException;
+
+        // When a secondary instance redirects activation here, surface the window.
+        Microsoft.Windows.AppLifecycle.AppInstance
+            .GetCurrent()
+            .Activated += OnActivatedFromSecondaryInstance;
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
@@ -33,6 +38,28 @@ public partial class App : Application
 
         _mainWindow = new MainWindow();
         _mainWindow.Activate();
+    }
+
+    private void OnActivatedFromSecondaryInstance(
+        object? sender,
+        Microsoft.Windows.AppLifecycle.AppActivationArguments e)
+    {
+        if (_mainWindow is null)
+        {
+            return;
+        }
+
+        // Marshal to UI thread, show + bring to front.
+        _mainWindow.DispatcherQueue.TryEnqueue(() =>
+        {
+            _logger?.LogInformation("Secondary instance activation redirected; surfacing window");
+            _mainWindow.Activate();
+            if (_mainWindow.AppWindow is { } appWindow)
+            {
+                appWindow.Show();
+                appWindow.MoveInZOrderAtTop();
+            }
+        });
     }
 
     private void OnUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
