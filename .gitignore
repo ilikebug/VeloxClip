@@ -17,6 +17,9 @@ Package.resolved
 # Compiled binaries
 *.app/
 VeloxClip.app/
+# The Windows project directory (case-insensitive `VeloxClip.App/`)
+# would otherwise get caught by `*.app/` on macOS — exclude it.
+!windows/src/VeloxClip.App/
 VeloxClip.dmg
 VeloxClip-v*.dmg
 
