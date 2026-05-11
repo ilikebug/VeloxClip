@@ -12,7 +12,9 @@ public class AppPathsTests
     {
         var paths = new AppPaths(baseDirectory: @"C:\Base");
 
-        paths.Root.Should().Be(@"C:\Base\VeloxClip");
+        // Use Path.Combine so the assertion uses the platform separator;
+        // Core targets net8.0 and tests run on macOS/Linux too.
+        paths.Root.Should().Be(Path.Combine(@"C:\Base", "VeloxClip"));
     }
 
     [Fact]
