@@ -1,0 +1,17 @@
+<Project>
+  <PropertyGroup>
+    <LangVersion>12.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <WarningsNotAsErrors>NU1903</WarningsNotAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <NeutralLanguage>en-US</NeutralLanguage>
+    <Company>VeloxClip</Company>
+    <Authors>VeloxClip Contributors</Authors>
+    <Product>VeloxClip</Product>
+    <Copyright>Copyright (c) VeloxClip Contributors</Copyright>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+</Project>

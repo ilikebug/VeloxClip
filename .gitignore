@@ -55,3 +55,19 @@ VeloxClip.iconset/
 icon.png
 VeloxClip/Resources/AppIcon.icns.backup
 *.icns.backup
+
+# .NET / Visual Studio (Windows port)
+windows/**/bin/
+windows/**/obj/
+windows/**/.vs/
+windows/**/*.user
+windows/**/*.suo
+windows/**/TestResults/
+windows/**/Generated Files/
+windows/**/AppPackages/
+windows/**/BundleArtifacts/
+windows/**/*.appx
+windows/**/*.appxbundle
+windows/**/*.msix
+windows/**/*.msixbundle
+windows/**/PublishProfiles/local/
