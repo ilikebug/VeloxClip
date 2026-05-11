@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "VeloxClip (Unpackaged)": {
+      "commandName": "Project",
+      "nativeDebugging": false
+    }
+  }
+}

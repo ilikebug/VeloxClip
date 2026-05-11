@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="VeloxClip.App.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid>
+        <Grid.Background>
+            <SolidColorBrush Color="{ThemeResource SolidBackgroundFillColorBase}" />
+        </Grid.Background>
+        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
+            <TextBlock
+                Text="VeloxClip"
+                FontSize="36"
+                FontWeight="SemiBold"
+                HorizontalAlignment="Center" />
+            <TextBlock
+                Text="coming soon"
+                FontSize="16"
+                Opacity="0.7"
+                HorizontalAlignment="Center" />
+        </StackPanel>
+    </Grid>
+</Window>
