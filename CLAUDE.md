@@ -60,6 +60,7 @@ Dedup uses the `dataHash` (SHA256) column; "move to top on reuse" uses `lastUsed
 - `AIService` — Apple Vision OCR + NaturalLanguage sentence embeddings with actor-based cache (200 item max)
 - `ShortcutManager` — global keyboard shortcut registration
 - `ContentDetectionService` — auto-tags items (json, table, url, code, markdown, datetime, etc.)
+- `PasteStackService` — sequential paste queue (Paste Stack): stage items in the overlay, each observed Cmd+V pastes the next; passive global key monitor + pre-write, never intercepts events. HUD in `Views/PasteStackHUD.swift`
 - `ScreenshotEditor/` — full annotation tool with pen, arrow, shapes, mosaic, undo/redo
 
 **Views/** — SwiftUI UI:
