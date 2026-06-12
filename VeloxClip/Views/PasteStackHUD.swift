@@ -63,6 +63,8 @@ final class PasteStackHUDController {
             hosting.view.autoresizingMask = [.width, .height]
             container.addSubview(hosting.view)
             panel.contentView = container
+            // The HUD view has a fixed frame; size the panel once at creation
+            panel.setContentSize(hosting.sizeThatFits(in: NSSize(width: 800, height: 300)))
             self.hosting = hosting
             panel.backgroundColor = .clear
             panel.isOpaque = false
@@ -87,14 +89,7 @@ final class PasteStackHUDController {
         }
 
         guard let panel else { return }
-        // Re-measure on every phase change — the paused state is wider than
-        // the active one, and a fixed frame would clip its buttons. With
-        // sizingOptions disabled, fittingSize is meaningless; sizeThatFits
-        // measures the SwiftUI content directly
         isRepositioningProgrammatically = true
-        if let hosting {
-            panel.setContentSize(hosting.sizeThatFits(in: NSSize(width: 800, height: 300)))
-        }
         panel.setFrameOrigin(targetOrigin(for: panel.frame.size))
         isRepositioningProgrammatically = false
         panel.orderFrontRegardless()
@@ -155,6 +150,7 @@ struct PasteStackHUDView: View {
                         .font(.system(size: 10))
                         .foregroundColor(.secondary)
                 }
+                Spacer(minLength: 8)
                 progressLabel
                 closeButton
             case .paused:
@@ -167,6 +163,7 @@ struct PasteStackHUDView: View {
                         .font(.system(size: 10))
                         .foregroundColor(.secondary)
                 }
+                Spacer(minLength: 8)
                 progressLabel
                 Button(action: { stack.resume() }) {
                     Image(systemName: "play.circle.fill")
@@ -180,17 +177,18 @@ struct PasteStackHUDView: View {
                     .foregroundColor(.green)
                 Text("Done")
                     .font(.system(size: 12, weight: .medium))
+                Spacer(minLength: 8)
                 progressLabel
             case .idle:
                 EmptyView()
             }
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .frame(minWidth: 230)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        // Fixed size across all phases — the panel must never resize while visible
+        .frame(width: 320, height: 56)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(Color.primary.opacity(0.1), lineWidth: 1)
         )
         .padding(6)
