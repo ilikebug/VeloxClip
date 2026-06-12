@@ -329,7 +329,7 @@ struct MainView: View {
     }
     
     private var typeFilterBar: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 4) {
             ForEach(ClipboardTypeFilter.allCases) { filter in
                 Button(action: {
                     withAnimation(.easeInOut(duration: 0.15)) {
@@ -337,10 +337,11 @@ struct MainView: View {
                     }
                 }) {
                     Text(filter.label)
-                        .font(.system(size: 12, weight: typeFilter == filter ? .semibold : .regular, design: .rounded))
+                        .font(.system(size: 11, weight: typeFilter == filter ? .semibold : .regular, design: .rounded))
                         .foregroundColor(typeFilter == filter ? .white : .secondary)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 5)
+                        .padding(.vertical, 3)
+                        // Equal-width buttons spread evenly across the list column
+                        .frame(maxWidth: .infinity)
                         .background(
                             Capsule()
                                 .fill(typeFilter == filter ? Color.accentColor : Color.primary.opacity(0.06))
@@ -348,10 +349,10 @@ struct MainView: View {
                 }
                 .buttonStyle(.plain)
             }
-            Spacer()
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
     }
 
     private var favoriteToggleButton: some View {
