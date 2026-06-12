@@ -353,8 +353,8 @@ struct PreviewView: View {
     
     private func tagColor(for tag: String) -> Color {
         let colors: [Color] = [.blue, .purple, .green, .orange, .pink, .cyan]
-        let hash = abs(tag.hashValue)
-        return colors[hash % colors.count]
+        // stableHash keeps a tag's color identical across restarts
+        return colors[tag.stableHash % colors.count]
     }
 }
 

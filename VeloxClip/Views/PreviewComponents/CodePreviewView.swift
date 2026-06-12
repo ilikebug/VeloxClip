@@ -10,8 +10,7 @@ struct CodePreviewView: View {
     
     
     // Static shared cache to persist results between item switches
-    private static var globalHighlightCache: [String: AttributedString] = [:]
-    private static let maxCacheEntries = 2000
+    private static var globalHighlightCache = FIFOCache<String, AttributedString>(maxEntries: 2000)
     
     // Pre-compiled keyword regexes for performance
     static let keywordRegexes: [String: NSRegularExpression] = {
@@ -198,10 +197,6 @@ struct CodePreviewView: View {
             return Text(cached)
         } else {
             let highlighted = highlightSyntax(line: line, language: language)
-            if Self.globalHighlightCache.count >= Self.maxCacheEntries {
-                // Simple eviction
-                _ = Self.globalHighlightCache.removeValue(forKey: Self.globalHighlightCache.keys.first!)
-            }
             Self.globalHighlightCache[cacheKey] = highlighted
             return Text(highlighted)
         }

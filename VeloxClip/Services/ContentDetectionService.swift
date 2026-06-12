@@ -7,9 +7,7 @@ enum DetectedContentType: String, Sendable {
 actor ContentDetectionService {
     static let shared = ContentDetectionService()
     
-    private var cache: [UUID: DetectedContentType] = [:]
-    private var cacheOrder: [UUID] = []
-    private let maxCacheSize = 500
+    private var cache = FIFOCache<UUID, DetectedContentType>(maxEntries: 500)
 
     func detectType(for item: ClipboardItem) async -> DetectedContentType {
         if let cached = cache[item.id] {
@@ -17,12 +15,6 @@ actor ContentDetectionService {
         }
 
         let type = performDetection(for: item)
-
-        // Dictionary.keys.first is unordered — track insertion order for true FIFO eviction
-        if cacheOrder.count >= maxCacheSize, !cacheOrder.isEmpty {
-            cache.removeValue(forKey: cacheOrder.removeFirst())
-        }
-        cacheOrder.append(item.id)
         cache[item.id] = type
 
         return type

@@ -113,7 +113,7 @@ struct TextSummaryView: View {
                             }
                         }
                         .padding(16)
-                        .background(Color.white)
+                        .background(Color(nsColor: .textBackgroundColor))
                         .cornerRadius(12)
                         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.secondary.opacity(0.1), lineWidth: 1))
                     } else {
@@ -123,7 +123,7 @@ struct TextSummaryView: View {
                             .textSelection(.enabled)
                             .padding(16)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.white)
+                            .background(Color(nsColor: .textBackgroundColor))
                             .cornerRadius(12)
                             .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.secondary.opacity(0.1), lineWidth: 1))
                     }
@@ -133,7 +133,7 @@ struct TextSummaryView: View {
                         .textSelection(.enabled)
                         .padding(16)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.white)
+                        .background(Color(nsColor: .textBackgroundColor))
                         .cornerRadius(12)
                         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.secondary.opacity(0.1), lineWidth: 1))
                 }

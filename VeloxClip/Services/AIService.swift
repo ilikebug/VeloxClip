@@ -23,33 +23,22 @@ enum AIServiceError: LocalizedError, Sendable {
 
 // Thread-safe cache for embeddings using actor
 private actor EmbeddingCache {
-    private var cache: [String: [Double]] = [:]
-    private var insertionOrder: [String] = []
-    private let maxSize: Int
+    private var cache: FIFOCache<String, [Double]>
 
     init(maxSize: Int = 200) {
-        self.maxSize = maxSize
+        cache = FIFOCache(maxEntries: maxSize)
     }
 
     func get(_ key: String) -> [Double]? {
-        return cache[key]
+        cache[key]
     }
 
     func set(_ key: String, value: [Double]) {
-        if cache[key] == nil {
-            // Dictionary.keys.first is unordered — track insertion order for true FIFO eviction
-            if insertionOrder.count >= maxSize, !insertionOrder.isEmpty {
-                let oldest = insertionOrder.removeFirst()
-                cache.removeValue(forKey: oldest)
-            }
-            insertionOrder.append(key)
-        }
         cache[key] = value
     }
 
     func clear() {
         cache.removeAll()
-        insertionOrder.removeAll()
     }
 }
 

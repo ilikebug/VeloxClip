@@ -19,7 +19,10 @@ class CacheManager {
             
             // Clear JSONPreviewView static cache
             JSONPreviewView.jsonCache.removeAll()
-            
+
+            // Clear list thumbnails
+            ThumbnailProvider.shared.clear()
+
             print("✅ All caches cleared")
         }
     }
