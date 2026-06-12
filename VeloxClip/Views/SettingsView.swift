@@ -44,11 +44,11 @@ struct GeneralSettingsView: View {
 
                 Picker("HUD Position", selection: $settings.pasteStackHUDPosition) {
                     Text("Top Center").tag("topCenter")
-                    Text("Bottom Center").tag("bottomCenter")
-                    Text("Bottom Right").tag("bottomRight")
-                    Text("Bottom Left").tag("bottomLeft")
-                    Text("Top Right").tag("topRight")
                     Text("Top Left").tag("topLeft")
+                    Text("Top Right").tag("topRight")
+                    Text("Bottom Center").tag("bottomCenter")
+                    Text("Bottom Left").tag("bottomLeft")
+                    Text("Bottom Right").tag("bottomRight")
                     if settings.pasteStackHUDPosition == "custom" {
                         Text("Custom (dragged)").tag("custom")
                     }
