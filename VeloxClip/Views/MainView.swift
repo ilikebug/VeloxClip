@@ -14,13 +14,13 @@ struct MainView: View {
     @State private var viewMode: ViewMode = .history
     @State private var searchResults: [ClipboardItem] = []
     @State private var isSearching = false
+    @State private var scrollTarget: UUID?
     
     // Debounced search text for semantic search
     @State private var searchTask: Task<Void, Never>?
     
     // Cached semantic search results - only store IDs and scores to save memory
-    @State private var cachedSemanticResults: [String: [(UUID, Double)]] = [:]
-    @State private var semanticCacheOrder: [String] = []
+    @State private var cachedSemanticResults = FIFOCache<String, [(UUID, Double)]>(maxEntries: 50)
     
     var displayItems: [ClipboardItem] {
         if searchText.isEmpty {
@@ -108,6 +108,7 @@ struct MainView: View {
         // Select first item if search results changed
         if selectedItem == nil || !finalItems.contains(where: { $0.id == selectedItem?.id }) {
             selectedItem = finalItems.first
+            scrollTarget = finalItems.first?.id
         }
     }
 
@@ -139,13 +140,6 @@ struct MainView: View {
             return Array(results)
         }.value
 
-        // True FIFO eviction (Dictionary.keys.first is unordered)
-        if cachedSemanticResults[normalizedQuery] == nil {
-            if semanticCacheOrder.count >= 50, !semanticCacheOrder.isEmpty {
-                cachedSemanticResults.removeValue(forKey: semanticCacheOrder.removeFirst())
-            }
-            semanticCacheOrder.append(normalizedQuery)
-        }
         cachedSemanticResults[normalizedQuery] = finalResults
 
         return finalResults
@@ -209,7 +203,7 @@ struct MainView: View {
             HStack(spacing: 0) {
                 // Left: Clipboard List (History)
                 VStack(spacing: 0) {
-                    ClipboardListView(selectedItem: $selectedItem, items: displayItems)
+                    ClipboardListView(selectedItem: $selectedItem, items: displayItems, scrollTarget: $scrollTarget)
                 }
                 .frame(width: 320)
                 .background(Color.primary.opacity(0.03))
@@ -273,9 +267,9 @@ struct MainView: View {
             searchText = ""
             searchTask?.cancel()
             cachedSemanticResults.removeAll()
-            semanticCacheOrder.removeAll()
             if !store.items.isEmpty {
                 selectedItem = store.items.first
+                scrollTarget = store.items.first?.id
             }
         }
         .errorAlert() // Add unified error handling
@@ -292,12 +286,14 @@ struct MainView: View {
     private func moveSelection(direction: Int) {
         let items = displayItems
         guard !items.isEmpty else { return }
-        
+
         let currentIndex = items.firstIndex(where: { $0.id == selectedItem?.id }) ?? -1
         let nextIndex = currentIndex + direction
-        
+
         if nextIndex >= 0 && nextIndex < items.count {
             selectedItem = items[nextIndex]
+            // Keyboard navigation keeps the selection in view; mouse clicks never scroll
+            scrollTarget = items[nextIndex].id
         }
     }
     

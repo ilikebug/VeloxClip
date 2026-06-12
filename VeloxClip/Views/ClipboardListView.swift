@@ -5,7 +5,10 @@ struct ClipboardListView: View {
     @ObservedObject var store = ClipboardStore.shared
     @Binding var selectedItem: ClipboardItem?
     var items: [ClipboardItem] // Use items passed from parent instead of computing here
-    
+    // Set by keyboard navigation only — mouse clicks must not auto-scroll the list,
+    // or rows shift under the cursor and selection feels janky
+    @Binding var scrollTarget: UUID?
+
     var body: some View {
         ScrollViewReader { proxy in
             List(selection: $selectedItem) {
@@ -23,12 +26,12 @@ struct ClipboardListView: View {
                 .onDelete(perform: deleteItems)
             }
             .listStyle(.sidebar)
-            .onChange(of: selectedItem) { _, newItem in
-                if let newItem = newItem {
-                    withAnimation(.easeInOut(duration: 0.15)) {
-                        proxy.scrollTo(newItem.id, anchor: .center)
-                    }
+            .onChange(of: scrollTarget) { _, target in
+                guard let target else { return }
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    proxy.scrollTo(target, anchor: .center)
                 }
+                scrollTarget = nil
             }
         }
     }
@@ -47,14 +50,18 @@ struct ClipboardItemRow: View {
     
     var body: some View {
         HStack(spacing: 16) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(typeColor(for: item.type).opacity(0.15))
-                    .frame(width: 36, height: 36)
-                
-                typeIcon(for: item.type)
-                    .foregroundColor(typeColor(for: item.type))
-                    .font(.system(size: 16, weight: .semibold))
+            if item.type == "image" {
+                ImageRowThumbnail(itemID: item.id, fallbackColor: typeColor(for: item.type))
+            } else {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(typeColor(for: item.type).opacity(0.15))
+                        .frame(width: 36, height: 36)
+
+                    typeIcon(for: item.type)
+                        .foregroundColor(typeColor(for: item.type))
+                        .font(.system(size: 16, weight: .semibold))
+                }
             }
             
             VStack(alignment: .leading, spacing: 4) {
@@ -81,9 +88,14 @@ struct ClipboardItemRow: View {
             RoundedRectangle(cornerRadius: 8)
                 .fill(isSelected ? Color.accentColor.opacity(0.25) : Color.clear)
         )
-        .onTapGesture(count: 2) {
-            onDoubleClick()
-        }
+        .contentShape(Rectangle())
+        // simultaneousGesture: a plain onTapGesture(count: 2) makes single clicks
+        // wait for double-click disambiguation, so List selection lags or gets eaten
+        .simultaneousGesture(
+            TapGesture(count: 2).onEnded {
+                onDoubleClick()
+            }
+        )
     }
     
     private func typeColor(for type: String) -> Color {
@@ -119,5 +131,45 @@ struct ClipboardItemRow: View {
             return "Rich Text"
         }
         return "Unknown Content"
+    }
+}
+
+// Thumbnail for image rows — decodes lazily via ThumbnailProvider and shows
+// the type icon as a placeholder until (or in case) decoding fails
+struct ImageRowThumbnail: View {
+    let itemID: UUID
+    let fallbackColor: Color
+
+    @State private var thumbnail: NSImage?
+
+    var body: some View {
+        Group {
+            if let thumbnail {
+                Image(nsImage: thumbnail)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 36, height: 36)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                    )
+            } else {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(fallbackColor.opacity(0.15))
+                        .frame(width: 36, height: 36)
+
+                    Image(systemName: "photo")
+                        .foregroundColor(fallbackColor)
+                        .font(.system(size: 16, weight: .semibold))
+                }
+            }
+        }
+        .task(id: itemID) {
+            if thumbnail == nil {
+                thumbnail = await ThumbnailProvider.shared.thumbnail(for: itemID)
+            }
+        }
     }
 }
