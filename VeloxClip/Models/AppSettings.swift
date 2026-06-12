@@ -83,7 +83,7 @@ class AppSettings: ObservableObject {
         }
     }
 
-    // "topCenter" | "bottomRight" | "bottomLeft" | "topRight" | "topLeft" | "custom"
+    // "topCenter" | "bottomCenter" | "bottomRight" | "bottomLeft" | "topRight" | "topLeft" | "custom"
     @Published var pasteStackHUDPosition: String {
         didSet {
             guard !isInitializing else { return }
