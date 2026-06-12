@@ -15,30 +15,48 @@ struct VeloxClipApp: App {
         .windowResizability(.contentSize)
         .defaultSize(width: 500, height: 350)
         
-        MenuBarExtra("Velox Clip", systemImage: "paperclip.circle.fill") {
+        MenuBarExtra {
             Button("Show Clipboard") {
                 WindowManager.shared.toggleWindow()
             }
             .keyboardShortcut("v", modifiers: [.command, .shift])
-            
+
             Button("Paste Image") {
                 PasteImageService.shared.showPasteImage()
             }
-            
+
             Divider()
-            
+
             Button("Preferences...") {
                 openWindow(id: "settings")
                 NSApp.activate(ignoringOtherApps: true)
             }
             .keyboardShortcut(",", modifiers: .command)
-            
+
             Divider()
-            
+
             Button("Quit Velox Clip") {
                 NSApplication.shared.terminate(nil)
             }
             .keyboardShortcut("q", modifiers: .command)
+        } label: {
+            MenuBarLabel()
+        }
+    }
+}
+
+// Shows paste-stack progress in the menu bar when the HUD is disabled,
+// so the queue is never completely invisible
+struct MenuBarLabel: View {
+    @ObservedObject var stack = PasteStackService.shared
+    @ObservedObject var settings = AppSettings.shared
+
+    var body: some View {
+        if stack.phase != .idle && !settings.showPasteStackHUD {
+            Image(systemName: "list.number")
+            Text("\(min(stack.cursor + 1, stack.queue.count))/\(stack.queue.count)")
+        } else {
+            Image(systemName: "paperclip.circle.fill")
         }
     }
 }
@@ -55,6 +73,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         // Register all global shortcuts
         ShortcutManager.shared.registerAllShortcuts()
+
+        // Paste stack HUD reacts to PasteStackService phase changes
+        Task { @MainActor in
+            PasteStackHUDController.shared.activate()
+        }
         
         // Note: Window will be shown when user presses the shortcut or clicks menu item
         // Removed auto-show on launch to avoid interrupting user workflow

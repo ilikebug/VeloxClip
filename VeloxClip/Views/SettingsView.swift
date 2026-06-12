@@ -38,6 +38,23 @@ struct GeneralSettingsView: View {
                     .help("Automatically start Velox Clip when you log in")
             }
 
+            Section("Paste Stack") {
+                Toggle("Show Paste Stack HUD", isOn: $settings.showPasteStackHUD)
+                    .help("Floating progress panel while a paste queue is active. When off, progress shows in the menu bar instead.")
+
+                Picker("HUD Position", selection: $settings.pasteStackHUDPosition) {
+                    Text("Bottom Right").tag("bottomRight")
+                    Text("Bottom Left").tag("bottomLeft")
+                    Text("Top Right").tag("topRight")
+                    Text("Top Left").tag("topLeft")
+                    if settings.pasteStackHUDPosition == "custom" {
+                        Text("Custom (dragged)").tag("custom")
+                    }
+                }
+                .disabled(!settings.showPasteStackHUD)
+                .help("Picking a corner resets a dragged (custom) position")
+            }
+
             Section("Maintenance") {
                 Button("Clear Image & Analysis Caches") {
                     CacheManager.shared.clearAllCaches()
