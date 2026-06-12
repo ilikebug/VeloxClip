@@ -90,7 +90,7 @@ final class TextCaptureService {
             ClipboardItem(type: "text", content: content, sourceApp: "Text Capture")
         )
 
-        showToast(message: "Copied \(content.count) characters", isSuccess: true)
+        showToast(message: "OCR recognized \(content.count) characters", isSuccess: true)
     }
 
     // Runs text + barcode recognition on the captured region (background thread)
