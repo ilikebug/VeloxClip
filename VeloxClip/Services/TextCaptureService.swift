@@ -11,6 +11,7 @@ final class TextCaptureService {
 
     private var isCapturing = false
     private var toastPanel: NSPanel?
+    private var toastHosting: NSHostingController<TextCaptureToastView>?
     // Keep the running screencapture process alive until it terminates —
     // relying on NSTask's implicit self-retention is undocumented behavior
     private var captureProcess: Process?
@@ -121,14 +122,9 @@ final class TextCaptureService {
 
         let view = TextCaptureToastView(message: message, isSuccess: isSuccess)
         let hosting = NSHostingController(rootView: view)
-        // The hosting view must not manage the window's constraints itself —
-        // doing so from the display cycle throws NSInternalInconsistencyException
-        // (AppKit crash in _postWindowNeedsUpdateConstraints). We size manually.
         hosting.sizingOptions = []
-        // Size the panel to the SwiftUI content — a fixed frame clips long
-        // messages, leaving only the leading icon visible. With sizingOptions
-        // disabled, fittingSize is meaningless; sizeThatFits measures the
-        // SwiftUI content directly
+        // Size the panel to the SwiftUI content (a fixed frame clips long
+        // messages). sizeThatFits measures the content without constraints.
         let contentSize = hosting.sizeThatFits(in: NSSize(width: 600, height: 200))
         let panel = NSPanel(
             contentRect: NSRect(origin: .zero, size: contentSize),
@@ -136,8 +132,16 @@ final class TextCaptureService {
             backing: .buffered,
             defer: false
         )
-        panel.contentViewController = hosting
-        panel.setContentSize(contentSize)
+        // The hosting view must NOT be the window's contentView — AppKit then
+        // routes its display cycle through NSHostingView's window-sizing
+        // machinery, which mutates constraints mid-pass and throws
+        // NSInternalInconsistencyException. A plain container breaks that link.
+        let container = NSView(frame: NSRect(origin: .zero, size: contentSize))
+        hosting.view.frame = container.bounds
+        hosting.view.autoresizingMask = [.width, .height]
+        container.addSubview(hosting.view)
+        panel.contentView = container
+        toastHosting = hosting
         panel.backgroundColor = .clear
         panel.isOpaque = false
         panel.hasShadow = true
@@ -164,7 +168,10 @@ final class TextCaptureService {
                 Task { @MainActor in
                     panel.orderOut(nil)
                     panel.alphaValue = 1
-                    if self.toastPanel === panel { self.toastPanel = nil }
+                    if self.toastPanel === panel {
+                        self.toastPanel = nil
+                        self.toastHosting = nil
+                    }
                 }
             }
         }

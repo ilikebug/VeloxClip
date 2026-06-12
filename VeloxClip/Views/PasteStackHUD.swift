@@ -47,9 +47,6 @@ final class PasteStackHUDController {
     private func show() {
         if panel == nil {
             let hosting = NSHostingController(rootView: PasteStackHUDView())
-            // The hosting view must not manage the window's constraints itself —
-            // doing so from the display cycle throws NSInternalInconsistencyException
-            // (AppKit crash in _postWindowNeedsUpdateConstraints). We size manually.
             hosting.sizingOptions = []
             let panel = NSPanel(
                 contentRect: NSRect(x: 0, y: 0, width: 260, height: 64),
@@ -57,7 +54,15 @@ final class PasteStackHUDController {
                 backing: .buffered,
                 defer: false
             )
-            panel.contentViewController = hosting
+            // The hosting view must NOT be the window's contentView — AppKit then
+            // routes its display cycle through NSHostingView's window-sizing
+            // machinery, which mutates constraints mid-pass and throws
+            // NSInternalInconsistencyException. A plain container breaks that link.
+            let container = NSView(frame: NSRect(x: 0, y: 0, width: 260, height: 64))
+            hosting.view.frame = container.bounds
+            hosting.view.autoresizingMask = [.width, .height]
+            container.addSubview(hosting.view)
+            panel.contentView = container
             self.hosting = hosting
             panel.backgroundColor = .clear
             panel.isOpaque = false
