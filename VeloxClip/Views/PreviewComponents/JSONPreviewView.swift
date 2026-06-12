@@ -18,7 +18,8 @@ struct JSONPreviewView: View {
     @State private var isLoading = true
     
     // Static cache for processed JSON to persist across view updates
-    static var jsonCache: [String: (formatted: String, minified: String, isValid: Bool, error: String?)] = [:]
+    @MainActor
+    static var jsonCache = FIFOCache<String, (formatted: String, minified: String, isValid: Bool, error: String?)>(maxEntries: 100)
     var body: some View {
         GeometryReader { geo in
             VStack(alignment: .leading, spacing: 12) {
@@ -188,11 +189,8 @@ struct JSONPreviewView: View {
                 let minified = String(data: minifiedData, encoding: .utf8) ?? ""
                 
                 await MainActor.run {
-                    if Self.jsonCache.count >= 100 {
-                        Self.jsonCache.removeValue(forKey: Self.jsonCache.keys.first!)
-                    }
                     Self.jsonCache[input] = (formatted, minified, true, nil)
-                    
+
                     self.formattedJSON = formatted
                     self.minifiedJSONText = minified
                     self.isValidJSON = true
@@ -201,9 +199,6 @@ struct JSONPreviewView: View {
                 }
             } catch {
                 await MainActor.run {
-                    if Self.jsonCache.count >= 100 {
-                        Self.jsonCache.removeValue(forKey: Self.jsonCache.keys.first!)
-                    }
                     Self.jsonCache[input] = ("", "", false, error.localizedDescription)
                     
                     self.isValidJSON = false

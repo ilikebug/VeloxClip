@@ -111,11 +111,12 @@ class PasteImageService {
         
         eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self = self else { return event }
-            if event.keyCode == 53 { // ESC key
-                // Close the topmost window
-                if let topWindow = self.pasteImageWindows.first(where: { $0.isKeyWindow || $0.isMainWindow }) ?? self.pasteImageWindows.first {
-                    self.closePasteImageWindow(topWindow)
-                }
+            // Only consume ESC when a window was actually closed — the monitor
+            // outlives the last window briefly (fade-out + task hop), and must
+            // not swallow ESC presses meant for the rest of the app
+            if event.keyCode == 53, // ESC key
+               let topWindow = self.pasteImageWindows.first(where: { $0.isKeyWindow || $0.isMainWindow }) ?? self.pasteImageWindows.first {
+                self.closePasteImageWindow(topWindow)
                 return nil
             }
             return event

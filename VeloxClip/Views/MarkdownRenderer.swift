@@ -26,7 +26,8 @@ struct MarkdownView: View {
     @State private var isLoadingMore = false
     
     // Static cache for parsed chunks to persist across view updates
-    static var chunksCache: [String: [MarkdownChunk]] = [:]
+    @MainActor
+    static var chunksCache = FIFOCache<String, [MarkdownChunk]>(maxEntries: 100)
     
     private let chunksPerPage = 20
     
@@ -120,9 +121,6 @@ struct MarkdownView: View {
             if chunks.isEmpty { chunks.append(MarkdownChunk(content: input, type: .paragraph)) }
             
             await MainActor.run {
-                if Self.chunksCache.count >= 100 {
-                    Self.chunksCache.removeValue(forKey: Self.chunksCache.keys.first!)
-                }
                 Self.chunksCache[input] = chunks
                 self.allChunks = chunks
                 self.loadInitialChunks(from: chunks)
