@@ -101,15 +101,16 @@ final class PasteStackServiceTests: XCTestCase {
         XCTAssertTrue(writer.written.isEmpty)
     }
 
-    func testStartWithoutPermissionStaysIdleAndClearsStaging() async {
+    func testStartWithoutPermissionStaysIdleAndKeepsStaging() async {
         let denied = PasteStackService(
             writer: writer, permissionCheck: { false }, installsKeyMonitor: false)
         denied.toggleStaged(makeItems(1)[0])
 
         await denied.startIfStaged()
 
+        // Staging survives so granting permission + closing the overlay retries
         XCTAssertEqual(denied.phase, .idle)
-        XCTAssertTrue(denied.staged.isEmpty)
+        XCTAssertEqual(denied.staged.count, 1)
         XCTAssertTrue(writer.written.isEmpty)
     }
 

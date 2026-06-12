@@ -32,7 +32,7 @@ final class PasteStackService: ObservableObject {
     private var userWroteDuringStack = false
 
     init(writer: any PasteboardWriting,
-         permissionCheck: @escaping () -> Bool = { AXIsProcessTrusted() },
+         permissionCheck: @escaping () -> Bool = PasteStackService.checkAccessibilityPrompting,
          installsKeyMonitor: Bool = true) {
         self.writer = writer
         self.permissionCheck = permissionCheck
@@ -56,12 +56,24 @@ final class PasteStackService: ObservableObject {
 
     // MARK: - Lifecycle
 
+    // Same prompt flow as screenshot/paste injection: when the permission is
+    // missing, macOS shows its own dialog guiding the user to System Settings →
+    // Privacy & Security → Accessibility
+    nonisolated static func checkAccessibilityPrompting() -> Bool {
+        if AXIsProcessTrusted() { return true }
+        // kAXTrustedCheckOptionPrompt is a mutable global the Swift 6 checker rejects;
+        // its value is the literal below
+        let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
+        AXIsProcessTrustedWithOptions(options)
+        return false
+    }
+
     // Called when the overlay hides. No-op unless something is staged.
     func startIfStaged() async {
         guard phase == .idle, !staged.isEmpty else { return }
         guard permissionCheck() else {
-            staged.removeAll()
-            ErrorHandler.shared.handle(PasteStackError.accessibilityPermissionMissing)
+            // Keep the staged items — once the user grants permission, closing
+            // the overlay again retries without re-staging
             return
         }
 
@@ -173,13 +185,5 @@ final class PasteStackService: ObservableObject {
             NSEvent.removeMonitor(monitor)
             keyMonitor = nil
         }
-    }
-}
-
-enum PasteStackError: LocalizedError {
-    case accessibilityPermissionMissing
-
-    var errorDescription: String? {
-        "Paste Stack needs Accessibility permission to observe Cmd+V. Enable VeloxClip in System Settings → Privacy & Security → Accessibility."
     }
 }
