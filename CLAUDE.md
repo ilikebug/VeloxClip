@@ -32,12 +32,19 @@ swift test --filter DatabaseManagerMigrationTests
 
 ```
 macOS Pasteboard
-  → ClipboardMonitor (polls every 0.5s)
+  → ClipboardMonitor (polls every 0.5s; skips self-writes via PasteboardSelfWriteGate; TIFF → PNG)
   → ClipboardItem (type detection: text, image, RTF, file, color)
-  → ClipboardStore (@MainActor — dedup, favorites, history limit)
+  → ClipboardStore (@MainActor — dedup by content/dataHash, favorites, history limit)
   → DatabaseManager (@actor — async SQLite, thread-safe)
   → ~/Library/Application Support/VeloxClip/veloxclip.db
 ```
+
+**IMPORTANT — lazy blob loading**: list queries do NOT fetch the `data` column. For
+items loaded from the DB, `item.data` is nil even for images/RTF; load it on demand via
+`ClipboardStore.loadData(for:)`. Never persist an item assuming `data` is populated —
+`DatabaseManager.updateClipboardItem` only writes the blob when `item.data != nil`.
+Dedup uses the `dataHash` (SHA256) column; "move to top on reuse" uses `lastUsedAt`
+(never rewrite `createdAt`); ordering is `COALESCE(lastUsedAt, createdAt) DESC`.
 
 ### Key Layers
 

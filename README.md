@@ -230,7 +230,7 @@ Configure:
   - Auto-tagged content types for easy categorization
   - Capture and annotate research materials
 - **Multilingual Users**: 
-  - Translate and manage content in multiple languages
+  - Manage content in multiple languages — semantic search understands both English and Chinese
   - URL preview for quick link access
   - Auto-tagged URLs (`url` tag) for easy access
 - **Project Managers**: 
