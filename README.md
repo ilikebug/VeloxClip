@@ -1,6 +1,6 @@
 # VeloxClip
 
-A powerful, AI-enhanced clipboard manager for macOS that helps you manage, search, and transform your clipboard history with intelligent features. Includes built-in screenshot capture and professional image editing tools.
+A powerful clipboard manager for macOS that helps you manage, search, and transform your clipboard history with intelligent on-device features. Includes built-in screenshot capture and professional image editing tools.
 
 ## ✨ Features
 
@@ -14,17 +14,14 @@ A powerful, AI-enhanced clipboard manager for macOS that helps you manage, searc
 - **Custom Tags**: Add custom tags to favorite items for better organization and search
 - **Single Instance**: Automatically prevents multiple instances from running simultaneously
 
-### 🤖 AI-Powered Features
-- **OCR Text Recognition**: Automatically extracts text from images using Apple Vision framework
-- **Text Summarization**: Get concise summaries of long text content
-- **Translation**: Translate text to multiple languages (Chinese, English, Japanese, Korean, Spanish, French, German)
-- **Code Explanation**: Understand code snippets with AI-generated explanations
-- **Text Polishing**: Improve and optimize text while preserving the original language
-- **Semantic Search**: Find clipboard items by meaning, not just keywords
+### 🤖 On-Device Intelligence
+- **OCR Text Recognition**: Automatically extracts text from images using Apple Vision framework — fully local
+- **Text Summary**: Quick extractive summaries of long text content
+- **Semantic Search**: Find clipboard items by meaning, not just keywords (Natural Language framework, local)
 
 ### 🔍 Advanced Search
 - **Keyword Search**: Fast exact match search across content, type, source app, and tags
-- **Semantic Search**: AI-powered search that understands context and meaning
+- **Semantic Search**: On-device search that understands context and meaning
 - **Tag-based Search**: Search by custom tags or auto-detected content type tags (json, table, url, code, markdown, etc.)
 - **Content Type Tags**: Automatically generated tags based on detected content types for better organization
 - **Favorites Prioritization**: Favorite items appear first in search results
@@ -78,7 +75,7 @@ A powerful, AI-enhanced clipboard manager for macOS that helps you manage, searc
 - **Screenshot Shortcuts**: Customize screenshot and paste image shortcuts (defaults: F1, F3)
 
 ### 🔒 Privacy & Performance
-- **Cloud AI Processing**: AI features powered by OpenRouter API (free DeepSeek model available)
+- **100% On-Device**: OCR, semantic search, and content detection all run locally — no API keys, no network calls
 - **No Cloud Sync**: Your clipboard data stays on your Mac
 - **Efficient Caching**: Smart caching for embeddings and search results
 - **Memory Optimized**: Designed for performance with large clipboard histories
@@ -90,7 +87,6 @@ A powerful, AI-enhanced clipboard manager for macOS that helps you manage, searc
 - **AI/ML**: 
   - Apple Vision Framework (OCR)
   - Natural Language Framework (Embeddings, Language Detection)
-  - OpenRouter API (DeepSeek Chat model)
 - **Platform**: macOS 14.0+
 
 ## 📦 Installation
@@ -147,34 +143,6 @@ xattr -cr VeloxClip.app
 
 **Note:** This is normal for open-source apps without paid Apple Developer certificates. The app is safe - macOS just needs your confirmation the first time.
 
-### AI Setup (Required for AI features)
-
-To enable AI features like summarization, translation, code explanation, and text polishing, you need to configure an OpenRouter API key:
-
-#### Step 1: Get OpenRouter API Key
-
-1. Visit [OpenRouter.ai](https://openrouter.ai/)
-2. Sign up for a free account
-3. Go to [API Keys page](https://openrouter.ai/keys)
-4. Create a new API key
-5. Copy your API key
-
-**Note**: OpenRouter offers free models including DeepSeek Chat, which is used by default in VeloxClip.
-
-#### Step 2: Configure API Key in App
-
-1. Launch VeloxClip
-2. Open Settings (Menu bar icon → Preferences, or press `Cmd+,`)
-3. Go to "AI Settings" section
-4. Paste your OpenRouter API Key in the "OpenRouter API Key" field
-5. The API key will be saved automatically
-
-#### Troubleshooting
-
-- **AI features not working**: Make sure you've entered a valid API key in Settings
-- **API Key error**: Verify your API key is correct and has sufficient credits/quota
-- **Rate limit exceeded**: You may have hit the rate limit, try again later
-
 ## 🚀 Usage
 
 ### Basic Operations
@@ -220,13 +188,11 @@ To enable AI features like summarization, translation, code explanation, and tex
 5. **Remove Tags**: In edit mode, click the X button on any tag to remove it
 6. **Search by Tags**: Type a tag name in the search box to find all items with that tag
 
-### AI Features
+### On-Device Intelligence
 
 - **OCR**: Automatically extracts text from images. Click "Copy Text" button in preview to copy OCR results
-- **Summarize**: Select text and use AI actions to get summaries
-- **Translate**: Translate clipboard content to your preferred language
-- **Explain Code**: Get explanations for code snippets
-- **Polish Text**: Improve text quality while keeping the original language
+- **Summarize**: Generate a quick extractive summary for long text in the preview pane
+- **Text Tools**: Convert case (UPPERCASE/lowercase) or clean up whitespace via the Tools menu
 
 ### Settings
 
@@ -239,8 +205,6 @@ Configure:
 - Global shortcut (default: Cmd+Shift+V)
 - Screenshot shortcut (default: F1)
 - Paste image shortcut (default: F3)
-- OpenRouter API Key (required for AI features)
-- AI response language
 - Launch at login
 
 ## 🎯 Use Cases
@@ -297,16 +261,6 @@ Default: 100 items
 - Favorite items are permanently preserved regardless of history limit
 - This ensures your important items are never accidentally deleted
 
-### AI Response Language
-Choose from:
-- Chinese (中文)
-- English
-- Japanese (日本語)
-- Korean (한국어)
-- Spanish (Español)
-- French (Français)
-- German (Deutsch)
-
 ## 📝 File Structure
 
 ```
@@ -315,7 +269,7 @@ VeloxClip/
 │   ├── App/              # Application entry point and window management
 │   ├── Models/            # Data models (ClipboardItem, AppSettings, DatabaseManager)
 │   ├── Services/          # Core services
-│   │   ├── AI/            # AI services (AIService, LLMService)
+│   │   ├── AIService.swift    # On-device OCR + embeddings
 │   │   ├── ScreenshotEditor/  # Screenshot editing (EditorModels, EditorState, ScreenshotEditorService, ScreenshotEditorView)
 │   │   ├── ClipboardMonitor.swift
 │   │   ├── ScreenshotService.swift
@@ -361,7 +315,6 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 - Built with SwiftUI and Apple's native frameworks
 - Uses Apple Vision Framework for OCR
-- AI features powered by OpenRouter API (DeepSeek Chat model)
 
 ## 📧 Support
 

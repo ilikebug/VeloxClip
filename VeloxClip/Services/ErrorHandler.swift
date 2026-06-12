@@ -14,13 +14,7 @@ class ErrorHandler: ObservableObject {
         let appError: AppError
         
         // Handle different error types
-        if let llmError = error as? LLMError {
-            appError = AppError(
-                title: "AI Processing Error",
-                message: llmError.localizedDescription,
-                details: error.localizedDescription
-            )
-        } else if let aiError = error as? AIServiceError {
+        if let aiError = error as? AIServiceError {
             appError = AppError(
                 title: "AI Service Error",
                 message: aiError.localizedDescription,

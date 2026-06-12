@@ -7,9 +7,7 @@ struct PreviewView: View {
     @StateObject private var viewModel = PreviewViewModel()
     @State private var debouncedItem: ClipboardItem?
     @State private var debounceTask: Task<Void, Never>?
-    
-    @State private var showErrorDetails = false
-    
+
     // Tag editing state
     @State private var isEditingTags = false
     @State private var newTagText = ""
@@ -61,18 +59,26 @@ struct PreviewView: View {
             isEditingTags = false
             newTagText = ""
         }
-        
+
         debounceTask?.cancel()
-        
+
         let isLarge = (newItem?.content?.count ?? 0) > 1000 || newItem?.type == "image"
-        
+
         debounceTask = Task {
             try? await Task.sleep(nanoseconds: isLarge ? 50_000_000 : 0)
-            if !Task.isCancelled {
-                await MainActor.run {
-                    debouncedItem = newItem
-                    viewModel.updateItem(newItem)
-                }
+            if Task.isCancelled { return }
+
+            // Blobs are not loaded with the list — fetch on demand for preview
+            var resolvedItem = newItem
+            if let pending = newItem, pending.data == nil,
+               pending.type == "image" || pending.type == "rtf" {
+                resolvedItem?.data = await store.loadData(for: pending.id)
+            }
+            if Task.isCancelled { return }
+
+            await MainActor.run {
+                debouncedItem = resolvedItem
+                viewModel.updateItem(resolvedItem)
             }
         }
     }
@@ -91,15 +97,9 @@ struct PreviewView: View {
             }
             
             Spacer()
-            
+
             favoriteButton(for: displayItem)
-            
-            if viewModel.isAIProcessing {
-                processingIndicator
-            } else if let error = viewModel.aiError {
-                errorIndicator(error)
-            }
-            
+
             VStack(alignment: .trailing, spacing: 4) {
                 Text(displayItem.createdAt, style: .date)
                 Text(displayItem.createdAt, style: .time)
@@ -119,42 +119,6 @@ struct PreviewView: View {
                 .foregroundStyle(displayItem.isFavorite ? AnyShapeStyle(DesignSystem.primaryGradient) : AnyShapeStyle(.secondary))
         }
         .buttonStyle(.plain)
-    }
-    
-    private var processingIndicator: some View {
-        HStack(spacing: 6) {
-            ProgressView().scaleEffect(0.7)
-            Text("Thinking...").font(.caption).foregroundColor(.secondary)
-        }
-        .padding(.horizontal, 8).padding(.vertical, 4)
-        .background(Color.secondary.opacity(0.1)).cornerRadius(12)
-    }
-    
-    @ViewBuilder
-    private func errorIndicator(_ error: String) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.orange)
-            Text("AI Error").font(.caption).foregroundColor(.orange)
-        }
-        .padding(.horizontal, 8).padding(.vertical, 4)
-        .background(Color.orange.opacity(0.1)).cornerRadius(12)
-        .onTapGesture { showErrorDetails = true }
-        .popover(isPresented: $showErrorDetails) {
-            errorPopover(error)
-        }
-    }
-    
-    @ViewBuilder
-    private func errorPopover(_ error: String) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("AI Service Error").font(.headline)
-            ScrollView {
-                Text(error).font(.caption.monospaced()).textSelection(.enabled)
-            }
-            .frame(maxHeight: 300)
-            Button("Dismiss") { viewModel.aiError = nil; showErrorDetails = false }
-        }
-        .padding().frame(width: 300)
     }
     
     @ViewBuilder
@@ -283,38 +247,34 @@ struct PreviewView: View {
             }
             .buttonStyle(.borderedProminent)
             
-            if item.type == "image", let imageData = item.data, let nsImage = NSImage(data: imageData) {
-                Button(action: { ScreenshotEditorService.shared.showEditor(with: nsImage) }) {
+            if item.type == "image", let imageData = item.data {
+                // Decode the NSImage on click, not on every toolbar render
+                Button(action: {
+                    if let nsImage = NSImage(data: imageData) {
+                        ScreenshotEditorService.shared.showEditor(with: nsImage)
+                    }
+                }) {
                     Label("Edit", systemImage: "pencil")
                 }
                 .buttonStyle(.bordered)
             }
             
-            magicActionsMenu(for: item)
+            textToolsMenu(for: item)
             Spacer()
         }
         .padding().background(Color.black.opacity(0.02))
     }
-    
+
     @ViewBuilder
-    private func magicActionsMenu(for item: ClipboardItem) -> some View {
-        Menu {
-            if let content = item.content {
-                Section("AI Actions") {
-                    ForEach(AIAction.allCases) { action in
-                        Button {
-                            Task { await viewModel.performAIAction(action, content: content) }
-                        } label: { Label(action.rawValue, systemImage: action.icon) }
-                    }
-                }
-                Section("Tools") {
-                    standardTextTools(content: content)
-                }
+    private func textToolsMenu(for item: ClipboardItem) -> some View {
+        if let content = item.content {
+            Menu {
+                standardTextTools(content: content)
+            } label: {
+                Label("Tools", systemImage: "wrench.and.screwdriver")
             }
-        } label: {
-            Label("Magic", systemImage: "wand.and.stars")
+            .menuStyle(.button)
         }
-        .menuStyle(.button).disabled(viewModel.isAIProcessing)
     }
     
     @ViewBuilder

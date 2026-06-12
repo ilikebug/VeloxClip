@@ -8,8 +8,7 @@ struct TextSummaryView: View {
     @State private var summary: String?
     @State private var keywords: [String] = []
     @State private var showFullText = false
-    @State private var isGeneratingSummary = false
-    
+
     // Lazy loading state for long text
     @State private var loadedParagraphs: [String] = []
     @State private var loadMoreTask: Task<Void, Never>?
@@ -54,15 +53,6 @@ struct TextSummaryView: View {
                 .padding(16)
                 .background(Color.secondary.opacity(0.05))
                 .cornerRadius(12)
-            } else if isGeneratingSummary {
-                HStack {
-                    ProgressView()
-                        .scaleEffect(0.7)
-                    Text("Generating summary...")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                .padding(12)
             } else if text.count > 200 {
                 Button(action: generateSummary) {
                     Label("Generate Summary", systemImage: "text.alignleft")
@@ -185,20 +175,8 @@ struct TextSummaryView: View {
     }
     
     private func generateSummary() {
-        isGeneratingSummary = true
-        
-        Task { @MainActor in
-            // Use AI service to generate summary
-            do {
-                let result = try await LLMService.shared.performAction(.summarize, content: text)
-                summary = result
-                isGeneratingSummary = false
-            } catch {
-                // Fallback to simple summary
-                summary = generateSimpleSummary()
-                isGeneratingSummary = false
-            }
-        }
+        // Local extractive summary — no network/LLM dependency
+        summary = generateSimpleSummary()
     }
     
     private func generateSimpleSummary() -> String {

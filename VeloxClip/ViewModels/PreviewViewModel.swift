@@ -4,8 +4,6 @@ import AppKit
 @MainActor
 class PreviewViewModel: ObservableObject {
     @Published var detectedType: DetectedContentType = .plain
-    @Published var isAIProcessing = false
-    @Published var aiError: String?
     @Published var isContentLoading = false
     
     private var detectionTask: Task<Void, Never>?
@@ -29,21 +27,6 @@ class PreviewViewModel: ObservableObject {
         }
     }
     
-    func performAIAction(_ action: AIAction, content: String) async {
-        isAIProcessing = true
-        aiError = nil
-        
-        do {
-            let result = try await LLMService.shared.performAction(action, content: content)
-            copyTransformedText(result)
-            try? await Task.sleep(nanoseconds: 500_000_000)
-        } catch {
-            ErrorHandler.shared.handle(error)
-            aiError = "AI Service Failed: \(error.localizedDescription)"
-        }
-        isAIProcessing = false
-    }
-    
     func copyTransformedText(_ text: String) {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
@@ -52,5 +35,6 @@ class PreviewViewModel: ObservableObject {
     
     func copyToClipboard(_ item: ClipboardItem) {
         item.copyToPasteboard()
+        ClipboardStore.shared.markUsed(item.id)
     }
 }

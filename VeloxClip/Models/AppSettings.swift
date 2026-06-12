@@ -61,42 +61,6 @@ class AppSettings: ObservableObject {
         }
     }
     
-    @Published var aiResponseLanguage: String {
-        didSet {
-            guard !isInitializing else { return }
-            Task {
-                try? await dbManager.setSetting(key: "aiResponseLanguage", value: aiResponseLanguage)
-            }
-        }
-    }
-    
-    @Published var openRouterAPIKey: String {
-        didSet {
-            // Only save if not initializing (avoid saving empty string on init)
-            guard !isInitializing else { return }
-            
-            // Save immediately when changed
-            Task {
-                do {
-                    try await dbManager.setSetting(key: "openRouterAPIKey", value: openRouterAPIKey)
-                    print("✅ OpenRouter API Key saved successfully (length: \(openRouterAPIKey.count))")
-                } catch {
-                    print("❌ Failed to save OpenRouter API Key: \(error)")
-                    ErrorHandler.shared.handle(error)
-                }
-            }
-        }
-    }
-    
-    @Published var openRouterModel: String {
-        didSet {
-            guard !isInitializing else { return }
-            Task {
-                try? await dbManager.setSetting(key: "openRouterModel", value: openRouterModel)
-            }
-        }
-    }
-    
     private var isInitializing = true
     
     private init() {
@@ -106,10 +70,8 @@ class AppSettings: ObservableObject {
         self.globalShortcut = "cmd+shift+v"
         self.screenshotShortcut = "f1"
         self.pasteImageShortcut = "f3"
-        self.aiResponseLanguage = "Chinese"
-        self.openRouterAPIKey = ""
-        self.openRouterModel = "tngtech/deepseek-r1t2-chimera:free"
-        
+
+
         // Load settings from database asynchronously
         Task {
             await loadSettings()
@@ -179,48 +141,11 @@ class AppSettings: ObservableObject {
             try? await dbManager.setSetting(key: "pasteImageShortcut", value: "f3")
         }
         
-        // Load aiResponseLanguage
-        if let language = await dbManager.getSetting(key: "aiResponseLanguage") {
-            await MainActor.run {
-                self.aiResponseLanguage = language
-            }
-        } else {
-            try? await dbManager.setSetting(key: "aiResponseLanguage", value: "Chinese")
-        }
-        
-        // Load openRouterAPIKey
-        // Use a separate method to check if key exists (not just if it has a value)
-        let apiKeyExists = await dbManager.settingExists(key: "openRouterAPIKey")
-        
-        if apiKeyExists {
-            // Key exists in database, load its value (even if empty)
-            if let apiKey = await dbManager.getSetting(key: "openRouterAPIKey") {
-                await MainActor.run {
-                    self.openRouterAPIKey = apiKey
-                    if apiKey.isEmpty {
-                        print("⚠️ Loaded OpenRouter API Key from database but it's empty (length: 0)")
-                    } else {
-                        print("✅ Loaded OpenRouter API Key from database (length: \(apiKey.count))")
-                    }
-                }
-            } else {
-                print("⚠️ OpenRouter API Key exists in database but failed to read value")
-            }
-        } else {
-            // Key doesn't exist in database, don't write empty string
-            // Just keep the default empty string in memory
-            // This prevents overwriting a valid key if database read fails
-            print("ℹ️ OpenRouter API Key not found in database, keeping default empty value (not writing to DB)")
-        }
-        
-        // Load openRouterModel
-        if let model = await dbManager.getSetting(key: "openRouterModel") {
-            await MainActor.run {
-                self.openRouterModel = model
-            }
-        } else {
-            try? await dbManager.setSetting(key: "openRouterModel", value: "tngtech/deepseek-r1t2-chimera:free")
-        }
+        // LLM integration was removed — clean up any previously stored credentials/config
+        // so an API key doesn't linger in the settings table
+        try? await dbManager.deleteSetting(key: "openRouterAPIKey")
+        try? await dbManager.deleteSetting(key: "openRouterModel")
+        try? await dbManager.deleteSetting(key: "aiResponseLanguage")
     }
     
     private func updateLaunchAtLogin() {
