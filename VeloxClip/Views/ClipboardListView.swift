@@ -16,6 +16,9 @@ struct ClipboardListView: View {
                     ClipboardItemRow(
                         item: item,
                         isSelected: selectedItem?.id == item.id,
+                        onSelect: {
+                            selectedItem = item
+                        },
                         onDoubleClick: {
                             WindowManager.shared.selectAndPaste(item)
                         }
@@ -46,6 +49,7 @@ struct ClipboardListView: View {
 struct ClipboardItemRow: View {
     let item: ClipboardItem
     let isSelected: Bool
+    let onSelect: () -> Void
     let onDoubleClick: () -> Void
     
     var body: some View {
@@ -89,13 +93,21 @@ struct ClipboardItemRow: View {
                 .fill(isSelected ? Color.accentColor.opacity(0.25) : Color.clear)
         )
         .contentShape(Rectangle())
-        // simultaneousGesture: a plain onTapGesture(count: 2) makes single clicks
-        // wait for double-click disambiguation, so List selection lags or gets eaten
+        // Selection is handled by our own gestures: the gesture layer covers the whole
+        // row (contentShape), so List's native click-selection never sees the click.
+        // Both gestures are simultaneous — the first click of a double-click selects
+        // immediately (no double-click disambiguation delay), the second fires paste.
         .simultaneousGesture(
             TapGesture(count: 2).onEnded {
                 onDoubleClick()
             }
         )
+        .simultaneousGesture(
+            TapGesture(count: 1).onEnded {
+                onSelect()
+            }
+        )
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
     
     private func typeColor(for type: String) -> Color {
