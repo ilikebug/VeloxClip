@@ -75,12 +75,16 @@ final class PasteStackHUDController {
             panel.hidesOnDeactivate = false
             panel.isReleasedWhenClosed = false
 
+            // Must run SYNCHRONOUSLY: a deferred Task lands after the
+            // isRepositioningProgrammatically flag is reset, so our own
+            // setFrameOrigin would be misread as a user drag and clobber the
+            // position setting back to "custom" on every show
             NotificationCenter.default.addObserver(
                 forName: NSWindow.didMoveNotification,
                 object: panel,
                 queue: .main
             ) { _ in
-                Task { @MainActor in
+                MainActor.assumeIsolated {
                     PasteStackHUDController.shared.panelDidMove()
                 }
             }
