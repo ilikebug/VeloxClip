@@ -276,6 +276,12 @@ struct MainView: View {
         .onChange(of: searchText) { _, _ in
             updateSearchResults()
         }
+        .onChange(of: store.items) { _, newItems in
+            // Deleting an item must not leave a ghost row in active search results
+            guard !searchResults.isEmpty else { return }
+            let validIDs = Set(newItems.map(\.id))
+            searchResults.removeAll { !validIDs.contains($0.id) }
+        }
         .onChange(of: selectedItem) { _, _ in
             // Clicking a row moves focus into the list; bring it back so
             // arrow keys / Enter / Esc keep working

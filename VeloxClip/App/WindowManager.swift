@@ -43,6 +43,11 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
 
     private var window: OverlayWindow?
     private var lastActiveApp: NSRunningApplication?
+    // True while selectAndPaste is mid-flight. Hiding the overlay during that
+    // window (didResignActive fires when the target app activates) must NOT
+    // start a staged paste stack — its pre-write would clobber the pasteboard
+    // before the injected Cmd+V reads it, pasting the wrong item.
+    private var pasteInFlight = false
 
     override private init() {
         super.init()
@@ -71,6 +76,7 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
     // staged paste stack
     func hideOverlay() {
         window?.orderOut(nil)
+        guard !pasteInFlight else { return } // selectAndPaste starts the stack itself
         Task { @MainActor in
             await PasteStackService.shared.startIfStaged()
         }
@@ -158,7 +164,9 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
         // 1. Record target app BEFORE hiding window (more accurate)
         let targetApp = lastActiveApp ?? NSWorkspace.shared.frontmostApplication
 
+        pasteInFlight = true
         Task { @MainActor in
+            defer { self.pasteInFlight = false }
             // 2. Copy to clipboard — blobs are lazy-loaded, fetch if needed
             var fullItem = item
             if fullItem.data == nil, fullItem.type == "image" || fullItem.type == "rtf" {

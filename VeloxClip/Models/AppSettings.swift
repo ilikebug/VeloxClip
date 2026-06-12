@@ -15,6 +15,8 @@ class AppSettings: ObservableObject {
             Task {
                 try? await dbManager.setSetting(key: "historyLimit", value: String(historyLimit))
             }
+            // Shrinking the limit takes effect immediately, not on the next copy
+            ClipboardStore.shared.enforceHistoryLimit()
         }
     }
     
@@ -102,7 +104,12 @@ class AppSettings: ObservableObject {
     }
 
     private var isInitializing = true
-    
+
+    // True once loadSettings() has applied the persisted values. History
+    // trimming must not run before this — historyLimit still holds its
+    // default and trimming against it could mass-delete history at launch.
+    private(set) var settingsLoaded = false
+
     private init() {
         // Initialize with default values first
         self.historyLimit = 100
@@ -122,6 +129,7 @@ class AppSettings: ObservableObject {
             // Mark initialization complete after loading
             await MainActor.run {
                 self.isInitializing = false
+                self.settingsLoaded = true
             }
         }
         

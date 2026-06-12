@@ -84,6 +84,10 @@ final class PasteStackService: ObservableObject {
             && (items[index].type == "image" || items[index].type == "rtf") {
             items[index].data = await ClipboardStore.shared.loadData(for: items[index].id)
         }
+        // Drop items whose blob no longer exists (deleted from history after
+        // staging) — pasting them would silently re-paste the previous item
+        items.removeAll { ($0.type == "image" || $0.type == "rtf") && $0.data == nil }
+        guard !items.isEmpty else { return }
 
         queue = items
         cursor = 0

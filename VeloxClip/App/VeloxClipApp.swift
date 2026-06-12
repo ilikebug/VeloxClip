@@ -25,6 +25,8 @@ struct VeloxClipApp: App {
                 PasteImageService.shared.showPasteImage()
             }
 
+            MenuBarQueueSection()
+
             Divider()
 
             Button("Preferences...") {
@@ -42,6 +44,32 @@ struct VeloxClipApp: App {
         } label: {
             MenuBarLabel()
         }
+    }
+}
+
+// Queue controls in the menu-bar menu — the only way to resume/cancel a
+// stack when the HUD is disabled in settings
+struct MenuBarQueueSection: View {
+    @ObservedObject var stack = PasteStackService.shared
+
+    var body: some View {
+        if stack.phase == .active || stack.phase == .paused {
+            Divider()
+            if stack.phase == .paused {
+                Button("Resume Paste Queue (\(progress))") {
+                    stack.resume()
+                }
+            } else {
+                Text("Paste Queue: \(progress)")
+            }
+            Button("Cancel Paste Queue") {
+                stack.cancel()
+            }
+        }
+    }
+
+    private var progress: String {
+        "\(min(stack.cursor + 1, stack.queue.count))/\(stack.queue.count)"
     }
 }
 

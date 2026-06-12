@@ -53,37 +53,12 @@ class ClipboardStore: ObservableObject {
         
         // Optimistic UI update for better UX
         self.items.insert(item, at: 0)
-        
-        // Enforce history limit - only limit non-favorite items
-        let limit = AppSettings.shared.historyLimit
-        var itemsToRemove: [ClipboardItem] = []
-        
-        // Separate favorite and regular items
-        let regularItems = self.items.filter { !$0.isFavorite }
-        let regularCount = regularItems.count
-        
-        // Only apply limit to non-favorite items
-        if regularCount > limit {
-            let excessCount = regularCount - limit
-            // Collect non-favorite items from the end (oldest first)
-            var collected = 0
-            for item in self.items.reversed() {
-                if !item.isFavorite && collected < excessCount {
-                    itemsToRemove.append(item)
-                    collected += 1
-                }
-            }
-            // Remove from local array
-            for itemToRemove in itemsToRemove {
-                if let index = self.items.firstIndex(where: { $0.id == itemToRemove.id }) {
-                    self.items.remove(at: index)
-                }
-            }
-        }
-        
+
+        enforceHistoryLimit()
+
         // Capture the item ID to safely remove it later if needed
         let itemId = item.id
-        
+
         // Then persist to database asynchronously
         Task {
             do {
@@ -92,11 +67,6 @@ class ClipboardStore: ObservableObject {
                 // Blob is now persisted — drop it from memory; previews lazy-load via loadData(for:)
                 if item.data != nil, let index = self.items.firstIndex(where: { $0.id == itemId }) {
                     self.items[index].data = nil
-                }
-
-                // Delete excess items from database if any
-                for itemToRemove in itemsToRemove {
-                    try? await dbManager.deleteClipboardItem(id: itemToRemove.id)
                 }
             } catch {
                 print("Failed to add item to database: \(error)")
@@ -113,6 +83,32 @@ class ClipboardStore: ObservableObject {
         }
     }
     
+    // Trim non-favorite items beyond the configured limit (favorites never count).
+    // Guarded on settingsLoaded: during the launch window historyLimit still
+    // holds its default, and trimming against it could mass-delete history.
+    func enforceHistoryLimit() {
+        guard AppSettings.shared.settingsLoaded else { return }
+        // Floor of 1: a corrupted/tampered limit of 0 must never wipe history
+        let limit = max(1, AppSettings.shared.historyLimit)
+
+        let regularCount = items.lazy.filter { !$0.isFavorite }.count
+        guard regularCount > limit else { return }
+        let excessCount = regularCount - limit
+
+        var itemsToRemove: [ClipboardItem] = []
+        for item in items.reversed() where !item.isFavorite && itemsToRemove.count < excessCount {
+            itemsToRemove.append(item)
+        }
+        let idsToRemove = Set(itemsToRemove.map(\.id))
+        items.removeAll { idsToRemove.contains($0.id) }
+
+        Task {
+            for id in idsToRemove {
+                try? await dbManager.deleteClipboardItem(id: id)
+            }
+        }
+    }
+
     // Loads the blob for an item on demand (list queries don't fetch the data column)
     func loadData(for id: UUID) async -> Data? {
         if let item = items.first(where: { $0.id == id }) ?? favoriteItems.first(where: { $0.id == id }),
@@ -146,13 +142,21 @@ class ClipboardStore: ObservableObject {
         
         var updatedItem = items[index]
         let originalItem = items[index] // Backup for rollback
-        
+
         updatedItem.content = content
-        updatedItem.tags.append("OCR")
-        
+        if !updatedItem.tags.contains("OCR") {
+            updatedItem.tags.append("OCR")
+        }
+
         // Optimistic UI update
         self.items[index] = updatedItem
-        
+
+        // Keep the favorites list in sync — a favorited screenshot must show
+        // its OCR text there too
+        if updatedItem.isFavorite, let favIndex = favoriteItems.firstIndex(where: { $0.id == id }) {
+            favoriteItems[favIndex] = updatedItem
+        }
+
         // Persist to database
         Task {
             do {
@@ -164,6 +168,9 @@ class ClipboardStore: ObservableObject {
                     // Find item again by ID (index might have changed)
                     if let currentIndex = self.items.firstIndex(where: { $0.id == id }) {
                         self.items[currentIndex] = originalItem
+                    }
+                    if originalItem.isFavorite, let favIndex = self.favoriteItems.firstIndex(where: { $0.id == id }) {
+                        self.favoriteItems[favIndex] = originalItem
                     }
                     ErrorHandler.shared.handle(error)
                 }
@@ -258,10 +265,11 @@ class ClipboardStore: ObservableObject {
         Task {
             do {
                 try await dbManager.deleteAllClipboardItems()
-                
-                // Then clear local array
+
+                // Then clear local arrays — favorites are wiped from the DB too
                 await MainActor.run {
                     self.items.removeAll()
+                    self.favoriteItems.removeAll()
                 }
             } catch {
                 print("Failed to clear all items: \(error)")
