@@ -180,17 +180,17 @@ struct ColorPreviewView: View {
             if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
                let match = regex.firstMatch(in: string, range: NSRange(string.startIndex..., in: string)) {
                 
-                let rRange = Range(match.range(at: 1), in: string)!
-                let gRange = Range(match.range(at: 2), in: string)!
-                let bRange = Range(match.range(at: 3), in: string)!
-                
+                guard let rRange = Range(match.range(at: 1), in: string),
+                      let gRange = Range(match.range(at: 2), in: string),
+                      let bRange = Range(match.range(at: 3), in: string) else { continue }
+
                 if let r = Int(string[rRange]),
                    let g = Int(string[gRange]),
                    let b = Int(string[bRange]) {
-                    
+
                     var alpha: Double = 1.0
-                    if match.numberOfRanges > 4 && match.range(at: 4).location != NSNotFound {
-                        let aRange = Range(match.range(at: 4), in: string)!
+                    if match.numberOfRanges > 4, match.range(at: 4).location != NSNotFound,
+                       let aRange = Range(match.range(at: 4), in: string) {
                         alpha = Double(string[aRange]) ?? 1.0
                     }
                     

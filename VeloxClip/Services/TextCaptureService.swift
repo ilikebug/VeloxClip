@@ -11,6 +11,9 @@ final class TextCaptureService {
 
     private var isCapturing = false
     private var toastPanel: NSPanel?
+    // Keep the running screencapture process alive until it terminates —
+    // relying on NSTask's implicit self-retention is undocumented behavior
+    private var captureProcess: Process?
 
     private init() {}
 
@@ -28,12 +31,14 @@ final class TextCaptureService {
         task.arguments = ["-i", "-x", tmpURL.path]
         task.terminationHandler = { _ in
             Task { @MainActor in
+                TextCaptureService.shared.captureProcess = nil
                 await TextCaptureService.shared.processCapturedFile(at: tmpURL)
             }
         }
 
         do {
             try task.run()
+            captureProcess = task
         } catch {
             isCapturing = false
             print("Failed to launch screencapture for text capture: \(error)")
