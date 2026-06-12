@@ -443,7 +443,9 @@ actor DatabaseManager {
         
         var items: [ClipboardItem] = []
         
-        for row in try db.prepare(clipboardItems.select(listColumns).filter(isFavorite == true).order(favoritedAt.desc)) {
+        // Same ordering rule as ClipboardStore.load(): favoritedAt with
+        // createdAt fallback — legacy favorites may have a NULL favoritedAt
+        for row in try db.prepare(clipboardItems.select(listColumns).filter(isFavorite == true).order((favoritedAt ?? createdAt).desc)) {
             let item = try rowToClipboardItem(row, includesData: false)
             items.append(item)
         }

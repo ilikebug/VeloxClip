@@ -216,6 +216,30 @@ final class PasteStackServiceTests: XCTestCase {
         XCTAssertTrue(service.queue.isEmpty)
     }
 
+    func testStartDropsBlobItemsWhoseDataIsGone() async {
+        // An image staged then deleted from history has no blob to load —
+        // it must be dropped instead of silently re-pasting the previous item
+        let ghost = ClipboardItem(type: "image", content: nil, data: nil)
+        let text = ClipboardItem(type: "text", content: "still here")
+        service.toggleStaged(ghost)
+        service.toggleStaged(text)
+
+        await service.startIfStaged()
+
+        XCTAssertEqual(service.phase, .active)
+        XCTAssertEqual(service.queue.map(\.content), ["still here"])
+    }
+
+    func testStartWithOnlyGhostItemsStaysIdle() async {
+        let ghost = ClipboardItem(type: "image", content: nil, data: nil)
+        service.toggleStaged(ghost)
+
+        await service.startIfStaged()
+
+        XCTAssertEqual(service.phase, .idle)
+        XCTAssertTrue(writer.written.isEmpty)
+    }
+
     func testStagingIgnoredWhileActive() async {
         let items = makeItems(2)
         service.toggleStaged(items[0])
