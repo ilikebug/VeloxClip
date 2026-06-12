@@ -88,7 +88,8 @@ class ClipboardStore: ObservableObject {
     // holds its default, and trimming against it could mass-delete history.
     func enforceHistoryLimit() {
         guard AppSettings.shared.settingsLoaded else { return }
-        let limit = AppSettings.shared.historyLimit
+        // Floor of 1: a corrupted/tampered limit of 0 must never wipe history
+        let limit = max(1, AppSettings.shared.historyLimit)
 
         let regularCount = items.lazy.filter { !$0.isFavorite }.count
         guard regularCount > limit else { return }
@@ -141,13 +142,21 @@ class ClipboardStore: ObservableObject {
         
         var updatedItem = items[index]
         let originalItem = items[index] // Backup for rollback
-        
+
         updatedItem.content = content
-        updatedItem.tags.append("OCR")
-        
+        if !updatedItem.tags.contains("OCR") {
+            updatedItem.tags.append("OCR")
+        }
+
         // Optimistic UI update
         self.items[index] = updatedItem
-        
+
+        // Keep the favorites list in sync — a favorited screenshot must show
+        // its OCR text there too
+        if updatedItem.isFavorite, let favIndex = favoriteItems.firstIndex(where: { $0.id == id }) {
+            favoriteItems[favIndex] = updatedItem
+        }
+
         // Persist to database
         Task {
             do {
@@ -159,6 +168,9 @@ class ClipboardStore: ObservableObject {
                     // Find item again by ID (index might have changed)
                     if let currentIndex = self.items.firstIndex(where: { $0.id == id }) {
                         self.items[currentIndex] = originalItem
+                    }
+                    if originalItem.isFavorite, let favIndex = self.favoriteItems.firstIndex(where: { $0.id == id }) {
+                        self.favoriteItems[favIndex] = originalItem
                     }
                     ErrorHandler.shared.handle(error)
                 }
@@ -253,10 +265,11 @@ class ClipboardStore: ObservableObject {
         Task {
             do {
                 try await dbManager.deleteAllClipboardItems()
-                
-                // Then clear local array
+
+                // Then clear local arrays — favorites are wiped from the DB too
                 await MainActor.run {
                     self.items.removeAll()
+                    self.favoriteItems.removeAll()
                 }
             } catch {
                 print("Failed to clear all items: \(error)")
