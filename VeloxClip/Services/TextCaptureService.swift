@@ -116,20 +116,24 @@ final class TextCaptureService {
 
         let view = TextCaptureToastView(message: message, isSuccess: isSuccess)
         let hosting = NSHostingController(rootView: view)
+        // Size the panel to the SwiftUI content — a fixed frame clips long
+        // messages, leaving only the leading icon visible
+        hosting.view.layoutSubtreeIfNeeded()
+        let contentSize = hosting.view.fittingSize
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 220, height: 44),
+            contentRect: NSRect(origin: .zero, size: contentSize),
             styleMask: [.nonactivatingPanel, .borderless, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         panel.contentViewController = hosting
+        panel.setContentSize(contentSize)
         panel.backgroundColor = .clear
         panel.isOpaque = false
         panel.hasShadow = true
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isReleasedWhenClosed = false
-        panel.layoutIfNeeded()
 
         // Bottom-center of the screen, just above the Dock
         let screen = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
