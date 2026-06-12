@@ -116,10 +116,10 @@ final class PasteStackService: ObservableObject {
     // Called (after a small delay) when the global monitor observes Cmd+V.
     func advanceAfterObservedPaste() {
         guard phase == .active else { return }
-        // The pasteboard must still hold our write; otherwise the user copied
-        // something the poll-based monitor hasn't reported yet — pause.
+        // The pasteboard must still hold our write; otherwise something else
+        // wrote to it and the poll-based monitor hasn't reported yet — pause.
         guard writer.changeCount == lastWriteChangeCount else {
-            noteExternalClipboardChange()
+            pauseForForeignWrite()
             return
         }
         if cursor + 1 >= queue.count {
@@ -131,9 +131,15 @@ final class PasteStackService: ObservableObject {
         }
     }
 
-    // Called by ClipboardMonitor when it sees a non-self pasteboard write.
-    func noteExternalClipboardChange() {
-        guard phase == .active else { return }
+    // Called on any pasteboard change. Pauses unless the change is the
+    // stack's own write — this covers user copies AND the app's other
+    // pasteboard writers (text capture, Copy Text, single-item paste).
+    func noteClipboardChange() {
+        guard phase == .active, writer.changeCount != lastWriteChangeCount else { return }
+        pauseForForeignWrite()
+    }
+
+    private func pauseForForeignWrite() {
         userWroteDuringStack = true
         phase = .paused
     }

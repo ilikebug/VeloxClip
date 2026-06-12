@@ -34,7 +34,8 @@ actor DatabaseManager {
     
     init() {
         let fileManager = FileManager.default
-        let appSupportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let appSupportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? fileManager.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
         
         // Target paths
         let targetURL = appSupportURL.appendingPathComponent("VeloxClip")

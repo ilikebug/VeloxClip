@@ -61,6 +61,17 @@ class AppSettings: ObservableObject {
         }
     }
 
+    @Published var textCaptureShortcut: String {
+        didSet {
+            if !isInitializing {
+                Task {
+                    try? await dbManager.setSetting(key: "textCaptureShortcut", value: textCaptureShortcut)
+                }
+            }
+            ShortcutManager.shared.updateTextCaptureShortcut(textCaptureShortcut)
+        }
+    }
+
     @Published var showPasteStackHUD: Bool {
         didSet {
             guard !isInitializing else { return }
@@ -70,7 +81,7 @@ class AppSettings: ObservableObject {
         }
     }
 
-    // "bottomRight" | "bottomLeft" | "topRight" | "topLeft" | "custom"
+    // "topCenter" | "bottomRight" | "bottomLeft" | "topRight" | "topLeft" | "custom"
     @Published var pasteStackHUDPosition: String {
         didSet {
             guard !isInitializing else { return }
@@ -99,8 +110,9 @@ class AppSettings: ObservableObject {
         self.globalShortcut = "cmd+shift+v"
         self.screenshotShortcut = "f1"
         self.pasteImageShortcut = "f3"
+        self.textCaptureShortcut = "f2"
         self.showPasteStackHUD = true
-        self.pasteStackHUDPosition = "bottomRight"
+        self.pasteStackHUDPosition = "topCenter"
         self.pasteStackHUDCustomOrigin = ""
 
 
@@ -173,6 +185,15 @@ class AppSettings: ObservableObject {
             try? await dbManager.setSetting(key: "pasteImageShortcut", value: "f3")
         }
         
+        // Load textCaptureShortcut
+        if let shortcut = await dbManager.getSetting(key: "textCaptureShortcut") {
+            await MainActor.run {
+                self.textCaptureShortcut = shortcut
+            }
+        } else {
+            try? await dbManager.setSetting(key: "textCaptureShortcut", value: "f2")
+        }
+
         // Load paste stack HUD settings
         if let show = await dbManager.getSetting(key: "showPasteStackHUD") {
             await MainActor.run { self.showPasteStackHUD = show == "true" }
@@ -180,11 +201,17 @@ class AppSettings: ObservableObject {
             try? await dbManager.setSetting(key: "showPasteStackHUD", value: "true")
         }
 
-        if let position = await dbManager.getSetting(key: "pasteStackHUDPosition") {
+        // One-time default change: bottomRight was the launch default before
+        // topCenter; a stored bottomRight from before the marker existed was
+        // auto-written, not a user choice — upgrade it once
+        let positionMigrated = await dbManager.getSetting(key: "hudPositionTopCenterMigration") != nil
+        if let position = await dbManager.getSetting(key: "pasteStackHUDPosition"),
+           positionMigrated || position != "bottomRight" {
             await MainActor.run { self.pasteStackHUDPosition = position }
         } else {
-            try? await dbManager.setSetting(key: "pasteStackHUDPosition", value: "bottomRight")
+            try? await dbManager.setSetting(key: "pasteStackHUDPosition", value: "topCenter")
         }
+        try? await dbManager.setSetting(key: "hudPositionTopCenterMigration", value: "done")
 
         if let origin = await dbManager.getSetting(key: "pasteStackHUDCustomOrigin") {
             await MainActor.run { self.pasteStackHUDCustomOrigin = origin }

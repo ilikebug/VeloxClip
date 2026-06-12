@@ -9,6 +9,7 @@ final class PasteStackHUDController {
     static let shared = PasteStackHUDController()
 
     private var panel: NSPanel?
+    private var hosting: NSHostingController<PasteStackHUDView>?
     private var cancellables: Set<AnyCancellable> = []
     private var isRepositioningProgrammatically = false
 
@@ -46,13 +47,25 @@ final class PasteStackHUDController {
     private func show() {
         if panel == nil {
             let hosting = NSHostingController(rootView: PasteStackHUDView())
+            hosting.sizingOptions = []
             let panel = NSPanel(
                 contentRect: NSRect(x: 0, y: 0, width: 260, height: 64),
                 styleMask: [.nonactivatingPanel, .borderless, .fullSizeContentView],
                 backing: .buffered,
                 defer: false
             )
-            panel.contentViewController = hosting
+            // The hosting view must NOT be the window's contentView — AppKit then
+            // routes its display cycle through NSHostingView's window-sizing
+            // machinery, which mutates constraints mid-pass and throws
+            // NSInternalInconsistencyException. A plain container breaks that link.
+            let container = NSView(frame: NSRect(x: 0, y: 0, width: 260, height: 64))
+            hosting.view.frame = container.bounds
+            hosting.view.autoresizingMask = [.width, .height]
+            container.addSubview(hosting.view)
+            panel.contentView = container
+            // The HUD view has a fixed frame; size the panel once at creation
+            panel.setContentSize(hosting.sizeThatFits(in: NSSize(width: 800, height: 300)))
+            self.hosting = hosting
             panel.backgroundColor = .clear
             panel.isOpaque = false
             panel.hasShadow = true
@@ -62,12 +75,16 @@ final class PasteStackHUDController {
             panel.hidesOnDeactivate = false
             panel.isReleasedWhenClosed = false
 
+            // Must run SYNCHRONOUSLY: a deferred Task lands after the
+            // isRepositioningProgrammatically flag is reset, so our own
+            // setFrameOrigin would be misread as a user drag and clobber the
+            // position setting back to "custom" on every show
             NotificationCenter.default.addObserver(
                 forName: NSWindow.didMoveNotification,
                 object: panel,
                 queue: .main
             ) { _ in
-                Task { @MainActor in
+                MainActor.assumeIsolated {
                     PasteStackHUDController.shared.panelDidMove()
                 }
             }
@@ -76,7 +93,6 @@ final class PasteStackHUDController {
         }
 
         guard let panel else { return }
-        panel.layoutIfNeeded()
         isRepositioningProgrammatically = true
         panel.setFrameOrigin(targetOrigin(for: panel.frame.size))
         isRepositioningProgrammatically = false
@@ -108,12 +124,15 @@ final class PasteStackHUDController {
         switch settings.pasteStackHUDPosition {
         case "bottomLeft":
             return NSPoint(x: screen.minX + margin, y: screen.minY + margin)
+        case "bottomRight":
+            return NSPoint(x: screen.maxX - size.width - margin, y: screen.minY + margin)
         case "topRight":
             return NSPoint(x: screen.maxX - size.width - margin, y: screen.maxY - size.height - margin)
         case "topLeft":
             return NSPoint(x: screen.minX + margin, y: screen.maxY - size.height - margin)
-        default: // bottomRight
-            return NSPoint(x: screen.maxX - size.width - margin, y: screen.minY + margin)
+        default: // topCenter — 50px down from the physical top edge of the screen
+            let full = NSScreen.main?.frame ?? screen
+            return NSPoint(x: full.midX - size.width / 2, y: full.maxY - size.height - 50)
         }
     }
 }
@@ -135,6 +154,7 @@ struct PasteStackHUDView: View {
                         .font(.system(size: 10))
                         .foregroundColor(.secondary)
                 }
+                Spacer(minLength: 8)
                 progressLabel
                 closeButton
             case .paused:
@@ -147,6 +167,7 @@ struct PasteStackHUDView: View {
                         .font(.system(size: 10))
                         .foregroundColor(.secondary)
                 }
+                Spacer(minLength: 8)
                 progressLabel
                 Button(action: { stack.resume() }) {
                     Image(systemName: "play.circle.fill")
@@ -160,17 +181,18 @@ struct PasteStackHUDView: View {
                     .foregroundColor(.green)
                 Text("Done")
                     .font(.system(size: 12, weight: .medium))
+                Spacer(minLength: 8)
                 progressLabel
             case .idle:
                 EmptyView()
             }
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .frame(minWidth: 230)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        // Fixed size across all phases — the panel must never resize while visible
+        .frame(width: 320, height: 56)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(Color.primary.opacity(0.1), lineWidth: 1)
         )
         .padding(6)

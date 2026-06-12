@@ -13,6 +13,7 @@ class ShortcutManager {
     private let windowToggleID: UInt32 = 1
     private let screenshotID: UInt32 = 2
     private let pasteImageID: UInt32 = 3
+    private let textCaptureID: UInt32 = 4
     
     // Note: As a singleton, this object is never deallocated during app lifetime
     // Resources are automatically cleaned up by the system when the app terminates
@@ -21,6 +22,21 @@ class ShortcutManager {
         registerGlobalShortcut()
         registerScreenshotShortcut()
         registerPasteImageShortcut()
+        registerTextCaptureShortcut()
+    }
+
+    func registerTextCaptureShortcut() {
+        let shortcutString = AppSettings.shared.textCaptureShortcut
+        registerShortcut(shortcutString, id: textCaptureID, action: {
+            TextCaptureService.shared.captureText()
+        })
+    }
+
+    func updateTextCaptureShortcut(_ shortcutString: String) {
+        unregisterShortcut(id: textCaptureID)
+        registerShortcut(shortcutString, id: textCaptureID, action: {
+            TextCaptureService.shared.captureText()
+        })
     }
     
     func registerGlobalShortcut() {
@@ -117,6 +133,8 @@ class ShortcutManager {
                             ScreenshotService.shared.captureArea()
                         } else if hotKeyID.id == 3 {
                             PasteImageService.shared.showPasteImage()
+                        } else if hotKeyID.id == 4 {
+                            TextCaptureService.shared.captureText()
                         }
                     }
                 }

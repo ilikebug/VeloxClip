@@ -165,12 +165,13 @@ final class PasteStackServiceTests: XCTestCase {
         XCTAssertEqual(writer.written.count, 1)
     }
 
-    func testExternalChangeNotePausesAndResumeRewritesCurrent() async {
+    func testForeignWritePausesAndResumeRewritesCurrent() async {
         let items = makeItems(2)
         items.forEach { service.toggleStaged($0) }
         await service.startIfStaged()
 
-        service.noteExternalClipboardChange()
+        writer.simulateExternalWrite()
+        service.noteClipboardChange()
         XCTAssertEqual(service.phase, .paused)
 
         service.resume()
@@ -178,12 +179,23 @@ final class PasteStackServiceTests: XCTestCase {
         XCTAssertEqual(writer.written.map(\.content), ["item-0", "item-0"])
     }
 
+    func testOwnWriteDoesNotPause() async {
+        let items = makeItems(2)
+        items.forEach { service.toggleStaged($0) }
+        await service.startIfStaged()
+
+        // changeCount still matches the stack's own write — no pause
+        service.noteClipboardChange()
+        XCTAssertEqual(service.phase, .active)
+    }
+
     func testNoRestoreWhenUserWroteDuringStack() async {
         let items = makeItems(1)
         service.toggleStaged(items[0])
         await service.startIfStaged()
 
-        service.noteExternalClipboardChange()
+        writer.simulateExternalWrite()
+        service.noteClipboardChange()
         service.resume()
         service.advanceAfterObservedPaste()
         service.finalizeCompletion()

@@ -43,6 +43,7 @@ struct GeneralSettingsView: View {
                     .help("Floating progress panel while a paste queue is active. When off, progress shows in the menu bar instead.")
 
                 Picker("HUD Position", selection: $settings.pasteStackHUDPosition) {
+                    Text("Top Center").tag("topCenter")
                     Text("Bottom Right").tag("bottomRight")
                     Text("Bottom Left").tag("bottomLeft")
                     Text("Top Right").tag("topRight")
@@ -112,6 +113,18 @@ struct ShortcutsSettingsView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
+
+            Section {
+                HStack {
+                    Text("Screen Text Capture")
+                    Spacer()
+                    ShortcutRecorder(shortcut: $settings.textCaptureShortcut)
+                        .frame(width: 200, height: 24)
+                }
+                Text("Select a screen area — recognized text (or QR payload) goes straight to the clipboard (default: F2)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
         }
         .padding()
         .formStyle(.grouped)
@@ -123,6 +136,9 @@ struct ShortcutsSettingsView: View {
         }
         .onChange(of: settings.pasteImageShortcut) { _, newValue in
             ShortcutManager.shared.updatePasteImageShortcut(newValue)
+        }
+        .onChange(of: settings.textCaptureShortcut) { _, newValue in
+            ShortcutManager.shared.updateTextCaptureShortcut(newValue)
         }
     }
 }
