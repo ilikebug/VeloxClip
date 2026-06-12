@@ -119,7 +119,7 @@ class AppSettings: ObservableObject {
         self.pasteImageShortcut = "f3"
         self.textCaptureShortcut = "f2"
         self.showPasteStackHUD = true
-        self.pasteStackHUDPosition = "topCenter"
+        self.pasteStackHUDPosition = "bottomCenter"
         self.pasteStackHUDCustomOrigin = ""
 
 
@@ -209,17 +209,19 @@ class AppSettings: ObservableObject {
             try? await dbManager.setSetting(key: "showPasteStackHUD", value: "true")
         }
 
-        // One-time default change: bottomRight was the launch default before
-        // topCenter; a stored bottomRight from before the marker existed was
-        // auto-written, not a user choice — upgrade it once
-        let positionMigrated = await dbManager.getSetting(key: "hudPositionTopCenterMigration") != nil
+        // One-time default change: bottomRight then topCenter were earlier
+        // launch defaults; a stored value from before this marker existed was
+        // auto-written, not a user choice — upgrade it to bottomCenter once
+        let positionMigrated = await dbManager.getSetting(key: "hudPositionBottomCenterMigration") != nil
+        let oldDefaults = ["bottomRight", "topCenter"]
         if let position = await dbManager.getSetting(key: "pasteStackHUDPosition"),
-           positionMigrated || position != "bottomRight" {
+           positionMigrated || !oldDefaults.contains(position) {
             await MainActor.run { self.pasteStackHUDPosition = position }
         } else {
-            try? await dbManager.setSetting(key: "pasteStackHUDPosition", value: "topCenter")
+            try? await dbManager.setSetting(key: "pasteStackHUDPosition", value: "bottomCenter")
         }
-        try? await dbManager.setSetting(key: "hudPositionTopCenterMigration", value: "done")
+        try? await dbManager.setSetting(key: "hudPositionBottomCenterMigration", value: "done")
+        try? await dbManager.deleteSetting(key: "hudPositionTopCenterMigration")
 
         if let origin = await dbManager.getSetting(key: "pasteStackHUDCustomOrigin") {
             await MainActor.run { self.pasteStackHUDCustomOrigin = origin }

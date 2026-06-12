@@ -130,11 +130,11 @@ final class PasteStackHUDController {
             return NSPoint(x: screen.maxX - size.width - margin, y: screen.maxY - size.height - margin)
         case "topLeft":
             return NSPoint(x: screen.minX + margin, y: screen.maxY - size.height - margin)
-        case "bottomCenter":
-            return NSPoint(x: screen.midX - size.width / 2, y: screen.minY + margin)
-        default: // topCenter — 50px down from the physical top edge of the screen
+        case "topCenter": // 50px down from the physical top edge of the screen
             let full = NSScreen.main?.frame ?? screen
             return NSPoint(x: full.midX - size.width / 2, y: full.maxY - size.height - 50)
+        default: // bottomCenter
+            return NSPoint(x: screen.midX - size.width / 2, y: screen.minY + margin)
         }
     }
 }
