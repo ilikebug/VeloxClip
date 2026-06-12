@@ -3,11 +3,11 @@ import AppKit
 
 struct ScreenshotEditorView: View {
     let image: NSImage
+    @ObservedObject var editorState: EditorState
     let onSave: (NSImage) -> Void
-    let onCopy: (NSImage) -> Void
-    let onCancel: () -> Void
-    
-    @StateObject private var editorState = EditorState()
+    let onDone: (NSImage) -> Void
+    let onClose: () -> Void
+
     @State private var imageScale: CGFloat = 1.0
     @State private var imageOffset: CGSize = .zero
     @FocusState private var isTextFieldFocused: Bool
@@ -153,10 +153,11 @@ struct ScreenshotEditorView: View {
                         }
                         .drawingGroup()  // Render Canvas to offscreen buffer to prevent redraws
                         .onHover { isHovering in
+                            // Use set() instead of push() — push grows the cursor stack on every hover
                             if isHovering {
                                 setCursorForTool(editorState.currentTool)
                             } else {
-                                NSCursor.arrow.push()
+                                NSCursor.arrow.set()
                             }
                         }
                         .gesture(
@@ -187,7 +188,13 @@ struct ScreenshotEditorView: View {
                                     }
                                 }
                                 .onEnded { _ in
-                                    if editorState.currentTool != .text {
+                                    switch editorState.currentTool {
+                                    case .text:
+                                        break
+                                    case .eraser:
+                                        // One undo step per drag, not per erased element
+                                        editorState.endEraseSession()
+                                    default:
                                         editorState.finishDrawing()
                                     }
                                 }
@@ -234,7 +241,7 @@ struct ScreenshotEditorView: View {
             VStack {
                 // Top Action Bar
                 HStack {
-                    Button(action: onCancel) {
+                    Button(action: onClose) {
                         Image(systemName: "xmark")
                             .font(.system(size: 14, weight: .bold))
                             .frame(width: 32, height: 32)
@@ -285,10 +292,14 @@ struct ScreenshotEditorView: View {
                     if showPropertyToolbar {
                         HStack(spacing: 16) {
                             ColorPicker(editorState: editorState)
-                            
+
                             Divider().frame(height: 24).background(Color.white.opacity(0.1))
-                            
+
                             SizeSlider(editorState: editorState)
+
+                            Divider().frame(height: 24).background(Color.white.opacity(0.1))
+
+                            OpacitySlider(editorState: editorState)
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
@@ -334,8 +345,7 @@ struct ScreenshotEditorView: View {
                             
                             ActionButton(icon: "checkmark", label: "Done", color: .green) {
                                 let editedImage = renderEditedImage()
-                                onCopy(editedImage)
-                                onCancel()
+                                onDone(editedImage)
                             }
                         }
                     }
@@ -349,7 +359,7 @@ struct ScreenshotEditorView: View {
                 .padding(.bottom, 40)
             }
         }
-        .frame(minWidth: 1000, minHeight: 700)
+        .frame(minWidth: 880, minHeight: 600)
     }
     
     // MARK: - Components
@@ -430,14 +440,44 @@ struct ScreenshotEditorView: View {
         }
     }
     
+    struct OpacitySlider: View {
+        @ObservedObject var editorState: EditorState
+        var body: some View {
+            HStack(spacing: 12) {
+                Image(systemName: "circle.lefthalf.filled")
+                    .foregroundColor(.secondary)
+
+                Slider(value: $editorState.opacity, in: 0.1...1.0)
+                    .frame(width: 100)
+                    .tint(DesignSystem.primaryGradient)
+
+                Text("\(Int(editorState.opacity * 100))%")
+                    .font(.caption.monospaced())
+                    .frame(width: 40)
+                    .foregroundColor(.secondary)
+            }
+        }
+    }
+
     // MARK: - Helpers
-    
+
     private func renderEditedImage() -> NSImage {
         let imageSize = image.size
-        let bitmapRep = NSBitmapImageRep(
+        guard imageSize.width > 0, imageSize.height > 0 else { return image }
+
+        // image.size is in points; Retina screenshots carry 2x pixels. Size the bitmap
+        // by true pixel dimensions or the export loses half its resolution.
+        let repPixelsWide = image.representations.map(\.pixelsWide).max() ?? 0
+        let repPixelsHigh = image.representations.map(\.pixelsHigh).max() ?? 0
+        let pixelsWide = repPixelsWide > 0 ? repPixelsWide : Int(imageSize.width)
+        let pixelsHigh = repPixelsHigh > 0 ? repPixelsHigh : Int(imageSize.height)
+
+        // Bitmap/context creation can fail on extreme dimensions or memory pressure —
+        // fall back to the unedited image instead of crashing on a force unwrap
+        guard let bitmapRep = NSBitmapImageRep(
             bitmapDataPlanes: nil,
-            pixelsWide: Int(imageSize.width),
-            pixelsHigh: Int(imageSize.height),
+            pixelsWide: pixelsWide,
+            pixelsHigh: pixelsHigh,
             bitsPerSample: 8,
             samplesPerPixel: 4,
             hasAlpha: true,
@@ -445,17 +485,24 @@ struct ScreenshotEditorView: View {
             colorSpaceName: .calibratedRGB,
             bytesPerRow: 0,
             bitsPerPixel: 0
-        )!
-        
-        let graphicsContext = NSGraphicsContext(bitmapImageRep: bitmapRep)!
+        ), let graphicsContext = NSGraphicsContext(bitmapImageRep: bitmapRep) else {
+            print("❌ Failed to create bitmap context for edited image, returning original")
+            return image
+        }
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = graphicsContext
-        
-        image.draw(in: NSRect(origin: .zero, size: imageSize))
-        
+
         let context = graphicsContext.cgContext
+
+        // Map user space to points so all drawing below (image, annotations,
+        // line widths, font sizes) lands on the full pixel raster
         context.saveGState()
-        
+        context.scaleBy(x: CGFloat(pixelsWide) / imageSize.width, y: CGFloat(pixelsHigh) / imageSize.height)
+
+        image.draw(in: NSRect(origin: .zero, size: imageSize))
+
+        context.saveGState()
+
         // Flip coordinate system: SwiftUI uses top-down (Y=0 at top), Core Graphics uses bottom-up (Y=0 at bottom)
         context.translateBy(x: 0, y: imageSize.height)
         context.scaleBy(x: 1.0, y: -1.0)
@@ -476,8 +523,10 @@ struct ScreenshotEditorView: View {
                     let font = NSFont.systemFont(ofSize: fontSize)
                     let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: textColor]
                     let attributedString = NSAttributedString(string: text, attributes: attributes)
-                    attributedString.draw(at: .zero)
-                    
+                    // Canvas preview centers text on its point — anchor the export the same way
+                    let textSize = attributedString.size()
+                    attributedString.draw(at: CGPoint(x: -textSize.width / 2, y: -textSize.height / 2))
+
                     context.restoreGState()
                 }
             case .mosaic:
@@ -505,14 +554,51 @@ struct ScreenshotEditorView: View {
             }
         }
         
-        context.restoreGState()
+        context.restoreGState() // flip
+        context.restoreGState() // points→pixels scale
         NSGraphicsContext.restoreGraphicsState()
-        
+
+        // Report the rep in points so the NSImage keeps its 2x backing scale
+        bitmapRep.size = imageSize
         let finalImage = NSImage(size: imageSize)
         finalImage.addRepresentation(bitmapRep)
         return finalImage
     }
     
+    // Pixelates the source region under `pointRect` (top-down, point coordinates).
+    // CGImage cropping operates on bitmap rows (top-left origin) in PIXELS — on Retina
+    // the backing CGImage is 2x the point size, so the rect must be scaled before cropping.
+    private func pixelatedPatch(forPointRect pointRect: CGRect) -> CGImage? {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+
+        let clamped = pointRect.intersection(CGRect(origin: .zero, size: image.size))
+        guard clamped.width > 0, clamped.height > 0 else { return nil }
+
+        let pxScaleX = CGFloat(cgImage.width) / image.size.width
+        let pxScaleY = CGFloat(cgImage.height) / image.size.height
+        let cropRect = CGRect(
+            x: clamped.origin.x * pxScaleX,
+            y: clamped.origin.y * pxScaleY,
+            width: clamped.width * pxScaleX,
+            height: clamped.height * pxScaleY
+        )
+
+        guard let croppedCGImage = cgImage.cropping(to: cropRect) else { return nil }
+
+        let pixelationFactor: CGFloat = 15
+        let smallSize = CGSize(
+            width: max(1, clamped.width / pixelationFactor),
+            height: max(1, clamped.height / pixelationFactor)
+        )
+
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        guard let smallContext = CGContext(data: nil, width: Int(smallSize.width), height: Int(smallSize.height), bitsPerComponent: 8, bytesPerRow: 0, space: colorSpace, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+
+        smallContext.interpolationQuality = .none
+        smallContext.draw(croppedCGImage, in: CGRect(origin: .zero, size: smallSize))
+        return smallContext.makeImage()
+    }
+
     private func drawMosaicEffectInCanvas(context: GraphicsContext, rect: CGRect, imageOrigin: CGPoint, scaleX: CGFloat, scaleY: CGFloat) {
         let imageRect = CGRect(
             x: (rect.origin.x - imageOrigin.x) / scaleX,
@@ -520,77 +606,33 @@ struct ScreenshotEditorView: View {
             width: rect.width / scaleX,
             height: rect.height / scaleY
         )
-        
-        if let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-            let croppedRect = CGRect(
-                x: max(0, imageRect.origin.x),
-                y: max(0, imageRect.origin.y),
-                width: min(imageRect.width, image.size.width - imageRect.origin.x),
-                height: min(imageRect.height, image.size.height - imageRect.origin.y)
-            )
-            guard croppedRect.width > 0 && croppedRect.height > 0 else { return }
-            
-            if let croppedCGImage = cgImage.cropping(to: croppedRect) {
-                let pixelationFactor: CGFloat = 15
-                let smallSize = CGSize(width: max(1, croppedRect.width / pixelationFactor), height: max(1, croppedRect.height / pixelationFactor))
-                
-                let colorSpace = CGColorSpaceCreateDeviceRGB()
-                if let smallContext = CGContext(data: nil, width: Int(smallSize.width), height: Int(smallSize.height), bitsPerComponent: 8, bytesPerRow: 0, space: colorSpace, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) {
-                    smallContext.interpolationQuality = .none
-                    smallContext.draw(croppedCGImage, in: CGRect(origin: .zero, size: smallSize))
-                    if let pixelatedCGImage = smallContext.makeImage() {
-                        context.draw(Image(nsImage: NSImage(cgImage: pixelatedCGImage, size: smallSize)).resizable().interpolation(.none), in: rect)
-                    }
-                }
-            }
+
+        if let pixelatedCGImage = pixelatedPatch(forPointRect: imageRect) {
+            let patchSize = CGSize(width: pixelatedCGImage.width, height: pixelatedCGImage.height)
+            context.draw(Image(nsImage: NSImage(cgImage: pixelatedCGImage, size: patchSize)).resizable().interpolation(.none), in: rect)
         }
     }
-    
+
     private func applyMosaicEffect(to context: CGContext, rect: CGRect, imageSize: CGSize) {
-        if let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-            // rect is in SwiftUI coordinate space (Y=0 at top)
-            // cgImage uses Core Graphics coordinate space (Y=0 at bottom)
-            // We need to convert rect to cgImage's coordinate space
-            let cgImageRect = CGRect(
-                x: rect.origin.x,
-                y: imageSize.height - rect.origin.y - rect.height,  // Flip Y coordinate
-                width: rect.width,
-                height: rect.height
-            )
-            
-            let croppedRect = CGRect(
-                x: max(0, cgImageRect.origin.x),
-                y: max(0, cgImageRect.origin.y),
-                width: min(cgImageRect.width, imageSize.width - cgImageRect.origin.x),
-                height: min(cgImageRect.height, imageSize.height - cgImageRect.origin.y)
-            )
-            guard croppedRect.width > 0 && croppedRect.height > 0 else { return }
-            
-            if let croppedCGImage = cgImage.cropping(to: croppedRect) {
-                context.saveGState()
-                let pixelationFactor: CGFloat = 15
-                let smallSize = CGSize(width: max(1, croppedRect.width / pixelationFactor), height: max(1, croppedRect.height / pixelationFactor))
-                
-                let colorSpace = CGColorSpaceCreateDeviceRGB()
-                if let smallContext = CGContext(data: nil, width: Int(smallSize.width), height: Int(smallSize.height), bitsPerComponent: 8, bytesPerRow: 0, space: colorSpace, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) {
-                    smallContext.interpolationQuality = .none
-                    smallContext.draw(croppedCGImage, in: CGRect(origin: .zero, size: smallSize))
-                    if let pixelatedImage = smallContext.makeImage() {
-                        context.interpolationQuality = .none
-                        // Draw in the original rect position (in flipped coordinate space)
-                        context.draw(pixelatedImage, in: rect)
-                    }
-                }
-                context.restoreGState()
-            }
-        }
+        // rect is top-down (same space the user drew in) — pixelatedPatch handles cropping
+        guard let pixelatedImage = pixelatedPatch(forPointRect: rect) else { return }
+
+        context.saveGState()
+        context.interpolationQuality = .none
+        // The export context is flipped to top-down; CGContext.draw renders images
+        // bottom-up, so mirror around the rect's center to keep the patch upright
+        context.translateBy(x: 0, y: rect.midY)
+        context.scaleBy(x: 1.0, y: -1.0)
+        context.translateBy(x: 0, y: -rect.midY)
+        context.draw(pixelatedImage, in: rect)
+        context.restoreGState()
     }
     
     private func setCursorForTool(_ tool: EditorTool) {
         switch tool {
-        case .pen, .arrow, .line, .rectangle, .circle, .highlight, .mosaic: NSCursor.crosshair.push()
-        case .text: NSCursor.iBeam.push()
-        case .eraser: NSCursor.openHand.push()
+        case .pen, .arrow, .line, .rectangle, .circle, .highlight, .mosaic: NSCursor.crosshair.set()
+        case .text: NSCursor.iBeam.set()
+        case .eraser: NSCursor.openHand.set()
         }
     }
 }

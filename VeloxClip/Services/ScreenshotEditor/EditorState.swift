@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 
+@MainActor
 class EditorState: ObservableObject {
     @Published var currentTool: EditorTool = .pen
     @Published var currentColor: Color = .red
@@ -182,13 +183,22 @@ class EditorState: ObservableObject {
     
     private func createPenPath(from points: [CGPoint]) -> CGPath {
         let path = CGMutablePath()
-        guard !points.isEmpty else { return path }
-        
-        path.move(to: points[0])
-        for i in 1..<points.count {
-            path.addLine(to: points[i])
+        guard let first = points.first else { return path }
+
+        path.move(to: first)
+        guard points.count > 1 else { return path }
+
+        // Smooth the stroke with quadratic curves through segment midpoints
+        // instead of jagged straight segments between sampled points
+        for i in 1..<points.count - 1 {
+            let mid = CGPoint(
+                x: (points[i].x + points[i + 1].x) / 2,
+                y: (points[i].y + points[i + 1].y) / 2
+            )
+            path.addQuadCurve(to: mid, control: points[i])
         }
-        
+        path.addLine(to: points[points.count - 1])
+
         return path
     }
     
@@ -281,49 +291,49 @@ class EditorState: ObservableObject {
         return path
     }
     
+    // One undo snapshot per eraser drag session, no matter how many elements it removes
+    private var eraseSessionDidSave = false
+
+    func endEraseSession() {
+        eraseSessionDidSave = false
+    }
+
     // Remove elements that intersect with eraser path
     func eraseElements(at point: CGPoint, radius: CGFloat) {
         let eraseRadius = max(radius, 10) // Minimum interactive area
-        
-        let shouldRemove = elements.contains { element in
-            // Check bounding box first for optimization
-            let boundingBox = element.path.boundingBox
-            let expandedBox = boundingBox.insetBy(dx: -eraseRadius, dy: -eraseRadius)
-            if !expandedBox.contains(point) {
-                return false
-            }
-            
-            // For mosaic/rect/circle, check if point is inside
-            if element.type == .mosaic || element.type == .rectangle || element.type == .circle {
-                if let rect = element.rect {
-                    return rect.insetBy(dx: -eraseRadius, dy: -eraseRadius).contains(point)
-                }
-                return element.path.contains(point)
-            }
-            
-            // For line-based elements, check distance to path
-            // We create a stroked path and check if it contains the point
-            let strokedPath = element.path.copy(strokingWithWidth: max(element.lineWidth, eraseRadius * 2), lineCap: .round, lineJoin: .round, miterLimit: 10)
-            return strokedPath.contains(point)
-        }
-        
-        if shouldRemove {
+
+        let idsToRemove = Set(
+            elements.filter { eraserHits($0, at: point, radius: eraseRadius) }.map(\.id)
+        )
+        guard !idsToRemove.isEmpty else { return }
+
+        if !eraseSessionDidSave {
             saveState()
-            elements.removeAll { element in
-                let boundingBox = element.path.boundingBox
-                let expandedBox = boundingBox.insetBy(dx: -eraseRadius, dy: -eraseRadius)
-                if !expandedBox.contains(point) { return false }
-                
-                if element.type == .mosaic || element.type == .rectangle || element.type == .circle {
-                    if let rect = element.rect {
-                        return rect.insetBy(dx: -eraseRadius, dy: -eraseRadius).contains(point)
-                    }
-                }
-                
-                let strokedPath = element.path.copy(strokingWithWidth: max(element.lineWidth, eraseRadius * 2), lineCap: .round, lineJoin: .round, miterLimit: 10)
-                return strokedPath.contains(point)
-            }
+            eraseSessionDidSave = true
         }
+        elements.removeAll { idsToRemove.contains($0.id) }
+    }
+
+    private func eraserHits(_ element: DrawingElement, at point: CGPoint, radius: CGFloat) -> Bool {
+        // Check bounding box first for optimization
+        let boundingBox = element.path.boundingBox
+        let expandedBox = boundingBox.insetBy(dx: -radius, dy: -radius)
+        if !expandedBox.contains(point) {
+            return false
+        }
+
+        // For mosaic/rect/circle, check if point is inside
+        if element.type == .mosaic || element.type == .rectangle || element.type == .circle {
+            if let rect = element.rect {
+                return rect.insetBy(dx: -radius, dy: -radius).contains(point)
+            }
+            return element.path.contains(point)
+        }
+
+        // For line-based elements, check distance to path
+        // We create a stroked path and check if it contains the point
+        let strokedPath = element.path.copy(strokingWithWidth: max(element.lineWidth, radius * 2), lineCap: .round, lineJoin: .round, miterLimit: 10)
+        return strokedPath.contains(point)
     }
 }
 
