@@ -30,6 +30,10 @@ class ClipboardMonitor: ObservableObject {
             return
         }
 
+        // A non-self write means the user copied something — the paste stack
+        // must yield (pause) instead of fighting over the pasteboard
+        PasteStackService.shared.noteExternalClipboardChange()
+
         processClippedContent()
     }
     

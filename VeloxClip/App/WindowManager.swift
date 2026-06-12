@@ -13,7 +13,7 @@ class OverlayWindow: NSWindow {
 
     // Esc fallback: works even when focus is not in the search field
     override func cancelOperation(_ sender: Any?) {
-        orderOut(nil)
+        WindowManager.shared.hideOverlay()
     }
 
     // Menu-bar apps may lack an Edit menu, so standard editing key equivalents
@@ -54,16 +54,25 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
             queue: .main
         ) { _ in
             Task { @MainActor in
-                WindowManager.shared.window?.orderOut(nil)
+                WindowManager.shared.hideOverlay()
             }
         }
     }
 
     func toggleWindow() {
         if let window = window, window.isVisible {
-            window.orderOut(nil)
+            hideOverlay()
         } else {
             showWindow()
+        }
+    }
+
+    // Central hide path: closing the overlay (by any means) is what arms a
+    // staged paste stack
+    func hideOverlay() {
+        window?.orderOut(nil)
+        Task { @MainActor in
+            await PasteStackService.shared.startIfStaged()
         }
     }
 
@@ -141,7 +150,7 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
                 }
             }
 
-            window.orderOut(nil)
+            hideOverlay()
         }
     }
 
@@ -165,6 +174,7 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
 
             guard let app = targetApp else {
                 NSApp.hide(nil)
+                await PasteStackService.shared.startIfStaged()
                 return
             }
 
@@ -188,6 +198,11 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
                 try? await Task.sleep(nanoseconds: 200_000_000)
             }
             self.injectPasteEvent(to: app)
+
+            // If items are staged, start the stack only after the in-flight
+            // injected paste has read the pasteboard
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            await PasteStackService.shared.startIfStaged()
         }
     }
 
