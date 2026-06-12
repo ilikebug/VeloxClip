@@ -43,6 +43,7 @@ struct GeneralSettingsView: View {
                     .help("Floating progress panel while a paste queue is active. When off, progress shows in the menu bar instead.")
 
                 Picker("HUD Position", selection: $settings.pasteStackHUDPosition) {
+                    Text("Top Center").tag("topCenter")
                     Text("Bottom Right").tag("bottomRight")
                     Text("Bottom Left").tag("bottomLeft")
                     Text("Top Right").tag("topRight")

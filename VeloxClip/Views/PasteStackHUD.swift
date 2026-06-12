@@ -108,12 +108,15 @@ final class PasteStackHUDController {
         switch settings.pasteStackHUDPosition {
         case "bottomLeft":
             return NSPoint(x: screen.minX + margin, y: screen.minY + margin)
+        case "bottomRight":
+            return NSPoint(x: screen.maxX - size.width - margin, y: screen.minY + margin)
         case "topRight":
             return NSPoint(x: screen.maxX - size.width - margin, y: screen.maxY - size.height - margin)
         case "topLeft":
             return NSPoint(x: screen.minX + margin, y: screen.maxY - size.height - margin)
-        default: // bottomRight
-            return NSPoint(x: screen.maxX - size.width - margin, y: screen.minY + margin)
+        default: // topCenter — 50px down from the physical top edge of the screen
+            let full = NSScreen.main?.frame ?? screen
+            return NSPoint(x: full.midX - size.width / 2, y: full.maxY - size.height - 50)
         }
     }
 }
