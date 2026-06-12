@@ -55,6 +55,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         // Register all global shortcuts
         ShortcutManager.shared.registerAllShortcuts()
+
+        // Paste stack HUD reacts to PasteStackService phase changes
+        Task { @MainActor in
+            PasteStackHUDController.shared.activate()
+        }
         
         // Note: Window will be shown when user presses the shortcut or clicks menu item
         // Removed auto-show on launch to avoid interrupting user workflow
