@@ -135,11 +135,11 @@ final class TextCaptureService {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isReleasedWhenClosed = false
 
-        // Bottom-center of the screen, just above the Dock
+        // Top-center of the screen, just below the menu bar
         let screen = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
         panel.setFrameOrigin(NSPoint(
             x: screen.midX - panel.frame.width / 2,
-            y: screen.minY + 24
+            y: screen.maxY - panel.frame.height - 16
         ))
         panel.orderFrontRegardless()
         toastPanel = panel
