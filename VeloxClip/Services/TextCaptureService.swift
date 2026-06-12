@@ -126,9 +126,10 @@ final class TextCaptureService {
         // (AppKit crash in _postWindowNeedsUpdateConstraints). We size manually.
         hosting.sizingOptions = []
         // Size the panel to the SwiftUI content — a fixed frame clips long
-        // messages, leaving only the leading icon visible
-        hosting.view.layoutSubtreeIfNeeded()
-        let contentSize = hosting.view.fittingSize
+        // messages, leaving only the leading icon visible. With sizingOptions
+        // disabled, fittingSize is meaningless; sizeThatFits measures the
+        // SwiftUI content directly
+        let contentSize = hosting.sizeThatFits(in: NSSize(width: 600, height: 200))
         let panel = NSPanel(
             contentRect: NSRect(origin: .zero, size: contentSize),
             styleMask: [.nonactivatingPanel, .borderless, .fullSizeContentView],

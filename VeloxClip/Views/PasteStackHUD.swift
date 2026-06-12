@@ -83,11 +83,12 @@ final class PasteStackHUDController {
 
         guard let panel else { return }
         // Re-measure on every phase change — the paused state is wider than
-        // the active one, and a fixed frame would clip its buttons
+        // the active one, and a fixed frame would clip its buttons. With
+        // sizingOptions disabled, fittingSize is meaningless; sizeThatFits
+        // measures the SwiftUI content directly
         isRepositioningProgrammatically = true
-        if let hostingView = hosting?.view {
-            hostingView.layoutSubtreeIfNeeded()
-            panel.setContentSize(hostingView.fittingSize)
+        if let hosting {
+            panel.setContentSize(hosting.sizeThatFits(in: NSSize(width: 800, height: 300)))
         }
         panel.setFrameOrigin(targetOrigin(for: panel.frame.size))
         isRepositioningProgrammatically = false
