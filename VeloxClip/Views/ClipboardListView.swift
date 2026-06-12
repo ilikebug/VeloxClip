@@ -3,6 +3,7 @@ import SwiftData
 
 struct ClipboardListView: View {
     @ObservedObject var store = ClipboardStore.shared
+    @ObservedObject var pasteStack = PasteStackService.shared
     @Binding var selectedItem: ClipboardItem?
     var items: [ClipboardItem] // Use items passed from parent instead of computing here
     // Set by keyboard navigation only — mouse clicks must not auto-scroll the list,
@@ -16,11 +17,15 @@ struct ClipboardListView: View {
                     ClipboardItemRow(
                         item: item,
                         isSelected: selectedItem?.id == item.id,
+                        stagedIndex: pasteStack.stagedIndex(of: item.id),
                         onSelect: {
                             selectedItem = item
                         },
                         onDoubleClick: {
                             WindowManager.shared.selectAndPaste(item)
+                        },
+                        onToggleStage: {
+                            pasteStack.toggleStaged(item)
                         }
                     )
                     .tag(item)
@@ -49,9 +54,13 @@ struct ClipboardListView: View {
 struct ClipboardItemRow: View {
     let item: ClipboardItem
     let isSelected: Bool
+    let stagedIndex: Int?
     let onSelect: () -> Void
     let onDoubleClick: () -> Void
-    
+    let onToggleStage: () -> Void
+
+    @State private var isHovering = false
+
     var body: some View {
         HStack(spacing: 16) {
             if item.type == "image" {
@@ -82,8 +91,29 @@ struct ClipboardItemRow: View {
                 .font(.caption2)
                 .foregroundColor(.secondary)
             }
-            
+
             Spacer()
+
+            if let stagedIndex {
+                ZStack {
+                    Circle()
+                        .fill(Color.accentColor)
+                        .frame(width: 20, height: 20)
+                    Text("\(stagedIndex + 1)")
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                }
+                .onTapGesture { onToggleStage() }
+                .help("In paste queue — click to remove")
+            } else if isHovering {
+                Button(action: onToggleStage) {
+                    Image(systemName: "plus.circle")
+                        .font(.system(size: 16))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Add to paste queue (Space)")
+            }
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 8)
@@ -93,6 +123,7 @@ struct ClipboardItemRow: View {
                 .fill(isSelected ? Color.accentColor.opacity(0.25) : Color.clear)
         )
         .contentShape(Rectangle())
+        .onHover { isHovering = $0 }
         // Selection is handled by our own gestures: the gesture layer covers the whole
         // row (contentShape), so List's native click-selection never sees the click.
         // Both gestures are simultaneous — the first click of a double-click selects

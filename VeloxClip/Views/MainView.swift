@@ -191,6 +191,13 @@ struct MainView: View {
                 }
                 return .ignored
             }
+            .onKeyPress(.space) {
+                // Space stages only while the query is empty — otherwise it
+                // must keep typing spaces into the search field
+                guard searchText.isEmpty, let item = selectedItem else { return .ignored }
+                PasteStackService.shared.toggleStaged(item)
+                return .handled
+            }
             .onKeyPress(.escape) {
                 WindowManager.shared.toggleWindow()
                 return .handled
