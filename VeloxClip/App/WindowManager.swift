@@ -111,11 +111,17 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
         // Show window and make it key window
         window?.makeKeyAndOrderFront(nil)
 
-        // Ensure window becomes key window (for keyboard input)
-        // Use a small delay to ensure activation completes
+        // Ensure window becomes key (for keyboard input). On first launch the
+        // window is created in this same runloop turn — activation and the SwiftUI
+        // view hierarchy may not be ready yet, so retry instead of a single shot
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 100_000_000)
-            self.window?.makeKey()
+            for _ in 0..<10 {
+                try? await Task.sleep(nanoseconds: 50_000_000)
+                guard let window = self.window, window.isVisible else { return }
+                if window.isKeyWindow { return }
+                NSApp.activate(ignoringOtherApps: true)
+                window.makeKeyAndOrderFront(nil)
+            }
         }
     }
 

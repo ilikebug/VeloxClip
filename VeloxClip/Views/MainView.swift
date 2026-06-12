@@ -226,6 +226,15 @@ struct MainView: View {
         )
         .onAppear {
             isSearchFocused = true
+            // First open: the focus set above is dropped if the window isn't key yet,
+            // and the didBecomeKey notification fired before this view subscribed —
+            // re-assert once the window has had time to become key
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 250_000_000)
+                if !isSearchFocused {
+                    isSearchFocused = true
+                }
+            }
             // Always select first item on appear
             if !displayItems.isEmpty {
                 selectedItem = displayItems.first
