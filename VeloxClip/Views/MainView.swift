@@ -12,6 +12,7 @@ struct MainView: View {
     @State private var searchText = ""
     @FocusState private var isSearchFocused: Bool
     @State private var viewMode: ViewMode = .history
+    @State private var typeFilter: ClipboardTypeFilter = .all
     @State private var searchResults: [ClipboardItem] = []
     @State private var isSearching = false
     @State private var scrollTarget: UUID?
@@ -23,10 +24,15 @@ struct MainView: View {
     @State private var cachedSemanticResults = FIFOCache<String, [(UUID, Double)]>(maxEntries: 50)
     
     var displayItems: [ClipboardItem] {
+        let base: [ClipboardItem]
         if searchText.isEmpty {
-            return viewMode == .favorites ? store.favoriteItems : store.items
+            base = viewMode == .favorites ? store.favoriteItems : store.items
+        } else {
+            base = searchResults
         }
-        return searchResults
+        // Type filter stacks on top of search results and the favorites view
+        guard typeFilter != .all else { return base }
+        return base.filter { typeFilter.matches($0) }
     }
     
     private func updateSearchResults() {
@@ -210,6 +216,7 @@ struct MainView: View {
             HStack(spacing: 0) {
                 // Left: Clipboard List (History)
                 VStack(spacing: 0) {
+                    typeFilterBar
                     ClipboardListView(selectedItem: $selectedItem, items: displayItems, scrollTarget: $scrollTarget)
                 }
                 .frame(width: 320)
@@ -259,6 +266,13 @@ struct MainView: View {
                 selectedItem = nil
             }
         }
+        .onChange(of: typeFilter) { _, _ in
+            // Keep the selection inside the filtered list
+            if !displayItems.contains(where: { $0.id == selectedItem?.id }) {
+                selectedItem = displayItems.first
+                scrollTarget = displayItems.first?.id
+            }
+        }
         .onChange(of: searchText) { _, _ in
             updateSearchResults()
         }
@@ -280,6 +294,7 @@ struct MainView: View {
             // regains key status (e.g. after closing a popover)
             isSearchFocused = true
             viewMode = .history
+            typeFilter = .all
             searchText = ""
             searchTask?.cancel()
             cachedSemanticResults.removeAll()
@@ -313,6 +328,32 @@ struct MainView: View {
         }
     }
     
+    private var typeFilterBar: some View {
+        HStack(spacing: 6) {
+            ForEach(ClipboardTypeFilter.allCases) { filter in
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        typeFilter = filter
+                    }
+                }) {
+                    Text(filter.label)
+                        .font(.system(size: 12, weight: typeFilter == filter ? .semibold : .regular, design: .rounded))
+                        .foregroundColor(typeFilter == filter ? .white : .secondary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 5)
+                        .background(
+                            Capsule()
+                                .fill(typeFilter == filter ? Color.accentColor : Color.primary.opacity(0.06))
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+
     private var favoriteToggleButton: some View {
         Button(action: {
             withAnimation(.easeInOut(duration: 0.2)) {
