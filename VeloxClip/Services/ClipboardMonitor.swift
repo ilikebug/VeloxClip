@@ -49,22 +49,33 @@ class ClipboardMonitor: ObservableObject {
         let rtfData = pasteboard.data(forType: .rtf)
         let tiffData = pasteboard.data(forType: .tiff)
         let pngData = pasteboard.data(forType: .png)
-        let fileURLs = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL]
-        
+        // fileURLsOnly: a copied browser URL must not be mistaken for a file
+        let fileURLs = pasteboard.readObjects(
+            forClasses: [NSURL.self],
+            options: [.urlReadingFileURLsOnly: true]
+        ) as? [URL]
+
         Task.detached(priority: .userInitiated) {
-            // 1. Check for Text
-            if let text = stringContent {
+            // 1. Check for Files FIRST — Finder also puts the file name on the
+            // pasteboard as plain text, so checking text first would shadow
+            // every file copy and record it as a text item
+            if let urls = fileURLs, !urls.isEmpty {
+                let paths = urls.map { $0.path }.joined(separator: "\n")
+                await self.saveItemAsync(type: "file", content: paths, sourceApp: sourceApp)
+            }
+            // 2. Check for Text
+            else if let text = stringContent {
                 if self.isColor(text) {
                     await self.saveItemAsync(type: "color", content: text, sourceApp: sourceApp)
                 } else {
                     await self.saveItemAsync(type: "text", content: text, sourceApp: sourceApp)
                 }
             }
-            // 2. Check for RTF
+            // 3. Check for RTF
             else if let data = rtfData {
                 await self.saveItemAsync(type: "rtf", data: data, sourceApp: sourceApp)
             }
-            // 3. Check for Images
+            // 4. Check for Images
             else if let rawImageData = pngData ?? tiffData {
                 // TIFF from the pasteboard is uncompressed (tens of MB per screenshot);
                 // normalize to PNG before storing
@@ -82,11 +93,6 @@ class ClipboardMonitor: ObservableObject {
                         }
                     }
                 }
-            }
-            // 4. Check for Files
-            else if let urls = fileURLs, !urls.isEmpty {
-                let paths = urls.map { $0.path }.joined(separator: "\n")
-                await self.saveItemAsync(type: "file", content: paths, sourceApp: sourceApp)
             }
         }
     }

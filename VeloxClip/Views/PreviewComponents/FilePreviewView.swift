@@ -1,11 +1,199 @@
 import SwiftUI
 import AppKit
 
-// File preview with file info
+// Entry point: a file item stores one path per line — a multi-file copy
+// stays ONE history item (paste reproduces the whole group), the preview
+// just adapts to show either a single file or the file list
 struct FilePreviewView: View {
     let filePath: String
+
+    private var paths: [String] {
+        filePath.components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+    }
+
+    var body: some View {
+        if paths.count > 1 {
+            MultiFilePreview(paths: paths)
+        } else {
+            SingleFilePreview(filePath: paths.first ?? filePath)
+        }
+    }
+}
+
+// MARK: - Multi-file list
+
+struct MultiFilePreview: View {
+    let paths: [String]
+    @State private var entries: [FileEntry] = []
+
+    struct FileEntry: Identifiable {
+        let id = UUID()
+        let path: String
+        let name: String
+        let exists: Bool
+        let size: Int64
+        let isDirectory: Bool
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Summary header
+            HStack(spacing: 16) {
+                Image(systemName: "doc.on.doc.fill")
+                    .font(.system(size: 32))
+                    .foregroundColor(.blue)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("\(entries.count) Files")
+                        .font(.title3.bold())
+                    Text(summaryLine)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+            }
+            .padding(16)
+            .background(Color.secondary.opacity(0.05))
+            .cornerRadius(12)
+
+            // File rows
+            VStack(spacing: 0) {
+                ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
+                    fileRow(entry)
+                    if index < entries.count - 1 {
+                        Divider().padding(.leading, 44)
+                    }
+                }
+            }
+            .background(Color.secondary.opacity(0.05))
+            .cornerRadius(12)
+        }
+        .onAppear {
+            loadEntries()
+        }
+    }
+
+    private var summaryLine: String {
+        let existing = entries.filter(\.exists)
+        let totalSize = existing.reduce(Int64(0)) { $0 + $1.size }
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useKB, .useMB, .useGB]
+        formatter.countStyle = .file
+
+        var parts = [formatter.string(fromByteCount: totalSize)]
+        let missingCount = entries.count - existing.count
+        if missingCount > 0 {
+            parts.append("\(missingCount) missing")
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    @ViewBuilder
+    private func fileRow(_ entry: FileEntry) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: entry.isDirectory ? "folder" : "doc")
+                .font(.system(size: 18))
+                .foregroundColor(entry.exists ? .blue : .secondary)
+                .frame(width: 24)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.name)
+                    .font(.body)
+                    .textSelection(.enabled)
+                Text(entry.path)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .textSelection(.enabled)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            if entry.exists {
+                Text(formatFileSize(entry.size))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                Button(action: { revealInFinder(entry) }) {
+                    Image(systemName: "folder")
+                }
+                .buttonStyle(.plain)
+                .help("Reveal in Finder")
+
+                Button(action: { copySingleFile(entry) }) {
+                    Image(systemName: "doc.on.doc")
+                }
+                .buttonStyle(.plain)
+                .help("Copy just this file")
+            } else {
+                Text("Missing")
+                    .font(.caption.bold())
+                    .foregroundColor(.orange)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.orange.opacity(0.15))
+                    .cornerRadius(4)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+
+    private func loadEntries() {
+        let fileManager = FileManager.default
+        entries = paths.map { path in
+            var isDirectory: ObjCBool = false
+            let exists = fileManager.fileExists(atPath: path, isDirectory: &isDirectory)
+            var size: Int64 = 0
+            if exists, let attributes = try? fileManager.attributesOfItem(atPath: path),
+               let fileSize = attributes[.size] as? Int64 {
+                size = fileSize
+            }
+            return FileEntry(
+                path: path,
+                name: URL(fileURLWithPath: path).lastPathComponent,
+                exists: exists,
+                size: size,
+                isDirectory: isDirectory.boolValue
+            )
+        }
+    }
+
+    private func formatFileSize(_ bytes: Int64) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useKB, .useMB, .useGB]
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: bytes)
+    }
+
+    private func revealInFinder(_ entry: FileEntry) {
+        NSWorkspace.shared.selectFile(
+            entry.path,
+            inFileViewerRootedAtPath: URL(fileURLWithPath: entry.path).deletingLastPathComponent().path
+        )
+    }
+
+    // "I only want this one out of the group" — covers the only real advantage
+    // splitting into separate history items would have had
+    private func copySingleFile(_ entry: FileEntry) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        if entry.exists, pasteboard.writeObjects([URL(fileURLWithPath: entry.path) as NSURL]) {
+            return
+        }
+        pasteboard.setString(entry.path, forType: .string)
+    }
+}
+
+// MARK: - Single file
+
+struct SingleFilePreview: View {
+    let filePath: String
     @State private var fileInfo: FileInfo?
-    
+
     struct FileInfo {
         let name: String
         let path: String

@@ -113,6 +113,19 @@ extension ClipboardItem {
             return
         }
 
+        if type == "file", let c = content {
+            // Write real file URLs so pasting into Finder reproduces the files;
+            // fall back to the plain paths if none of them still exist
+            let urls = c.components(separatedBy: .newlines)
+                .filter { !$0.isEmpty && FileManager.default.fileExists(atPath: $0) }
+                .map { URL(fileURLWithPath: $0) as NSURL }
+            if !urls.isEmpty, pasteboard.writeObjects(urls) {
+                return
+            }
+            pasteboard.setString(c, forType: .string)
+            return
+        }
+
         if let c = content {
             pasteboard.setString(c, forType: .string)
         } else if let d = data {

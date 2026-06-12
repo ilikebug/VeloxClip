@@ -133,6 +133,14 @@ struct ClipboardItemRow: View {
     }
     
     private func displayContent(for item: ClipboardItem) -> String {
+        if item.type == "file", let content = item.content {
+            let paths = content.components(separatedBy: .newlines).filter { !$0.isEmpty }
+            let firstName = URL(fileURLWithPath: paths.first ?? content).lastPathComponent
+            if paths.count > 1 {
+                return "\(paths.count) files — \(firstName), …"
+            }
+            return firstName
+        }
         if let content = item.content {
             return content.trimmingCharacters(in: .whitespacesAndNewlines)
         }
