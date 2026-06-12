@@ -9,6 +9,7 @@ final class PasteStackHUDController {
     static let shared = PasteStackHUDController()
 
     private var panel: NSPanel?
+    private var hosting: NSHostingController<PasteStackHUDView>?
     private var cancellables: Set<AnyCancellable> = []
     private var isRepositioningProgrammatically = false
 
@@ -46,6 +47,10 @@ final class PasteStackHUDController {
     private func show() {
         if panel == nil {
             let hosting = NSHostingController(rootView: PasteStackHUDView())
+            // The hosting view must not manage the window's constraints itself —
+            // doing so from the display cycle throws NSInternalInconsistencyException
+            // (AppKit crash in _postWindowNeedsUpdateConstraints). We size manually.
+            hosting.sizingOptions = []
             let panel = NSPanel(
                 contentRect: NSRect(x: 0, y: 0, width: 260, height: 64),
                 styleMask: [.nonactivatingPanel, .borderless, .fullSizeContentView],
@@ -53,6 +58,7 @@ final class PasteStackHUDController {
                 defer: false
             )
             panel.contentViewController = hosting
+            self.hosting = hosting
             panel.backgroundColor = .clear
             panel.isOpaque = false
             panel.hasShadow = true
@@ -76,8 +82,13 @@ final class PasteStackHUDController {
         }
 
         guard let panel else { return }
-        panel.layoutIfNeeded()
+        // Re-measure on every phase change — the paused state is wider than
+        // the active one, and a fixed frame would clip its buttons
         isRepositioningProgrammatically = true
+        if let hostingView = hosting?.view {
+            hostingView.layoutSubtreeIfNeeded()
+            panel.setContentSize(hostingView.fittingSize)
+        }
         panel.setFrameOrigin(targetOrigin(for: panel.frame.size))
         isRepositioningProgrammatically = false
         panel.orderFrontRegardless()

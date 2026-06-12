@@ -116,6 +116,10 @@ final class TextCaptureService {
 
         let view = TextCaptureToastView(message: message, isSuccess: isSuccess)
         let hosting = NSHostingController(rootView: view)
+        // The hosting view must not manage the window's constraints itself —
+        // doing so from the display cycle throws NSInternalInconsistencyException
+        // (AppKit crash in _postWindowNeedsUpdateConstraints). We size manually.
+        hosting.sizingOptions = []
         // Size the panel to the SwiftUI content — a fixed frame clips long
         // messages, leaving only the leading icon visible
         hosting.view.layoutSubtreeIfNeeded()
