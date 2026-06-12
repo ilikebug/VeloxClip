@@ -86,6 +86,8 @@ final class TextCaptureService {
         pasteboard.clearContents()
         pasteboard.setString(content, forType: .string)
         PasteboardSelfWriteGate.shared.recordSelfWrite()
+        // An active paste stack must yield immediately, not on the next poll
+        PasteStackService.shared.noteClipboardChange()
 
         ClipboardStore.shared.addItem(
             ClipboardItem(type: "text", content: content, sourceApp: "Text Capture")

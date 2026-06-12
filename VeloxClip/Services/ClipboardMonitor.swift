@@ -26,13 +26,15 @@ class ClipboardMonitor: ObservableObject {
 
         // Skip changes written by the app itself (pasting from history),
         // otherwise re-encoded images would create duplicate entries
+        // Any write that isn't the stack's own pauses the stack — including the
+        // app's other self-writes (text capture, Copy Text, single-item paste),
+        // which the gate below would hide. The service compares changeCounts
+        // itself, so the stack's own writes never trigger a pause.
+        PasteStackService.shared.noteClipboardChange()
+
         if PasteboardSelfWriteGate.shared.isSelfWrite(changeCount: lastChangeCount) {
             return
         }
-
-        // A non-self write means the user copied something — the paste stack
-        // must yield (pause) instead of fighting over the pasteboard
-        PasteStackService.shared.noteExternalClipboardChange()
 
         processClippedContent()
     }
