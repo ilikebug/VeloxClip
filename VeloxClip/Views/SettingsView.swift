@@ -112,6 +112,18 @@ struct ShortcutsSettingsView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
+
+            Section {
+                HStack {
+                    Text("Screen Text Capture")
+                    Spacer()
+                    ShortcutRecorder(shortcut: $settings.textCaptureShortcut)
+                        .frame(width: 200, height: 24)
+                }
+                Text("Select a screen area — recognized text (or QR payload) goes straight to the clipboard (default: F2)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
         }
         .padding()
         .formStyle(.grouped)
@@ -123,6 +135,9 @@ struct ShortcutsSettingsView: View {
         }
         .onChange(of: settings.pasteImageShortcut) { _, newValue in
             ShortcutManager.shared.updatePasteImageShortcut(newValue)
+        }
+        .onChange(of: settings.textCaptureShortcut) { _, newValue in
+            ShortcutManager.shared.updateTextCaptureShortcut(newValue)
         }
     }
 }

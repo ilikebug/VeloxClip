@@ -61,6 +61,7 @@ Dedup uses the `dataHash` (SHA256) column; "move to top on reuse" uses `lastUsed
 - `ShortcutManager` — global keyboard shortcut registration
 - `ContentDetectionService` — auto-tags items (json, table, url, code, markdown, datetime, etc.)
 - `PasteStackService` — sequential paste queue (Paste Stack): stage items in the overlay, each observed Cmd+V pastes the next; passive global key monitor + pre-write, never intercepts events. HUD in `Views/PasteStackHUD.swift`
+- `TextCaptureService` — screen text capture (F2): region select via screencapture to a temp file, Vision OCR + barcode decode, text straight to clipboard as a `text` history item; QR payloads beat OCR text
 - `ScreenshotEditor/` — full annotation tool with pen, arrow, shapes, mosaic, undo/redo
 
 **Views/** — SwiftUI UI:
@@ -80,7 +81,7 @@ Swift 6 strict concurrency is enabled. Key patterns:
 ### Settings & Storage
 
 - App settings: persisted to `app_settings` table in SQLite (key/value pairs)
-- Default shortcuts: Cmd+Shift+V (show history), F1 (screenshot), F3 (paste image), Cmd+, (preferences)
+- Default shortcuts: Cmd+Shift+V (show history), F1 (screenshot), F2 (screen text capture/OCR), F3 (paste image), Cmd+, (preferences)
 - Database migration handles legacy schemas from prior "Velox"/"Velo" versions
 
 ### External Dependencies (Package.swift)

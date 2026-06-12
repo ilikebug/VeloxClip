@@ -61,6 +61,17 @@ class AppSettings: ObservableObject {
         }
     }
 
+    @Published var textCaptureShortcut: String {
+        didSet {
+            if !isInitializing {
+                Task {
+                    try? await dbManager.setSetting(key: "textCaptureShortcut", value: textCaptureShortcut)
+                }
+            }
+            ShortcutManager.shared.updateTextCaptureShortcut(textCaptureShortcut)
+        }
+    }
+
     @Published var showPasteStackHUD: Bool {
         didSet {
             guard !isInitializing else { return }
@@ -99,6 +110,7 @@ class AppSettings: ObservableObject {
         self.globalShortcut = "cmd+shift+v"
         self.screenshotShortcut = "f1"
         self.pasteImageShortcut = "f3"
+        self.textCaptureShortcut = "f2"
         self.showPasteStackHUD = true
         self.pasteStackHUDPosition = "bottomRight"
         self.pasteStackHUDCustomOrigin = ""
@@ -173,6 +185,15 @@ class AppSettings: ObservableObject {
             try? await dbManager.setSetting(key: "pasteImageShortcut", value: "f3")
         }
         
+        // Load textCaptureShortcut
+        if let shortcut = await dbManager.getSetting(key: "textCaptureShortcut") {
+            await MainActor.run {
+                self.textCaptureShortcut = shortcut
+            }
+        } else {
+            try? await dbManager.setSetting(key: "textCaptureShortcut", value: "f2")
+        }
+
         // Load paste stack HUD settings
         if let show = await dbManager.getSetting(key: "showPasteStackHUD") {
             await MainActor.run { self.showPasteStackHUD = show == "true" }
