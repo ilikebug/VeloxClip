@@ -60,7 +60,36 @@ class AppSettings: ObservableObject {
             ShortcutManager.shared.updatePasteImageShortcut(pasteImageShortcut)
         }
     }
-    
+
+    @Published var showPasteStackHUD: Bool {
+        didSet {
+            guard !isInitializing else { return }
+            Task {
+                try? await dbManager.setSetting(key: "showPasteStackHUD", value: String(showPasteStackHUD))
+            }
+        }
+    }
+
+    // "bottomRight" | "bottomLeft" | "topRight" | "topLeft" | "custom"
+    @Published var pasteStackHUDPosition: String {
+        didSet {
+            guard !isInitializing else { return }
+            Task {
+                try? await dbManager.setSetting(key: "pasteStackHUDPosition", value: pasteStackHUDPosition)
+            }
+        }
+    }
+
+    // "x,y" of the panel origin, set when the user drags the HUD
+    @Published var pasteStackHUDCustomOrigin: String {
+        didSet {
+            guard !isInitializing else { return }
+            Task {
+                try? await dbManager.setSetting(key: "pasteStackHUDCustomOrigin", value: pasteStackHUDCustomOrigin)
+            }
+        }
+    }
+
     private var isInitializing = true
     
     private init() {
@@ -70,6 +99,9 @@ class AppSettings: ObservableObject {
         self.globalShortcut = "cmd+shift+v"
         self.screenshotShortcut = "f1"
         self.pasteImageShortcut = "f3"
+        self.showPasteStackHUD = true
+        self.pasteStackHUDPosition = "bottomRight"
+        self.pasteStackHUDCustomOrigin = ""
 
 
         // Load settings from database asynchronously
@@ -141,6 +173,23 @@ class AppSettings: ObservableObject {
             try? await dbManager.setSetting(key: "pasteImageShortcut", value: "f3")
         }
         
+        // Load paste stack HUD settings
+        if let show = await dbManager.getSetting(key: "showPasteStackHUD") {
+            await MainActor.run { self.showPasteStackHUD = show == "true" }
+        } else {
+            try? await dbManager.setSetting(key: "showPasteStackHUD", value: "true")
+        }
+
+        if let position = await dbManager.getSetting(key: "pasteStackHUDPosition") {
+            await MainActor.run { self.pasteStackHUDPosition = position }
+        } else {
+            try? await dbManager.setSetting(key: "pasteStackHUDPosition", value: "bottomRight")
+        }
+
+        if let origin = await dbManager.getSetting(key: "pasteStackHUDCustomOrigin") {
+            await MainActor.run { self.pasteStackHUDCustomOrigin = origin }
+        }
+
         // LLM integration was removed — clean up any previously stored credentials/config
         // so an API key doesn't linger in the settings table
         try? await dbManager.deleteSetting(key: "openRouterAPIKey")
