@@ -146,6 +146,7 @@ struct CodePreviewView: View {
     private func codeCell(line: String) -> some View {
         highlightCode(line: line, language: detectedLanguage)
             .font(.system(size: fontSize, design: .monospaced))
+            .textSelection(.enabled)
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)
             .padding(.vertical, 2)

@@ -221,6 +221,7 @@ struct PreviewView: View {
                     Spacer()
                 }
                 Text(ocrText).font(.system(.body, design: .monospaced))
+                    .textSelection(.enabled)
                     .padding(8).background(Color.secondary.opacity(0.1)).cornerRadius(8)
             }
         }
@@ -232,6 +233,7 @@ struct PreviewView: View {
         let displayContent = content.count > maxChars ? String(content.prefix(maxChars)) : content
         VStack(alignment: .leading, spacing: 8) {
             Text(displayContent).font(.body).lineLimit(nil)
+                .textSelection(.enabled)
             if content.count > maxChars {
                 Text("... (\(content.count - maxChars) more characters)")
                     .font(.caption).foregroundColor(.secondary).italic()

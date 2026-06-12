@@ -15,6 +15,26 @@ class OverlayWindow: NSWindow {
     override func cancelOperation(_ sender: Any?) {
         orderOut(nil)
     }
+
+    // Menu-bar apps may lack an Edit menu, so standard editing key equivalents
+    // (copy selected preview text, paste into the search field, …) never resolve
+    // through the main menu — route them down the responder chain manually
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command {
+            let action: Selector?
+            switch event.charactersIgnoringModifiers?.lowercased() {
+            case "c": action = #selector(NSText.copy(_:))
+            case "x": action = #selector(NSText.cut(_:))
+            case "v": action = #selector(NSText.paste(_:))
+            case "a": action = #selector(NSText.selectAll(_:))
+            default: action = nil
+            }
+            if let action, NSApp.sendAction(action, to: nil, from: self) {
+                return true
+            }
+        }
+        return super.performKeyEquivalent(with: event)
+    }
 }
 
 @MainActor

@@ -27,10 +27,12 @@ struct FilePreviewView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(info.name)
                             .font(.title3.bold())
-                        
+                            .textSelection(.enabled)
+
                         Text(info.path)
                             .font(.caption)
                             .foregroundColor(.secondary)
+                            .textSelection(.enabled)
                             .lineLimit(1)
                     }
                     
@@ -110,6 +112,7 @@ struct FilePreviewView: View {
                 .foregroundColor(.secondary)
             Text(value)
                 .font(.caption)
+                .textSelection(.enabled)
         }
     }
     

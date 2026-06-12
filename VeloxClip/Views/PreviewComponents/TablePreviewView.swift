@@ -237,6 +237,7 @@ struct TableCell: View {
         Text(content)
             .font(isHeader ? .caption.bold() : .caption)
             .foregroundColor(isHeader ? .primary : .secondary)
+            .textSelection(.enabled)
             .padding(8)
             .frame(maxWidth: .infinity, alignment: .leading)
             .lineLimit(2)
