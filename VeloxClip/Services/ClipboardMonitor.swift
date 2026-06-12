@@ -23,7 +23,13 @@ class ClipboardMonitor: ObservableObject {
     private func checkForChanges() {
         guard pasteboard.changeCount != lastChangeCount else { return }
         lastChangeCount = pasteboard.changeCount
-        
+
+        // Skip changes written by the app itself (pasting from history),
+        // otherwise re-encoded images would create duplicate entries
+        if PasteboardSelfWriteGate.shared.isSelfWrite(changeCount: lastChangeCount) {
+            return
+        }
+
         processClippedContent()
     }
     
@@ -59,9 +65,12 @@ class ClipboardMonitor: ObservableObject {
                 await self.saveItemAsync(type: "rtf", data: data, sourceApp: sourceApp)
             }
             // 3. Check for Images
-            else if let imageData = tiffData ?? pngData {
+            else if let rawImageData = pngData ?? tiffData {
+                // TIFF from the pasteboard is uncompressed (tens of MB per screenshot);
+                // normalize to PNG before storing
+                let imageData = Self.normalizedImageData(rawImageData) ?? rawImageData
                 let newItem = await self.saveItemAsync(type: "image", data: imageData, sourceApp: sourceApp)
-                
+
                 // Perform OCR in background
                 let itemID = newItem.id
                 AIService.shared.performOCR(on: imageData) { text in
@@ -82,20 +91,30 @@ class ClipboardMonitor: ObservableObject {
         }
     }
     
+    nonisolated private static func normalizedImageData(_ raw: Data) -> Data? {
+        // Already PNG? Keep as-is
+        if raw.starts(with: [0x89, 0x50, 0x4E, 0x47]) { return raw }
+        guard let rep = NSBitmapImageRep(data: raw) else { return nil }
+        return rep.representation(using: .png, properties: [:])
+    }
+
     @discardableResult
     private func saveItemAsync(type: String, content: String? = nil, data: Data? = nil, sourceApp: String? = nil) async -> ClipboardItem {
+        // Compare blobs via hash to avoid byte-by-byte Data comparisons
+        let incomingHash = data.map(ClipboardItem.hash(of:))
+
         // Deduplication check on MainActor
         return await MainActor.run {
             let now = Date()
             let recentItemsSnapshot = Array(ClipboardStore.shared.items.prefix(10))
-            
+
             for recentItem in recentItemsSnapshot {
-                if recentItem.type == type && recentItem.content == content && recentItem.data == data {
+                if recentItem.type == type && recentItem.content == content && recentItem.dataHash == incomingHash {
                     let timeDiff = now.timeIntervalSince(recentItem.createdAt)
                     if timeDiff < 5.0 { return recentItem }
                 }
             }
-            
+
             let newItem = ClipboardItem(type: type, content: content, data: data, sourceApp: sourceApp)
             ClipboardStore.shared.addItem(newItem)
             
@@ -112,9 +131,7 @@ class ClipboardMonitor: ObservableObject {
                     
                     if text.count >= 3 && text.count <= 2000 {
                         if let vector = await AIService.shared.generateEmbedding(for: text) {
-                            if let vectorData = try? JSONEncoder().encode(vector) {
-                                detectedEmbedding = vectorData
-                            }
+                            detectedEmbedding = ClipboardItem.encodeVector(vector)
                         }
                     }
                     

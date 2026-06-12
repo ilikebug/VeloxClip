@@ -8,20 +8,23 @@ actor ContentDetectionService {
     static let shared = ContentDetectionService()
     
     private var cache: [UUID: DetectedContentType] = [:]
+    private var cacheOrder: [UUID] = []
     private let maxCacheSize = 500
-    
+
     func detectType(for item: ClipboardItem) async -> DetectedContentType {
         if let cached = cache[item.id] {
             return cached
         }
-        
+
         let type = performDetection(for: item)
-        
-        if cache.count >= maxCacheSize {
-            cache.removeValue(forKey: cache.keys.first!)
+
+        // Dictionary.keys.first is unordered — track insertion order for true FIFO eviction
+        if cacheOrder.count >= maxCacheSize, !cacheOrder.isEmpty {
+            cache.removeValue(forKey: cacheOrder.removeFirst())
         }
+        cacheOrder.append(item.id)
         cache[item.id] = type
-        
+
         return type
     }
     
@@ -65,13 +68,32 @@ actor ContentDetectionService {
     private func isTableData(_ content: String) -> Bool {
         let lines = content.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
         guard lines.count >= 2 else { return false }
-        let firstLine = lines[0]
-        return firstLine.contains(",") || firstLine.contains("\t") || firstLine.contains("|")
+
+        // Real tabular data has the same delimiter count on every row.
+        // Commas additionally require >= 2 columns-worth, or any prose with
+        // a comma per line would render as a table.
+        for delimiter in ["\t", "|", ","] {
+            let counts = lines.map { $0.components(separatedBy: delimiter).count - 1 }
+            guard let first = counts.first, first >= 1, counts.allSatisfy({ $0 == first }) else { continue }
+            if delimiter == "," && first < 2 { continue }
+            return true
+        }
+        return false
     }
-    
+
     private func isDateTime(_ content: String) -> Bool {
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.count < 30 && (trimmed.contains("-") || trimmed.contains("/")) // Simple check
+        guard trimmed.count <= 40 else { return false }
+
+        // Strict full-string matches only — "my-branch-name" or "a/b/c" must not qualify
+        let patterns = [
+            #"^\d{4}[-/]\d{1,2}[-/]\d{1,2}([ T]\d{1,2}:\d{2}(:\d{2})?(\.\d+)?(Z|[+-]\d{2}:?\d{2})?)?$"#, // 2026-06-12, ISO 8601
+            #"^\d{1,2}[-/]\d{1,2}[-/]\d{2,4}$"#,   // 12/06/2026
+            #"^\d{1,2}:\d{2}(:\d{2})?$"#,           // 14:30, 14:30:05
+            #"^\d{10}$"#,                            // unix timestamp (seconds)
+            #"^\d{13}$"#                             // unix timestamp (milliseconds)
+        ]
+        return patterns.contains { trimmed.range(of: $0, options: .regularExpression) != nil }
     }
     
     private func isLongText(_ content: String) -> Bool {

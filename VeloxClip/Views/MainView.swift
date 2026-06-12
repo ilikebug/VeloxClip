@@ -20,6 +20,7 @@ struct MainView: View {
     
     // Cached semantic search results - only store IDs and scores to save memory
     @State private var cachedSemanticResults: [String: [(UUID, Double)]] = [:]
+    @State private var semanticCacheOrder: [String] = []
     
     var displayItems: [ClipboardItem] {
         if searchText.isEmpty {
@@ -41,114 +42,113 @@ struct MainView: View {
         }
         
         isSearching = true
-        
+        let baseItems = mode == .favorites ? store.favoriteItems : store.items
+
         searchTask = Task {
-            // Wait for 300ms debounce
-            try? await Task.sleep(nanoseconds: 300_000_000)
+            // 1. Keyword search: runs immediately (no debounce) and off the main thread
+            let keywordMatches = await Task.detached(priority: .userInitiated) {
+                baseItems.filter { item in
+                    item.content?.localizedCaseInsensitiveContains(query) ?? false ||
+                    item.type.localizedCaseInsensitiveContains(query) ||
+                    (item.sourceApp?.localizedCaseInsensitiveContains(query) ?? false) ||
+                    item.tags.contains(where: { $0.localizedCaseInsensitiveContains(query) })
+                }
+            }.value
+
             if Task.isCancelled { return }
-            
-            let baseItems = mode == .favorites ? store.favoriteItems : store.items
-            
-            // 1. Keyword search (Fast, immediate if possible but let's do it in task for consistency)
-            let keywordMatches = baseItems.filter { item in
-                item.content?.localizedCaseInsensitiveContains(query) ?? false ||
-                item.type.localizedCaseInsensitiveContains(query) ||
-                (item.sourceApp?.localizedCaseInsensitiveContains(query) ?? false) ||
-                item.tags.contains(where: { $0.localizedCaseInsensitiveContains(query) })
-            }
-            
-            if Task.isCancelled { return }
-            
-            // 2. Semantic search (Slow, background)
-            var semanticResults: [(UUID, Double)] = []
-            if query.count >= 2 {
-                semanticResults = await performSemanticSearchAsync(query: query, baseItems: baseItems)
-            }
-            
-            if Task.isCancelled { return }
-            
-            // 3. Hybrid Scoring and Sort
+
+            // Keyword matches get a high base score; publish right away
             var itemScores: [UUID: Double] = [:]
-            
-            // Keyword matches get a high base score
             for item in keywordMatches {
                 itemScores[item.id] = 0.9
             }
-            
-            // Semantic matches use their similarity score
+            publishSearchResults(itemScores, baseItems: baseItems)
+
+            // 2. Semantic search: debounced 300ms, merged into the keyword results
+            guard query.count >= 2 else {
+                isSearching = false
+                return
+            }
+
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            if Task.isCancelled { return }
+
+            let semanticResults = await performSemanticSearchAsync(query: query, baseItems: baseItems)
+            if Task.isCancelled { return }
+
             for (itemId, similarity) in semanticResults {
                 let currentScore = itemScores[itemId] ?? 0
                 itemScores[itemId] = max(currentScore, similarity)
             }
-            
-            // Collect all unique items that matched either way
-            let allMatchIds = Set(itemScores.keys)
-            let matchedItems = baseItems.filter { allMatchIds.contains($0.id) }
-            
-            let sortedResults = matchedItems.map { ($0, itemScores[$0.id] ?? 0) }
-                .sorted { r1, r2 in
-                    if abs(r1.1 - r2.1) < 0.001 {
-                        // If scores are very close, prioritize favorites then newer items
-                        if r1.0.isFavorite != r2.0.isFavorite {
-                            return r1.0.isFavorite
-                        }
-                        return r1.0.createdAt > r2.0.createdAt
-                    }
-                    return r1.1 > r2.1
-                }
-            
-            let finalItems = sortedResults.map { $0.0 }
-            
-            await MainActor.run {
-                self.searchResults = finalItems
-                self.isSearching = false
-                
-                // Select first item if search results changed
-                if selectedItem == nil || !finalItems.contains(where: { $0.id == selectedItem?.id }) {
-                    selectedItem = finalItems.first
-                }
-            }
+            publishSearchResults(itemScores, baseItems: baseItems)
+            isSearching = false
         }
     }
-    
+
+    private func publishSearchResults(_ itemScores: [UUID: Double], baseItems: [ClipboardItem]) {
+        let allMatchIds = Set(itemScores.keys)
+        let matchedItems = baseItems.filter { allMatchIds.contains($0.id) }
+
+        let sortedResults = matchedItems.map { ($0, itemScores[$0.id] ?? 0) }
+            .sorted { r1, r2 in
+                if abs(r1.1 - r2.1) < 0.001 {
+                    // If scores are very close, prioritize favorites then most recently used —
+                    // same ordering the history list uses (lastUsedAt ?? createdAt)
+                    if r1.0.isFavorite != r2.0.isFavorite {
+                        return r1.0.isFavorite
+                    }
+                    return (r1.0.lastUsedAt ?? r1.0.createdAt) > (r2.0.lastUsedAt ?? r2.0.createdAt)
+                }
+                return r1.1 > r2.1
+            }
+
+        let finalItems = sortedResults.map { $0.0 }
+        searchResults = finalItems
+
+        // Select first item if search results changed
+        if selectedItem == nil || !finalItems.contains(where: { $0.id == selectedItem?.id }) {
+            selectedItem = finalItems.first
+        }
+    }
+
     private func performSemanticSearchAsync(query: String, baseItems: [ClipboardItem]) async -> [(UUID, Double)] {
         let normalizedQuery = query.lowercased()
-        
+
         // Cache check
         if let cached = cachedSemanticResults[normalizedQuery] {
             return cached
         }
-        
-        return await Task.detached(priority: .userInitiated) {
-            // AIService is now an actor-less class, safe to call from background
+
+        let finalResults = await Task.detached(priority: .userInitiated) { () -> [(UUID, Double)] in
             guard let queryVector = await AIService.shared.generateEmbedding(for: query) else {
                 return []
             }
-            
+
             let threshold = 0.5
             let maxResults = 20
-            
-            let itemsWithEmbeddings = baseItems.filter { $0.vector != nil && $0.content != nil }
-            
-            let results = itemsWithEmbeddings.compactMap { item -> (UUID, Double)? in
-                guard let itemVector = item.vector else { return nil }
+
+            // Decode each stored vector exactly once per item
+            let results = baseItems.compactMap { item -> (UUID, Double)? in
+                guard item.content != nil, let itemVector = item.vector else { return nil }
                 let similarity = AIService.shared.calculateSimilarity(queryVector, itemVector)
                 return similarity >= threshold ? (item.id, similarity) : nil
             }
             .sorted { $0.1 > $1.1 }
             .prefix(maxResults)
-            
-            let finalResults = Array(results)
-            
-            await MainActor.run {
-                if cachedSemanticResults.count >= 50 {
-                    cachedSemanticResults.removeValue(forKey: cachedSemanticResults.keys.first!)
-                }
-                cachedSemanticResults[normalizedQuery] = finalResults
-            }
-            
-            return finalResults
+
+            return Array(results)
         }.value
+
+        // True FIFO eviction (Dictionary.keys.first is unordered)
+        if cachedSemanticResults[normalizedQuery] == nil {
+            if semanticCacheOrder.count >= 50, !semanticCacheOrder.isEmpty {
+                cachedSemanticResults.removeValue(forKey: semanticCacheOrder.removeFirst())
+            }
+            semanticCacheOrder.append(normalizedQuery)
+        }
+        cachedSemanticResults[normalizedQuery] = finalResults
+
+        return finalResults
     }
 
     
@@ -252,13 +252,28 @@ struct MainView: View {
         .onChange(of: searchText) { _, _ in
             updateSearchResults()
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in
+        .onChange(of: selectedItem) { _, _ in
+            // Clicking a row moves focus into the list; bring it back so
+            // arrow keys / Enter / Esc keep working
+            if !isSearchFocused {
+                isSearchFocused = true
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { notification in
+            // Only react to the overlay window itself — other windows (Settings,
+            // popovers) becoming key must not steal the search focus
+            guard notification.object is OverlayWindow else { return }
             isSearchFocused = true
-            // Reset state when window opens
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .veloxOverlayWillShow)) { _ in
+            // Reset state only when the overlay is (re)opened, not every time it
+            // regains key status (e.g. after closing a popover)
+            isSearchFocused = true
             viewMode = .history
             searchText = ""
             searchTask?.cancel()
-            cachedSemanticResults.removeAll() // Clear cache when window closes
+            cachedSemanticResults.removeAll()
+            semanticCacheOrder.removeAll()
             if !store.items.isEmpty {
                 selectedItem = store.items.first
             }

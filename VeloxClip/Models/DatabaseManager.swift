@@ -14,9 +14,11 @@ actor DatabaseManager {
     let clipboardItems = Table("clipboard_items")
     let id = Expression<String>("id")
     let createdAt = Expression<Double>("createdAt")
+    let lastUsedAt = Expression<Double?>("lastUsedAt")
     let type = Expression<String>("type")
     let content = Expression<String?>("content")
     let data = Expression<Data?>("data")
+    let dataHash = Expression<String?>("dataHash")
     let sourceApp = Expression<String?>("sourceApp")
     let tags = Expression<String>("tags")
     let summary = Expression<String?>("summary")
@@ -109,9 +111,11 @@ actor DatabaseManager {
             try db.run(clipboardItems.create(ifNotExists: true) { t in
                 t.column(id, primaryKey: true)
                 t.column(createdAt)
+                t.column(lastUsedAt)
                 t.column(self.type)
                 t.column(content)
                 t.column(data)
+                t.column(dataHash)
                 t.column(sourceApp)
                 t.column(tags, defaultValue: "[]")
                 t.column(summary)
@@ -155,11 +159,34 @@ actor DatabaseManager {
             ("embedding", "BLOB"),
             ("isFavorite", "BOOLEAN NOT NULL DEFAULT 0"),
             ("favoritedAt", "DOUBLE"),
+            ("lastUsedAt", "DOUBLE"),
+            ("dataHash", "TEXT"),
         ]
 
         for column in requiredColumns where !existingColumns.contains(column.name) {
             try db.run("ALTER TABLE clipboard_items ADD COLUMN \(column.name) \(column.definition)")
         }
+
+        try backfillDataHashesIfNeeded()
+    }
+
+    // One-time backfill so hash-based dedup also covers rows created before the dataHash column existed.
+    // Guarded by a settings flag — new rows always get a hash on insert, so once this has run
+    // there is nothing left to scan on subsequent launches.
+    private func backfillDataHashesIfNeeded() throws {
+        guard let db = db else { return }
+
+        let backfillFlag = "dataHashBackfillDone"
+        if try db.pluck(appSettings.filter(key == backfillFlag)) != nil { return }
+
+        let pending = clipboardItems.select(id, data).filter(dataHash == nil && data != nil)
+        for row in try db.prepare(pending) {
+            guard let blob = row[data] else { continue }
+            let hash = ClipboardItem.hash(of: blob)
+            try db.run(clipboardItems.filter(id == row[id]).update(dataHash <- hash))
+        }
+
+        try db.run(appSettings.insert(or: .replace, key <- backfillFlag, value <- "1"))
     }
     
     // MARK: - Clipboard Items Operations
@@ -181,9 +208,11 @@ actor DatabaseManager {
         let insert = clipboardItems.insert(
             id <- item.id.uuidString,
             createdAt <- item.createdAt.timeIntervalSince1970,
+            lastUsedAt <- item.lastUsedAt?.timeIntervalSince1970,
             type <- item.type,
             content <- item.content,
             data <- item.data,
+            dataHash <- item.dataHash,
             sourceApp <- item.sourceApp,
             tags <- tagsString,
             summary <- item.summary,
@@ -192,22 +221,22 @@ actor DatabaseManager {
             isFavorite <- item.isFavorite,
             favoritedAt <- item.favoritedAt?.timeIntervalSince1970
         )
-        
+
         try db.run(insert)
     }
-    
+
     func updateClipboardItem(_ item: ClipboardItem) async throws {
         await ensureInitialized()
         guard let db = db else { throw DatabaseError.connectionFailed }
-        
+
         let tagsJSON = try JSONEncoder().encode(item.tags)
         let tagsString = String(data: tagsJSON, encoding: .utf8) ?? "[]"
-        
+
         let itemRow = clipboardItems.filter(id == item.id.uuidString)
-        
-        try db.run(itemRow.update(
+
+        var setters: [Setter] = [
             content <- item.content,
-            data <- item.data,
+            lastUsedAt <- item.lastUsedAt?.timeIntervalSince1970,
             sourceApp <- item.sourceApp,
             tags <- tagsString,
             summary <- item.summary,
@@ -215,9 +244,27 @@ actor DatabaseManager {
             embedding <- item.embedding,
             isFavorite <- item.isFavorite,
             favoritedAt <- item.favoritedAt?.timeIntervalSince1970
-        ))
+        ]
+        // Items fetched for the list view carry data == nil (lazy-loaded);
+        // never overwrite the stored blob with nil in that case
+        if item.data != nil {
+            setters.append(data <- item.data)
+            setters.append(dataHash <- item.dataHash)
+        }
+
+        try db.run(itemRow.update(setters))
     }
     
+    // Lightweight "used just now" update — touches a single column instead of
+    // rewriting the whole row (content, embedding, …) on every paste
+    func touchItem(id itemID: UUID, lastUsedAt date: Date) async throws {
+        await ensureInitialized()
+        guard let db = db else { throw DatabaseError.connectionFailed }
+
+        let itemRow = clipboardItems.filter(id == itemID.uuidString)
+        try db.run(itemRow.update(lastUsedAt <- date.timeIntervalSince1970))
+    }
+
     func deleteClipboardItem(id: UUID) async throws {
         await ensureInitialized()
         guard let db = db else { throw DatabaseError.connectionFailed }
@@ -232,35 +279,54 @@ actor DatabaseManager {
         try db.run(clipboardItems.delete())
     }
     
+    // List queries skip the `data` blob column — images can be megabytes each
+    // and the list only needs metadata. Use fetchItemData(id:) to load blobs on demand.
+    private var listColumns: [Expressible] {
+        [id, createdAt, lastUsedAt, type, content, dataHash, sourceApp, tags, summary, isSensitive, embedding, isFavorite, favoritedAt]
+    }
+
+    private var sortKey: SQLite.Expression<Double> {
+        lastUsedAt ?? createdAt
+    }
+
     func fetchAllClipboardItems() async throws -> [ClipboardItem] {
         await ensureInitialized()
         guard let db = db else { throw DatabaseError.connectionFailed }
-        
+
         var items: [ClipboardItem] = []
-        
-        for row in try db.prepare(clipboardItems.order(createdAt.desc)) {
-            let item = try rowToClipboardItem(row)
+
+        for row in try db.prepare(clipboardItems.select(listColumns).order(sortKey.desc)) {
+            let item = try rowToClipboardItem(row, includesData: false)
             items.append(item)
         }
-        
+
         return items
     }
-    
+
     func fetchClipboardItems(limit: Int) async throws -> [ClipboardItem] {
         await ensureInitialized()
         guard let db = db else { throw DatabaseError.connectionFailed }
-        
+
         var items: [ClipboardItem] = []
-        
-        for row in try db.prepare(clipboardItems.order(createdAt.desc).limit(limit)) {
-            let item = try rowToClipboardItem(row)
+
+        for row in try db.prepare(clipboardItems.select(listColumns).order(sortKey.desc).limit(limit)) {
+            let item = try rowToClipboardItem(row, includesData: false)
             items.append(item)
         }
-        
+
         return items
     }
-    
-    private func rowToClipboardItem(_ row: Row) throws -> ClipboardItem {
+
+    func fetchItemData(id itemID: UUID) async throws -> Data? {
+        await ensureInitialized()
+        guard let db = db else { throw DatabaseError.connectionFailed }
+
+        let query = clipboardItems.select(data).filter(id == itemID.uuidString)
+        guard let row = try db.pluck(query) else { return nil }
+        return row[data]
+    }
+
+    private func rowToClipboardItem(_ row: Row, includesData: Bool = true) throws -> ClipboardItem {
         guard let itemID = UUID(uuidString: row[id]) else {
             throw DatabaseError.invalidData
         }
@@ -278,12 +344,16 @@ actor DatabaseManager {
         var item = ClipboardItem(
             type: row[type],
             content: row[content],
-            data: row[data],
+            data: includesData ? row[data] : nil,
             sourceApp: row[sourceApp]
         )
-        
+
         item.id = itemID
         item.createdAt = createdAtDate
+        item.dataHash = row[dataHash]
+        if let lastUsedAtTimestamp = row[lastUsedAt] {
+            item.lastUsedAt = Date(timeIntervalSince1970: lastUsedAtTimestamp)
+        }
         item.tags = tagsArray
         item.summary = row[summary]
         item.isSensitive = row[isSensitive]
@@ -372,8 +442,8 @@ actor DatabaseManager {
         
         var items: [ClipboardItem] = []
         
-        for row in try db.prepare(clipboardItems.filter(isFavorite == true).order(favoritedAt.desc)) {
-            let item = try rowToClipboardItem(row)
+        for row in try db.prepare(clipboardItems.select(listColumns).filter(isFavorite == true).order(favoritedAt.desc)) {
+            let item = try rowToClipboardItem(row, includesData: false)
             items.append(item)
         }
         

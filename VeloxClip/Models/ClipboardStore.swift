@@ -18,15 +18,18 @@ class ClipboardStore: ObservableObject {
     }
     
     func addItem(_ item: ClipboardItem) {
-        // Content-based Deduplication: Check if an item with the same content/data already exists
-        if let existingIndex = items.firstIndex(where: { 
-            ($0.content != nil && $0.content == item.content) || 
-            ($0.data != nil && $0.data == item.data) 
+        // Content-based Deduplication: Check if an item with the same content/data already exists.
+        // Blobs are compared via dataHash so this never touches multi-megabyte Data values.
+        if let existingIndex = items.firstIndex(where: {
+            $0.type == item.type && (
+                ($0.content != nil && $0.content == item.content) ||
+                ($0.dataHash != nil && $0.dataHash == item.dataHash)
+            )
         }) {
-            // Move existing item to top
+            // Move existing item to top, keeping the original copy time
             var existingItem = items[existingIndex]
-            existingItem.createdAt = Date() // Move to top
-            
+            existingItem.lastUsedAt = Date()
+
             // UI Update: Move to start of array
             self.items.remove(at: existingIndex)
             self.items.insert(existingItem, at: 0)
@@ -38,10 +41,12 @@ class ClipboardStore: ObservableObject {
                     favoriteItems.insert(existingItem, at: 0)
                 }
             }
-            
-            // Persist update
+
+            // Persist update — only lastUsedAt changed
+            let usedAt = existingItem.lastUsedAt ?? Date()
+            let existingID = existingItem.id
             Task {
-                try? await dbManager.updateClipboardItem(existingItem)
+                try? await dbManager.touchItem(id: existingID, lastUsedAt: usedAt)
             }
             return
         }
@@ -83,7 +88,12 @@ class ClipboardStore: ObservableObject {
         Task {
             do {
                 try await dbManager.insertClipboardItem(item)
-                
+
+                // Blob is now persisted — drop it from memory; previews lazy-load via loadData(for:)
+                if item.data != nil, let index = self.items.firstIndex(where: { $0.id == itemId }) {
+                    self.items[index].data = nil
+                }
+
                 // Delete excess items from database if any
                 for itemToRemove in itemsToRemove {
                     try? await dbManager.deleteClipboardItem(id: itemToRemove.id)
@@ -103,6 +113,34 @@ class ClipboardStore: ObservableObject {
         }
     }
     
+    // Loads the blob for an item on demand (list queries don't fetch the data column)
+    func loadData(for id: UUID) async -> Data? {
+        if let item = items.first(where: { $0.id == id }) ?? favoriteItems.first(where: { $0.id == id }),
+           let data = item.data {
+            return data
+        }
+        return try? await dbManager.fetchItemData(id: id)
+    }
+
+    // Called when the user pastes/copies an existing item: move it to the top
+    // without rewriting createdAt, so the original copy time is preserved
+    func markUsed(_ id: UUID) {
+        guard let index = items.firstIndex(where: { $0.id == id }) else { return }
+
+        var item = items.remove(at: index)
+        let usedAt = Date()
+        item.lastUsedAt = usedAt
+        items.insert(item, at: 0)
+
+        if item.isFavorite, let favIndex = favoriteItems.firstIndex(where: { $0.id == id }) {
+            favoriteItems[favIndex] = item
+        }
+
+        Task {
+            try? await dbManager.touchItem(id: id, lastUsedAt: usedAt)
+        }
+    }
+
     func updateItem(id: UUID, content: String) {
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
         

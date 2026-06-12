@@ -24,39 +24,55 @@ enum AIServiceError: LocalizedError, Sendable {
 // Thread-safe cache for embeddings using actor
 private actor EmbeddingCache {
     private var cache: [String: [Double]] = [:]
+    private var insertionOrder: [String] = []
     private let maxSize: Int
-    
+
     init(maxSize: Int = 200) {
         self.maxSize = maxSize
     }
-    
+
     func get(_ key: String) -> [Double]? {
         return cache[key]
     }
-    
+
     func set(_ key: String, value: [Double]) {
-        if cache.count >= maxSize {
-            // Remove oldest entry (simple FIFO for now)
-            if let firstKey = cache.keys.first {
-                cache.removeValue(forKey: firstKey)
+        if cache[key] == nil {
+            // Dictionary.keys.first is unordered — track insertion order for true FIFO eviction
+            if insertionOrder.count >= maxSize, !insertionOrder.isEmpty {
+                let oldest = insertionOrder.removeFirst()
+                cache.removeValue(forKey: oldest)
             }
+            insertionOrder.append(key)
         }
         cache[key] = value
     }
-    
+
     func clear() {
         cache.removeAll()
+        insertionOrder.removeAll()
     }
 }
 
 class AIService {
     nonisolated(unsafe) static let shared = AIService()
     
-    // Sentence embedding model for semantic search (thread-safe)
-    private let sentenceEmbedding = NLEmbedding.sentenceEmbedding(for: .english)
-    
+    // Sentence embedding models for semantic search (thread-safe).
+    // Chinese content needs its own model — the English model returns nil for it.
+    private let englishEmbedding = NLEmbedding.sentenceEmbedding(for: .english)
+    private let chineseEmbedding = NLEmbedding.sentenceEmbedding(for: .simplifiedChinese)
+
     // Thread-safe embedding cache using actor
     private let embeddingCache = EmbeddingCache(maxSize: 200)
+
+    private func embeddingModel(for text: String) -> NLEmbedding? {
+        let recognizer = NLLanguageRecognizer()
+        recognizer.processString(String(text.prefix(200)))
+        if let language = recognizer.dominantLanguage,
+           language == .simplifiedChinese || language == .traditionalChinese {
+            return chineseEmbedding ?? englishEmbedding
+        }
+        return englishEmbedding
+    }
     
     private init() {}
     
@@ -124,30 +140,28 @@ class AIService {
     }
     
     func generateEmbedding(for text: String) async -> [Double]? {
-        guard sentenceEmbedding != nil else { return nil }
-        
         let normalizedText = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !normalizedText.isEmpty else { return nil }
-        
+
         let maxLength = 500
-        let textToEmbed = normalizedText.count > maxLength 
-            ? String(normalizedText.prefix(maxLength)) 
+        let textToEmbed = normalizedText.count > maxLength
+            ? String(normalizedText.prefix(maxLength))
             : normalizedText
-        
+
         // Check cache
         if let cached = await embeddingCache.get(textToEmbed) {
             return cached
         }
-        
+
         // Generate embedding
-        guard let embedding = sentenceEmbedding,
+        guard let embedding = embeddingModel(for: textToEmbed),
               let vector = embedding.vector(for: textToEmbed) else {
             return nil
         }
-        
+
         // Cache the result
         await embeddingCache.set(textToEmbed, value: vector)
-        
+
         return vector
     }
     
