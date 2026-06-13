@@ -14,6 +14,20 @@ A powerful clipboard manager for macOS that helps you manage, search, and transf
 - **Custom Tags**: Add custom tags to favorite items for better organization and search
 - **Single Instance**: Automatically prevents multiple instances from running simultaneously
 
+### 📚 Paste Stack (Sequential Paste Queue)
+- **Stage Multiple Items**: Queue several history items (press `Space` or click the ⊕ on a row) and paste them in order
+- **Just Cmd+V**: Each plain `Cmd+V` in the target app pastes the next item — no extra shortcut to learn
+- **Progress HUD**: A floating, non-focus-stealing panel shows the queue position; pick its corner in Settings (defaults to bottom center) or drag it anywhere
+- **Auto-Pause**: Copying something new while a queue is active pauses it so it never fights you for the clipboard — resume from the HUD or menu bar
+- **Menu Bar Controls**: Resume/Cancel the queue from the menu bar, even with the HUD hidden
+- **Clipboard Restore**: Your pre-queue clipboard is restored when the stack finishes
+
+### 🔎 Screen Text Capture (OCR Anywhere)
+- **One-Step Text Grab**: Press `F2`, select any screen region, and the recognized text lands straight on the clipboard — no intermediate image, no extra clicks
+- **QR & Barcode Decode**: Frame a QR/barcode and its payload is copied instead of the surrounding text
+- **Fully On-Device**: Uses Apple Vision (Chinese + English), nothing leaves your Mac
+- **Independent of F1**: The F1 screenshot flow (image + background OCR) is unchanged — F2 is for when you want the *text*, not the picture
+
 ### 🤖 On-Device Intelligence
 - **OCR Text Recognition**: Automatically extracts text from images using Apple Vision framework — fully local
 - **Text Summary**: Quick extractive summaries of long text content
@@ -22,6 +36,7 @@ A powerful clipboard manager for macOS that helps you manage, search, and transf
 ### 🔍 Advanced Search
 - **Keyword Search**: Fast exact match search across content, type, source app, and tags
 - **Semantic Search**: On-device search that understands context and meaning
+- **Type Filter**: One-tap filter chips above the list — All / Text / Image / File — that stack on top of search and the favorites view
 - **Tag-based Search**: Search by custom tags or auto-detected content type tags (json, table, url, code, markdown, etc.)
 - **Content Type Tags**: Automatically generated tags based on detected content types for better organization
 - **Favorites Prioritization**: Favorite items appear first in search results
@@ -72,7 +87,7 @@ A powerful clipboard manager for macOS that helps you manage, search, and transf
 - **View Switching**: Toggle between favorites and history with Tab key or star button
 - **Tag Editor**: Intuitive tag editing interface in preview pane for favorite items
 - **Customizable Shortcuts**: Set your preferred global hotkey (default: Cmd+Shift+V)
-- **Screenshot Shortcuts**: Customize screenshot and paste image shortcuts (defaults: F1, F3)
+- **Screenshot Shortcuts**: Customize screenshot, screen text capture, and paste image shortcuts (defaults: F1, F2, F3)
 
 ### 🔒 Privacy & Performance
 - **100% On-Device**: OCR, semantic search, and content detection all run locally — no API keys, no network calls
@@ -152,6 +167,23 @@ xattr -cr VeloxClip.app
 3. **Navigate**: Use arrow keys to move through items
 4. **Paste**: Press Enter to paste the selected item to the previous application
 5. **Preview**: View detailed content in the preview pane
+6. **Filter by Type**: Use the All / Text / Image / File chips above the list to narrow results
+
+### Paste Stack (Sequential Paste Queue)
+
+1. **Stage Items**: With the search box empty, press `Space` on the selected row (or click the ⊕ that appears on hover) to add it to the queue — a numbered badge (①②③) shows its order
+2. **Start the Queue**: Close the overlay (Esc) — the floating Paste Stack HUD appears
+3. **Paste in Order**: In any app, press `Cmd+V` repeatedly — each press pastes the next item and advances the HUD
+4. **Pause/Resume**: Copying something else auto-pauses the queue; resume from the HUD's ▶ button or the menu bar
+5. **Exit**: Click ✕ on the HUD, or use "Cancel Paste Queue" in the menu bar
+6. **HUD Position**: Set the corner in Preferences → General → Paste Stack (or drag the HUD anywhere); disable it entirely to show progress in the menu bar instead
+
+### Screen Text Capture (OCR Anywhere)
+
+1. **Capture**: Press `F2` (customizable) and drag to select any region of the screen
+2. **Done**: The recognized text is copied to the clipboard instantly and added to history — a brief toast confirms how many characters were captured
+3. **QR / Barcode**: If the region contains a QR or barcode, its payload is copied instead of the surrounding text
+4. **Cancel**: Press `Esc` during selection — nothing is captured
 
 ### Screenshot & Image Editing
 
@@ -204,7 +236,9 @@ Configure:
 - History limit
 - Global shortcut (default: Cmd+Shift+V)
 - Screenshot shortcut (default: F1)
+- Screen text capture shortcut (default: F2)
 - Paste image shortcut (default: F3)
+- Paste Stack HUD: show/hide and position (defaults to bottom center)
 - Launch at login
 
 ## 🎯 Use Cases
@@ -248,7 +282,9 @@ Configure:
 ### Global Shortcuts
 - **Toggle Window**: Default `Cmd+Shift+V`
 - **Area Screenshot**: Default `F1`
+- **Screen Text Capture**: Default `F2`
 - **Paste Image**: Default `F3`
+- **Paste Stack**: Stage with `Space` (or ⊕) in the overlay, paste with plain `Cmd+V`
 - Customize in Preferences → Shortcuts Settings
 - Supports modifier keys: Cmd, Shift, Option, Control
 - Supports function keys (F1-F12) without modifiers
@@ -274,6 +310,9 @@ VeloxClip/
 │   │   ├── ClipboardMonitor.swift
 │   │   ├── ScreenshotService.swift
 │   │   ├── PasteImageService.swift
+│   │   ├── PasteStackService.swift    # Sequential paste queue (Paste Stack)
+│   │   ├── TextCaptureService.swift   # Screen text capture / OCR anywhere (F2)
+│   │   ├── ContentDetectionService.swift
 │   │   ├── ShortcutManager.swift
 │   │   └── ErrorHandler.swift
 │   ├── Views/             # SwiftUI views
