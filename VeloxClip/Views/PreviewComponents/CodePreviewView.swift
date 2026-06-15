@@ -71,24 +71,36 @@ struct CodePreviewView: View {
     
     private var toolbar: some View {
         HStack {
-            Picker("Language", selection: $detectedLanguage) {
-                ForEach(availableLanguages, id: \.self) { Text($0).tag($0) }
+            Menu {
+                ForEach(availableLanguages, id: \.self) { lang in
+                    Button(lang) { detectedLanguage = lang }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(detectedLanguage).lineLimit(1)
+                    Spacer(minLength: 4)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(.secondary)
+                }
+                .compactMenuLabel(width: 150)
             }
-            .pickerStyle(.menu).frame(width: 150)
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
             
-            Toggle("Line Numbers", isOn: $showLineNumbers).toggleStyle(.switch).controlSize(.small)
+            Toggle("Line Numbers", isOn: $showLineNumbers).toggleStyle(.dsSwitch)
             
             HStack(spacing: 8) {
                 Button(action: { fontSize = max(10, fontSize - 1) }) { Image(systemName: "minus") }
                 .buttonStyle(.plain)
-                Text("\(Int(fontSize))pt").font(.caption).foregroundColor(.secondary).frame(width: 40)
+                Text("\(Int(fontSize))pt").font(.dsCaption).foregroundColor(.secondary).frame(width: 40)
                 Button(action: { fontSize = min(20, fontSize + 1) }) { Image(systemName: "plus") }
                 .buttonStyle(.plain)
             }
             
             Spacer()
             
-            Button("Format", action: formatCode).buttonStyle(.bordered).controlSize(.small)
+            Button("Format", action: formatCode).dsButton(small: true)
         }
         .padding(.bottom, 4)
     }

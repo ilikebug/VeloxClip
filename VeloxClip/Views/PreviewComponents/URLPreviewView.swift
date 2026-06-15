@@ -24,7 +24,7 @@ struct URLPreviewView: View {
                     .foregroundColor(.blue)
                 
                 Text(urlString)
-                    .font(.system(.body, design: .monospaced))
+                    .font(.dsMonoBody)
                     .textSelection(.enabled)
                     .lineLimit(2)
                 
@@ -40,12 +40,12 @@ struct URLPreviewView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         if let title = info.title, !title.isEmpty {
                             Text(title)
-                                .font(.headline)
+                                .font(.dsHeadline)
                         }
                         
                         if let description = info.description, !description.isEmpty {
                             Text(description)
-                                .font(.caption)
+                                .font(.dsCaption)
                                 .foregroundColor(.secondary)
                                 .lineLimit(3)
                         }
@@ -69,7 +69,7 @@ struct URLPreviewView: View {
                     ProgressView()
                         .scaleEffect(0.7)
                     Text("Loading URL info...")
-                        .font(.caption)
+                        .font(.dsCaption)
                         .foregroundColor(.secondary)
                 }
                 .padding(12)
@@ -81,7 +81,7 @@ struct URLPreviewView: View {
                     Button(action: { openURL(url) }) {
                         Label("Open in Browser", systemImage: "safari")
                     }
-                    .buttonStyle(.borderedProminent)
+                    .dsButton(.prominent)
                 }
                 
                 Spacer()

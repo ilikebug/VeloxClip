@@ -13,6 +13,14 @@ struct JSONPreviewView: View {
     
     enum ViewMode {
         case formatted, minified, tree
+
+        var segmentLabel: String {
+            switch self {
+            case .formatted: return "Formatted"
+            case .minified: return "Minified"
+            case .tree: return "Tree"
+            }
+        }
     }
     
     @State private var isLoading = true
@@ -39,20 +47,18 @@ struct JSONPreviewView: View {
             Spacer()
             
             if !isLoading {
-                Picker("View", selection: $viewMode) {
-                    Text("Formatted").tag(ViewMode.formatted)
-                    Text("Minified").tag(ViewMode.minified)
-                    Text("Tree").tag(ViewMode.tree)
+                HStack(spacing: 4) {
+                    ForEach([ViewMode.formatted, .minified, .tree], id: \.self) { mode in
+                        Button(mode.segmentLabel) { viewMode = mode }
+                            .dsButton(viewMode == mode ? .prominent : .secondary, small: true)
+                    }
                 }
-                .pickerStyle(.segmented)
-                .frame(width: 200)
                 .padding(.trailing, 30) // Move it a little bit to the left relative to the Copy button
-                
+
                 Button(action: copyJSON) {
                     Label("Copy", systemImage: "doc.on.doc")
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                .dsButton(small: true)
             }
         }
         .padding(.bottom, 8)
@@ -62,11 +68,11 @@ struct JSONPreviewView: View {
     private var validationStatus: some View {
         if isLoading {
             ProgressView().scaleEffect(0.7)
-            Text("Validating...").font(.caption).foregroundColor(.secondary)
+            Text("Validating...").font(.dsCaption).foregroundColor(.secondary)
         } else if isValidJSON {
-            Label("Valid JSON", systemImage: "checkmark.circle.fill").font(.caption).foregroundColor(.green)
+            Label("Valid JSON", systemImage: "checkmark.circle.fill").font(.dsCaption).foregroundColor(.green)
         } else if let error = validationError {
-            Label("Invalid JSON", systemImage: "xmark.circle.fill").font(.caption).foregroundColor(.red).help(error)
+            Label("Invalid JSON", systemImage: "xmark.circle.fill").font(.dsCaption).foregroundColor(.red).help(error)
         }
     }
     
@@ -99,7 +105,7 @@ struct JSONPreviewView: View {
     private var loadingSpinner: some View {
         VStack(spacing: 8) {
             ProgressView()
-            Text("Loading JSON...").font(.caption).foregroundColor(.secondary)
+            Text("Loading JSON...").font(.dsCaption).foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 80)
@@ -110,7 +116,7 @@ struct JSONPreviewView: View {
             let lines = formattedJSON.components(separatedBy: .newlines)
             ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
                 Text(line)
-                    .font(.system(.body, design: .monospaced))
+                    .font(.dsMonoBody)
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
                     .padding(.trailing, 40)
@@ -124,7 +130,7 @@ struct JSONPreviewView: View {
     
     private func minifiedView(availableWidth: CGFloat) -> some View {
         Text(minifiedJSONText)
-            .font(.system(.body, design: .monospaced))
+            .font(.dsMonoBody)
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)
             .textSelection(.enabled)
@@ -146,13 +152,13 @@ struct JSONPreviewView: View {
     
     private var errorView: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("JSON Validation Error:").font(.headline).foregroundColor(.red)
+            Text("JSON Validation Error:").font(.dsHeadline).foregroundColor(.red)
             if let error = validationError {
-                Text(error).font(.system(.body, design: .monospaced)).foregroundColor(.secondary)
+                Text(error).font(.dsMonoBody).foregroundColor(.secondary)
             }
             Divider()
-            Text("Raw Content:").font(.caption).foregroundColor(.secondary)
-            Text(jsonString).font(.system(.body, design: .monospaced)).textSelection(.enabled)
+            Text("Raw Content:").font(.dsCaption).foregroundColor(.secondary)
+            Text(jsonString).font(.dsMonoBody).textSelection(.enabled)
         }
         .padding(12)
     }
@@ -250,13 +256,13 @@ struct JSONTreeView: View {
                 collectionHeader(label: "{", count: dict.count, type: "keys")
                 if isExpanded {
                     dictionaryContent(dict)
-                    Text("}").foregroundColor(bracketColor).font(.system(.body, design: .monospaced))
+                    Text("}").foregroundColor(bracketColor).font(.dsMonoBody)
                 }
             } else if let array = jsonObject as? [Any] {
                 collectionHeader(label: "[", count: array.count, type: "items")
                 if isExpanded {
                     arrayContent(array)
-                    Text("]").foregroundColor(bracketColor).font(.system(.body, design: .monospaced))
+                    Text("]").foregroundColor(bracketColor).font(.dsMonoBody)
                 }
             } else {
                 leafValue
@@ -287,7 +293,7 @@ struct JSONTreeView: View {
             }
             valueView(jsonObject)
         }
-        .font(.system(.body, design: .monospaced))
+        .font(.dsMonoBody)
     }
 
     private func collectionHeader(label: String, count: Int, type: String) -> some View {
@@ -308,11 +314,11 @@ struct JSONTreeView: View {
             Text(label).foregroundColor(bracketColor)
             
             if !isExpanded {
-                Text("... \(count) \(type) ...").font(.caption).padding(.horizontal, 4).background(Color.secondary.opacity(0.1)).cornerRadius(4)
+                Text("... \(count) \(type) ...").font(.dsCaption).padding(.horizontal, 4).background(Color.secondary.opacity(0.1)).cornerRadius(4)
                 Text(label == "{" ? "}" : "]").foregroundColor(bracketColor)
             }
         }
-        .font(.system(.body, design: .monospaced))
+        .font(.dsMonoBody)
         .fixedSize(horizontal: true, vertical: false)
     }
 

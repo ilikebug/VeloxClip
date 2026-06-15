@@ -34,19 +34,18 @@ struct TextSummaryView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Text("Summary")
-                            .font(.headline)
-                        
+                            .font(.dsHeadline)
+
                         Spacer()
-                        
+
                         Button(action: { copyText(summary) }) {
                             Label("Copy", systemImage: "doc.on.doc")
                         }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
+                        .dsButton(small: true)
                     }
-                    
+
                     Text(summary)
-                        .font(.body)
+                        .font(.dsBody)
                         .foregroundColor(.secondary)
                         .textSelection(.enabled)
                 }
@@ -57,19 +56,19 @@ struct TextSummaryView: View {
                 Button(action: generateSummary) {
                     Label("Generate Summary", systemImage: "text.alignleft")
                 }
-                .buttonStyle(.bordered)
+                .dsButton()
             }
             
             // Keywords
             if !keywords.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Keywords")
-                        .font(.headline)
+                        .font(.dsHeadline)
                     
                     FlowLayout(spacing: 8) {
                         ForEach(keywords, id: \.self) { keyword in
                             Text(keyword)
-                                .font(.caption.bold())
+                                .font(.dsCaption.bold())
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 5)
                                 .background(Color.blue.opacity(0.1))
@@ -88,7 +87,7 @@ struct TextSummaryView: View {
                 Button(action: { showFullText.toggle() }) {
                     Label(showFullText ? "Show Summary" : "Show Full Text", systemImage: showFullText ? "eye.slash" : "eye")
                 }
-                .buttonStyle(.bordered)
+                .dsButton()
             }
             
             // Text content
@@ -99,7 +98,7 @@ struct TextSummaryView: View {
                         LazyVStack(alignment: .leading, spacing: 8) {
                             ForEach(Array(loadedParagraphs.enumerated()), id: \.offset) { index, paragraph in
                                 Text(paragraph)
-                                    .font(.body)
+                                    .font(.dsBody)
                                     .textSelection(.enabled)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             }
@@ -119,7 +118,7 @@ struct TextSummaryView: View {
                     } else {
                         // Short text, render directly
                         Text(text)
-                            .font(.body)
+                            .font(.dsBody)
                             .textSelection(.enabled)
                             .padding(16)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -129,7 +128,7 @@ struct TextSummaryView: View {
                     }
                 } else {
                     Text(text.prefix(500) + (text.count > 500 ? "..." : ""))
-                        .font(.body)
+                        .font(.dsBody)
                         .textSelection(.enabled)
                         .padding(16)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -230,7 +229,7 @@ struct TextSummaryView: View {
                 ProgressView()
                     .scaleEffect(0.7)
                 Text("Loading more paragraphs...")
-                    .font(.caption)
+                    .font(.dsCaption)
                     .foregroundColor(.secondary)
             }
         }
@@ -268,9 +267,9 @@ struct StatItem: View {
     var body: some View {
         VStack(spacing: 4) {
             Text(value)
-                .font(.headline)
+                .font(.dsHeadline)
             Text(label)
-                .font(.caption2)
+                .font(.dsCaption2)
                 .foregroundColor(.blue)
         }
     }

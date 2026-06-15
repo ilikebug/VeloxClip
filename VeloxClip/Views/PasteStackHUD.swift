@@ -115,11 +115,18 @@ final class PasteStackHUDController {
         if settings.pasteStackHUDPosition == "custom" {
             let parts = settings.pasteStackHUDCustomOrigin.split(separator: ",")
             if parts.count == 2, let x = Double(parts[0]), let y = Double(parts[1]) {
-                return NSPoint(x: x, y: y)
+                let pt = NSPoint(x: x, y: y)
+                // Only honor a saved drag position if it still lands on a connected
+                // screen — otherwise (unplugged external display) fall through to a
+                // corner so the HUD never opens off-screen.
+                let rect = NSRect(origin: pt, size: size)
+                if NSScreen.screens.contains(where: { $0.frame.intersects(rect) }) {
+                    return pt
+                }
             }
         }
-        let screen = NSScreen.main?.visibleFrame
-            ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+        let activeScreen = NSScreen.activeOrMain
+        let screen = activeScreen?.visibleFrame ?? .zero
         let margin: CGFloat = 16
         switch settings.pasteStackHUDPosition {
         case "bottomLeft":
@@ -131,7 +138,7 @@ final class PasteStackHUDController {
         case "topLeft":
             return NSPoint(x: screen.minX + margin, y: screen.maxY - size.height - margin)
         case "topCenter": // 50px down from the physical top edge of the screen
-            let full = NSScreen.main?.frame ?? screen
+            let full = activeScreen?.frame ?? screen
             return NSPoint(x: full.midX - size.width / 2, y: full.maxY - size.height - 50)
         default: // bottomCenter
             return NSPoint(x: screen.midX - size.width / 2, y: screen.minY + margin)
@@ -141,6 +148,7 @@ final class PasteStackHUDController {
 
 struct PasteStackHUDView: View {
     @ObservedObject var stack = PasteStackService.shared
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
         HStack(spacing: 10) {
@@ -192,7 +200,16 @@ struct PasteStackHUDView: View {
         .padding(.horizontal, 14)
         // Fixed size across all phases — the panel must never resize while visible
         .frame(width: 320, height: 56)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background {
+            let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+            // "Reduce Transparency" turns materials opaque anyway; pin an explicit
+            // appearance-adaptive fill so the fallback matches light/dark mode.
+            if reduceTransparency {
+                shape.fill(Color(nsColor: .windowBackgroundColor))
+            } else {
+                shape.fill(.ultraThinMaterial)
+            }
+        }
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(Color.primary.opacity(0.1), lineWidth: 1)

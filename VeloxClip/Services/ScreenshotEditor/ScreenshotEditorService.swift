@@ -74,9 +74,18 @@ class ScreenshotEditorService: NSObject, NSWindowDelegate {
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
 
-        // Center window on screen after it's displayed
+        // Center window on the active display after it's displayed
         DispatchQueue.main.async {
-            window.center()
+            if let screen = NSScreen.activeOrMain {
+                let vf = screen.visibleFrame
+                let size = window.frame.size
+                window.setFrameOrigin(NSPoint(
+                    x: vf.midX - size.width / 2,
+                    y: vf.midY - size.height / 2
+                ))
+            } else {
+                window.center()
+            }
         }
 
         // Keyboard handling: ESC closes (with confirmation), Cmd+Z / Shift+Cmd+Z undo/redo

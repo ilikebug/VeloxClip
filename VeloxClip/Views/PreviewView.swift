@@ -88,12 +88,12 @@ struct PreviewView: View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
                 Text(displayItem.type.capitalized)
-                    .font(.caption.bold())
+                    .font(.dsCaption.bold())
                     .foregroundColor(.secondary)
                     .kerning(1.2)
-                
+
                 Text(displayItem.sourceApp ?? "System")
-                    .font(.title3.bold())
+                    .font(.dsTitle3.bold())
             }
             
             Spacer()
@@ -104,7 +104,7 @@ struct PreviewView: View {
                 Text(displayItem.createdAt, style: .date)
                 Text(displayItem.createdAt, style: .time)
             }
-            .font(.caption)
+            .font(.dsCaption)
             .foregroundColor(.secondary)
         }
         .padding()
@@ -137,7 +137,7 @@ struct PreviewView: View {
     private var loadingIndicator: some View {
         VStack(spacing: 12) {
             ProgressView().scaleEffect(0.8)
-            Text("Detecting content...").font(.caption).foregroundColor(.secondary)
+            Text("Detecting content...").font(.dsCaption).foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity).padding(.vertical, 40)
     }
@@ -216,11 +216,11 @@ struct PreviewView: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
                     Image(systemName: "text.viewfinder").foregroundColor(.blue)
-                    Text("OCR Text").font(.headline)
+                    Text("OCR Text").font(.dsHeadline)
                     Button("Copy") { viewModel.copyTransformedText(ocrText) }
                     Spacer()
                 }
-                Text(ocrText).font(.system(.body, design: .monospaced))
+                Text(ocrText).font(.dsMonoBody)
                     .textSelection(.enabled)
                     .padding(8).background(Color.secondary.opacity(0.1)).cornerRadius(8)
             }
@@ -232,11 +232,11 @@ struct PreviewView: View {
         let maxChars = 5000
         let displayContent = content.count > maxChars ? String(content.prefix(maxChars)) : content
         VStack(alignment: .leading, spacing: 8) {
-            Text(displayContent).font(.body).lineLimit(nil)
+            Text(displayContent).font(.dsBody).lineLimit(nil)
                 .textSelection(.enabled)
             if content.count > maxChars {
                 Text("... (\(content.count - maxChars) more characters)")
-                    .font(.caption).foregroundColor(.secondary).italic()
+                    .font(.dsCaption).foregroundColor(.secondary).italic()
             }
         }
     }
@@ -247,7 +247,7 @@ struct PreviewView: View {
             Button(action: { viewModel.copyToClipboard(item) }) {
                 Label("Copy", systemImage: "doc.on.doc")
             }
-            .buttonStyle(.borderedProminent)
+            .dsButton(.prominent)
             
             if item.type == "image", let imageData = item.data {
                 // Decode the NSImage on click, not on every toolbar render
@@ -258,7 +258,7 @@ struct PreviewView: View {
                 }) {
                     Label("Edit", systemImage: "pencil")
                 }
-                .buttonStyle(.bordered)
+                .dsButton()
             }
             
             textToolsMenu(for: item)
@@ -273,9 +273,18 @@ struct PreviewView: View {
             Menu {
                 standardTextTools(content: content)
             } label: {
-                Label("Tools", systemImage: "wrench.and.screwdriver")
+                HStack(spacing: 4) {
+                    Image(systemName: "wrench.and.screwdriver")
+                    Text("Tools")
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(.secondary)
+                }
+                .compactMenuLabel()
             }
-            .menuStyle(.button)
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
         }
     }
     
@@ -292,7 +301,7 @@ struct PreviewView: View {
     private func tagsSection(for item: ClipboardItem) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Tags").font(.caption.bold()).foregroundColor(.secondary)
+                Text("Tags").font(.dsCaption.bold()).foregroundColor(.secondary)
                 Spacer()
                 Button(action: { isEditingTags.toggle(); isTagInputFocused = isEditingTags }) {
                     Image(systemName: isEditingTags ? "checkmark.circle.fill" : "plus.circle")
@@ -310,7 +319,7 @@ struct PreviewView: View {
                         tagInputField(for: item)
                     }
                     if !isEditingTags && item.tags.isEmpty {
-                        Text("No tags").font(.caption).foregroundColor(.secondary).italic()
+                        Text("No tags").font(.dsCaption).foregroundColor(.secondary).italic()
                     }
                 }
                 .padding(.horizontal).padding(.bottom, 8)
@@ -329,7 +338,7 @@ struct PreviewView: View {
                 .buttonStyle(.plain)
             }
         }
-        .font(.caption.bold())
+        .font(.dsCaption.bold())
         .padding(.horizontal, 8).padding(.vertical, 4)
         .background(tagColor(for: tag)).foregroundColor(.white).cornerRadius(6)
     }
@@ -338,7 +347,7 @@ struct PreviewView: View {
     private func tagInputField(for item: ClipboardItem) -> some View {
         TextField("New tag...", text: $newTagText)
             .textFieldStyle(.plain)
-            .font(.caption)
+            .font(.dsCaption)
             .frame(width: 80)
             .padding(.horizontal, 4).padding(.vertical, 2)
             .background(Color.secondary.opacity(0.1)).cornerRadius(4)

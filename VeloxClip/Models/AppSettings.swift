@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import Combine
 
 import ServiceManagement
@@ -103,6 +104,19 @@ class AppSettings: ObservableObject {
         }
     }
 
+    // "light" | "dark" — applied app-wide via NSApp.appearance. Defaults to light
+    // and is fixed (does NOT follow the system), so the UI looks identical on every
+    // machine unless the user picks dark here.
+    @Published var appearance: String {
+        didSet {
+            guard !isInitializing else { return }
+            Task {
+                try? await dbManager.setSetting(key: "appearance", value: appearance)
+            }
+            applyAppearance()
+        }
+    }
+
     private var isInitializing = true
 
     // True once loadSettings() has applied the persisted values. History
@@ -121,6 +135,7 @@ class AppSettings: ObservableObject {
         self.showPasteStackHUD = true
         self.pasteStackHUDPosition = "bottomCenter"
         self.pasteStackHUDCustomOrigin = ""
+        self.appearance = "light"
 
 
         // Load settings from database asynchronously
@@ -227,6 +242,14 @@ class AppSettings: ObservableObject {
             await MainActor.run { self.pasteStackHUDCustomOrigin = origin }
         }
 
+        // Appearance (light by default; not following the system)
+        if let appearanceValue = await dbManager.getSetting(key: "appearance") {
+            await MainActor.run { self.appearance = appearanceValue }
+        } else {
+            try? await dbManager.setSetting(key: "appearance", value: "light")
+        }
+        await MainActor.run { self.applyAppearance() }
+
         // LLM integration was removed — clean up any previously stored credentials/config
         // so an API key doesn't linger in the settings table
         try? await dbManager.deleteSetting(key: "openRouterAPIKey")
@@ -234,6 +257,14 @@ class AppSettings: ObservableObject {
         try? await dbManager.deleteSetting(key: "aiResponseLanguage")
     }
     
+    // Force the whole app to the chosen appearance (overrides the system setting),
+    // which propagates to every NSWindow/NSPanel and to SwiftUI's colorScheme.
+    func applyAppearance() {
+        NSApplication.shared.appearance = (appearance == "dark")
+            ? NSAppearance(named: .darkAqua)
+            : NSAppearance(named: .aqua)
+    }
+
     private func updateLaunchAtLogin() {
         if #available(macOS 13.0, *) {
             do {

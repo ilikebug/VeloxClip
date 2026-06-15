@@ -50,8 +50,16 @@ class ShortcutRecorderView: NSView {
     
     private func setupView() {
         let button = NSButton(title: displayShortcut(shortcut), target: self, action: #selector(startRecording))
-        button.bezelStyle = .rounded
-        button.controlSize = .regular
+        // Self-drawn chrome instead of the system rounded bezel (whose corners /
+        // padding / shadow differ across macOS versions) so the recorder looks the
+        // same on every machine.
+        button.isBordered = false
+        button.wantsLayer = true
+        button.font = .systemFont(ofSize: 12, weight: .medium)
+        button.layer?.cornerRadius = 6
+        button.layer?.borderWidth = 1
+        button.layer?.backgroundColor = NSColor(white: 1.0, alpha: 0.08).cgColor
+        button.layer?.borderColor = NSColor(white: 1.0, alpha: 0.14).cgColor
         button.translatesAutoresizingMaskIntoConstraints = false
         addSubview(button)
         

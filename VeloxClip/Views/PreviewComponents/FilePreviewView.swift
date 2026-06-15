@@ -47,9 +47,9 @@ struct MultiFilePreview: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text("\(entries.count) Files")
-                        .font(.title3.bold())
+                        .font(.dsTitle3.bold())
                     Text(summaryLine)
-                        .font(.caption)
+                        .font(.dsCaption)
                         .foregroundColor(.secondary)
                 }
 
@@ -101,10 +101,10 @@ struct MultiFilePreview: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.name)
-                    .font(.body)
+                    .font(.dsBody)
                     .textSelection(.enabled)
                 Text(entry.path)
-                    .font(.caption2)
+                    .font(.dsCaption2)
                     .foregroundColor(.secondary)
                     .textSelection(.enabled)
                     .lineLimit(1)
@@ -114,7 +114,7 @@ struct MultiFilePreview: View {
 
             if entry.exists {
                 Text(formatFileSize(entry.size))
-                    .font(.caption)
+                    .font(.dsCaption)
                     .foregroundColor(.secondary)
 
                 Button(action: { revealInFinder(entry) }) {
@@ -130,7 +130,7 @@ struct MultiFilePreview: View {
                 .help("Copy just this file")
             } else {
                 Text("Missing")
-                    .font(.caption.bold())
+                    .font(.dsCaption.bold())
                     .foregroundColor(.orange)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
@@ -214,11 +214,11 @@ struct SingleFilePreview: View {
                     
                     VStack(alignment: .leading, spacing: 4) {
                         Text(info.name)
-                            .font(.title3.bold())
+                            .font(.dsTitle3.bold())
                             .textSelection(.enabled)
 
                         Text(info.path)
-                            .font(.caption)
+                            .font(.dsCaption)
                             .foregroundColor(.secondary)
                             .textSelection(.enabled)
                             .lineLimit(1)
@@ -234,7 +234,7 @@ struct SingleFilePreview: View {
                 if info.exists {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("File Details")
-                            .font(.headline)
+                            .font(.dsHeadline)
                         
                         Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 12) {
                             fileInfoRow(label: "Size", value: formatFileSize(info.size))
@@ -253,22 +253,22 @@ struct SingleFilePreview: View {
                         Button(action: openFile) {
                             Label("Open File", systemImage: "doc")
                         }
-                        .buttonStyle(.borderedProminent)
-                        
+                        .dsButton(.prominent)
+
                         Button(action: revealInFinder) {
                             Label("Reveal in Finder", systemImage: "folder")
                         }
-                        .buttonStyle(.bordered)
-                        
+                        .dsButton()
+
                         Button(action: copyPath) {
                             Label("Copy Path", systemImage: "doc.on.doc")
                         }
-                        .buttonStyle(.bordered)
-                        
+                        .dsButton()
+
                         Button(action: copyName) {
                             Label("Copy Name", systemImage: "text")
                         }
-                        .buttonStyle(.bordered)
+                        .dsButton()
                         
                         Spacer()
                     }
@@ -296,10 +296,10 @@ struct SingleFilePreview: View {
     private func fileInfoRow(label: String, value: String) -> some View {
         GridRow {
             Text(label)
-                .font(.caption.bold())
+                .font(.dsCaption.bold())
                 .foregroundColor(.secondary)
             Text(value)
-                .font(.caption)
+                .font(.dsCaption)
                 .textSelection(.enabled)
         }
     }

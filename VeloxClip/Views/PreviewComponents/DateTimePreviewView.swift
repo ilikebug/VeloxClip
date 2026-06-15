@@ -18,26 +18,26 @@ struct DateTimePreviewView: View {
                 // Date display
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Date/Time Formats")
-                        .font(.headline)
+                        .font(.dsHeadline)
                         .padding(.bottom, 4)
                     
                     VStack(spacing: 8) {
                         ForEach(Array(formats.enumerated()), id: \.offset) { index, format in
                             HStack {
                                 Text(format.name)
-                                    .font(.caption.bold())
+                                    .font(.dsCaption.bold())
                                     .foregroundColor(.secondary)
                                     .frame(width: 120, alignment: .leading)
-                                
+
                                 Text(format.value)
-                                    .font(.system(.body, design: .monospaced))
+                                    .font(.dsMonoBody)
                                     .textSelection(.enabled)
                                 
                                 Spacer()
                                 
                                 Button(action: { copyFormat(format.value) }) {
                                     Image(systemName: "doc.on.doc")
-                                        .font(.caption)
+                                        .font(.dsCaption)
                                         .foregroundColor(.blue)
                                 }
                                 .buttonStyle(.plain)
@@ -58,23 +58,23 @@ struct DateTimePreviewView: View {
                     Button(action: { copyFormat(formats.first?.value ?? "") }) {
                         Label("Copy ISO", systemImage: "doc.on.doc")
                     }
-                    .buttonStyle(.bordered)
-                    
+                    .dsButton()
+
                     Button(action: { copyUnixTimestamp() }) {
                         Label("Copy Unix", systemImage: "number")
                     }
-                    .buttonStyle(.bordered)
-                    
+                    .dsButton()
+
                     Button(action: { copyAllFormats() }) {
                         Label("Copy All", systemImage: "doc.on.doc.fill")
                     }
-                    .buttonStyle(.bordered)
+                    .dsButton()
                     
                     Spacer()
                 }
             } else {
                 Text(dateString)
-                    .font(.body)
+                    .font(.dsBody)
                     .textSelection(.enabled)
             }
         }
