@@ -59,7 +59,7 @@ struct MarkdownView: View {
         HStack {
             if isLoadingMore {
                 ProgressView().scaleEffect(0.7)
-                Text("Loading more...").font(.caption).foregroundColor(.secondary)
+                Text("Loading more...").font(.dsCaption).foregroundColor(.secondary)
             }
         }
         .frame(maxWidth: .infinity).padding(.vertical, 8)
@@ -198,7 +198,7 @@ struct MarkdownChunkView: View {
                         FontSize(.em(2.0))
                         FontWeight(.bold)
                     }
-                    .font(.largeTitle.bold())
+                    .font(.dsLargeTitle.bold())
                     .padding(.top, 8)
                     .padding(.bottom, 4)
             }
@@ -208,7 +208,7 @@ struct MarkdownChunkView: View {
                         FontSize(.em(1.75))
                         FontWeight(.bold)
                     }
-                    .font(.title.bold())
+                    .font(.dsTitle.bold())
                     .padding(.top, 8)
                     .padding(.bottom, 4)
             }
@@ -218,7 +218,7 @@ struct MarkdownChunkView: View {
                         FontSize(.em(1.5))
                         FontWeight(.bold)
                     }
-                    .font(.title2.bold())
+                    .font(.dsTitle2.bold())
                     .padding(.top, 8)
                     .padding(.bottom, 4)
             }
@@ -228,7 +228,7 @@ struct MarkdownChunkView: View {
                         FontSize(.em(1.25))
                         FontWeight(.bold)
                     }
-                    .font(.title3.bold())
+                    .font(.dsTitle3.bold())
                     .padding(.top, 8)
                     .padding(.bottom, 4)
             }
@@ -238,7 +238,7 @@ struct MarkdownChunkView: View {
                         FontSize(.em(1.1))
                         FontWeight(.bold)
                     }
-                    .font(.headline.bold())
+                    .font(.dsHeadline.bold())
                     .padding(.top, 8)
                     .padding(.bottom, 4)
             }
@@ -248,7 +248,7 @@ struct MarkdownChunkView: View {
                         FontSize(.em(1.0))
                         FontWeight(.bold)
                     }
-                    .font(.subheadline.bold())
+                    .font(.dsSubheadline.bold())
                     .padding(.top, 8)
                     .padding(.bottom, 4)
             }

@@ -151,8 +151,8 @@ final class TextCaptureService {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isReleasedWhenClosed = false
 
-        // Top-center of the screen, just below the menu bar
-        let screen = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+        // Top-center of the active screen, just below the menu bar
+        let screen = NSScreen.activeOrMain?.visibleFrame ?? .zero
         panel.setFrameOrigin(NSPoint(
             x: screen.midX - panel.frame.width / 2,
             y: screen.maxY - panel.frame.height - 16
@@ -183,6 +183,7 @@ final class TextCaptureService {
 private struct TextCaptureToastView: View {
     let message: String
     let isSuccess: Bool
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
         HStack(spacing: 8) {
@@ -193,7 +194,13 @@ private struct TextCaptureToastView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(.ultraThinMaterial, in: Capsule())
+        .background {
+            if reduceTransparency {
+                Capsule().fill(Color(nsColor: .windowBackgroundColor))
+            } else {
+                Capsule().fill(.ultraThinMaterial)
+            }
+        }
         .overlay(Capsule().stroke(Color.primary.opacity(0.1), lineWidth: 1))
         .padding(6)
     }

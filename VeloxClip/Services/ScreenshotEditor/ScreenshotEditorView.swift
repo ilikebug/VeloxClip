@@ -428,12 +428,11 @@ struct ScreenshotEditorView: View {
                 Image(systemName: editorState.currentTool == .text ? "textformat.size" : "lineweight")
                     .foregroundColor(.secondary)
                 
-                Slider(value: editorState.currentTool == .text ? $editorState.fontSize : $editorState.lineWidth, in: editorState.currentTool == .text ? 6...120 : 1...30)
+                DSSlider(value: editorState.currentTool == .text ? $editorState.fontSize : $editorState.lineWidth, in: editorState.currentTool == .text ? 6...120 : 1...30)
                     .frame(width: 120)
-                    .tint(DesignSystem.primaryGradient)
-                
+
                 Text("\(Int(editorState.currentTool == .text ? editorState.fontSize : editorState.lineWidth))")
-                    .font(.caption.monospaced())
+                    .font(.dsCaption.monospaced())
                     .frame(width: 30)
                     .foregroundColor(.secondary)
             }
@@ -447,12 +446,11 @@ struct ScreenshotEditorView: View {
                 Image(systemName: "circle.lefthalf.filled")
                     .foregroundColor(.secondary)
 
-                Slider(value: $editorState.opacity, in: 0.1...1.0)
+                DSSlider(value: $editorState.opacity, in: 0.1...1.0)
                     .frame(width: 100)
-                    .tint(DesignSystem.primaryGradient)
 
                 Text("\(Int(editorState.opacity * 100))%")
-                    .font(.caption.monospaced())
+                    .font(.dsCaption.monospaced())
                     .frame(width: 40)
                     .foregroundColor(.secondary)
             }

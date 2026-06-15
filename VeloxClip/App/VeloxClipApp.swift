@@ -99,6 +99,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         
+        // Apply the saved appearance (defaults to light) before any window shows
+        AppSettings.shared.applyAppearance()
+
         // Register all global shortcuts
         ShortcutManager.shared.registerAllShortcuts()
 

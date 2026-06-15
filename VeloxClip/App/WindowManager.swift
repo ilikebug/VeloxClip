@@ -7,6 +7,19 @@ extension Notification.Name {
     static let veloxOverlayWillShow = Notification.Name("veloxOverlayWillShow")
 }
 
+extension NSScreen {
+    /// Screen under the mouse, falling back to the main screen, then the first
+    /// connected screen. Replaces the bogus hardcoded fallback resolutions
+    /// (1440×900 / 1920×1080) that mis-placed floating panels on external,
+    /// multi-monitor, or non-standard-DPI setups.
+    static var activeOrMain: NSScreen? {
+        let mouse = NSEvent.mouseLocation
+        return NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) }
+            ?? NSScreen.main
+            ?? NSScreen.screens.first
+    }
+}
+
 class OverlayWindow: NSWindow {
     override var canBecomeKey: Bool { return true }
     override var canBecomeMain: Bool { return true }
@@ -98,7 +111,6 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
                 defer: false
             )
 
-            win.center()
             win.isReleasedWhenClosed = false
             win.contentView = hostingController.view
             win.backgroundColor = .clear
@@ -120,8 +132,8 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
         // Activate app first to ensure it can receive focus
         NSApp.activate(ignoringOtherApps: true)
 
-        // Center window before showing
-        window?.center()
+        // Center window on the active display (not always the main screen)
+        centerOnActiveScreen()
 
         // Show window and make it key window
         window?.makeKeyAndOrderFront(nil)
@@ -138,6 +150,20 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
                 window.makeKeyAndOrderFront(nil)
             }
         }
+    }
+
+    private func centerOnActiveScreen() {
+        guard let window else { return }
+        guard let screen = NSScreen.activeOrMain else {
+            window.center()
+            return
+        }
+        let vf = screen.visibleFrame
+        let size = window.frame.size
+        window.setFrameOrigin(NSPoint(
+            x: vf.midX - size.width / 2,
+            y: vf.midY - size.height / 2
+        ))
     }
 
     func windowDidResignKey(_ notification: Notification) {

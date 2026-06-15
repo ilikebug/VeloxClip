@@ -27,26 +27,26 @@ struct ColorPreviewView: View {
                 // Color formats
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Color Formats")
-                        .font(.headline)
+                        .font(.dsHeadline)
                         .padding(.bottom, 4)
                     
                     VStack(spacing: 8) {
                         ForEach(Array(formats.enumerated()), id: \.offset) { index, format in
                             HStack {
                                 Text(format.name)
-                                    .font(.caption.bold())
+                                    .font(.dsCaption.bold())
                                     .foregroundColor(.secondary)
                                     .frame(width: 60, alignment: .leading)
-                                
+
                                 Text(format.value)
-                                    .font(.system(.body, design: .monospaced))
+                                    .font(.dsMonoBody)
                                     .textSelection(.enabled)
                                 
                                 Spacer()
                                 
                                 Button(action: { copyFormat(format.value) }) {
                                     Image(systemName: "doc.on.doc")
-                                        .font(.caption)
+                                        .font(.dsCaption)
                                         .foregroundColor(.blue)
                                 }
                                 .buttonStyle(.plain)
@@ -66,21 +66,21 @@ struct ColorPreviewView: View {
                 if let rgb = extractRGB(from: color) {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Color Information")
-                            .font(.headline)
+                            .font(.dsHeadline)
                         
                         Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 12) {
                             GridRow {
                                 infoLabel("Red")
-                                Text("\(rgb.r)").font(.system(.body, design: .monospaced))
+                                Text("\(rgb.r)").font(.dsMonoBody)
                                 infoLabel("Green")
-                                Text("\(rgb.g)").font(.system(.body, design: .monospaced))
+                                Text("\(rgb.g)").font(.dsMonoBody)
                             }
                             
                             GridRow {
                                 infoLabel("Blue")
-                                Text("\(rgb.b)").font(.system(.body, design: .monospaced))
+                                Text("\(rgb.b)").font(.dsMonoBody)
                                 infoLabel("Alpha")
-                                Text(String(format: "%.2f", rgb.a)).font(.system(.body, design: .monospaced))
+                                Text(String(format: "%.2f", rgb.a)).font(.dsMonoBody)
                             }
                         }
                     }
@@ -94,17 +94,17 @@ struct ColorPreviewView: View {
                     Button(action: { copyFormat(formats.first(where: { $0.name == "HEX" })?.value ?? "") }) {
                         Label("Copy HEX", systemImage: "doc.on.doc")
                     }
-                    .buttonStyle(.bordered)
-                    
+                    .dsButton()
+
                     Button(action: { copyFormat(formats.first(where: { $0.name == "RGB" })?.value ?? "") }) {
                         Label("Copy RGB", systemImage: "doc.on.doc")
                     }
-                    .buttonStyle(.bordered)
-                    
+                    .dsButton()
+
                     Button(action: { copyAllFormats() }) {
                         Label("Copy All", systemImage: "doc.on.doc.fill")
                     }
-                    .buttonStyle(.bordered)
+                    .dsButton()
                     
                     Spacer()
                 }
@@ -123,7 +123,7 @@ struct ColorPreviewView: View {
     
     private func infoLabel(_ text: String) -> some View {
         Text(text)
-            .font(.caption.bold())
+            .font(.dsCaption.bold())
             .foregroundColor(.secondary)
     }
     

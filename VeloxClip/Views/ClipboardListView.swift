@@ -33,7 +33,12 @@ struct ClipboardListView: View {
                 }
                 .onDelete(perform: deleteItems)
             }
-            .listStyle(.sidebar)
+            // .plain is the most neutral, version-stable list chrome; .sidebar's
+            // selection highlight / insets were redrawn across macOS releases.
+            // Selection is shown by the row's own background, so hide the system
+            // scroll background to keep the list looking identical everywhere.
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
             .onChange(of: scrollTarget) { _, target in
                 guard let target else { return }
                 withAnimation(.easeInOut(duration: 0.15)) {
@@ -80,15 +85,15 @@ struct ClipboardItemRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(displayContent(for: item))
                     .lineLimit(1)
-                    .font(.system(.body, design: .rounded))
-                
+                    .font(.system(size: 13, design: .rounded))
+
                 HStack {
                     Text(item.sourceApp ?? "Unknown")
                         .fontWeight(.medium)
                     Text("•")
                     Text(item.createdAt, style: .time)
                 }
-                .font(.caption2)
+                .font(.dsCaption2)
                 .foregroundColor(.secondary)
             }
 

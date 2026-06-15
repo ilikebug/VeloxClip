@@ -75,7 +75,7 @@ class PasteImageService {
         )
         
         // Calculate position with offset to avoid overlapping windows
-        let screenFrame = NSScreen.main?.frame ?? NSRect(x: 0, y: 0, width: 1920, height: 1080)
+        let screenFrame = NSScreen.activeOrMain?.frame ?? .zero
         let offset: CGFloat = CGFloat(pasteImageWindows.count) * 30 // Offset each new window
         let windowFrame = NSRect(
             x: screenFrame.midX - windowSize.width / 2 + offset,
@@ -179,15 +179,15 @@ struct PasteImageView: View {
                 HStack(spacing: 12) {
                     // Opacity slider
                     HStack(spacing: 6) {
-                        Slider(value: $opacity, in: 0.3...1.0)
+                        DSSlider(value: $opacity, in: 0.3...1.0)
                             .frame(width: 100)
                             .onChange(of: opacity) { _, newValue in
                                 // Update window opacity
                                 PasteImageService.shared.setWindowOpacity(newValue, for: window)
                             }
-                        
+
                         Text("\(Int(opacity * 100))%")
-                            .font(.caption2)
+                            .font(.dsCaption2)
                             .foregroundColor(.white)
                             .frame(width: 35)
                     }

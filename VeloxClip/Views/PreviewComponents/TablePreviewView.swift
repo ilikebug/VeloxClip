@@ -8,34 +8,50 @@ struct TablePreviewView: View {
     @State private var headers: [String] = []
     @State private var delimiter: String = ","
     @State private var searchText: String = ""
+
+    private var delimiterLabel: String {
+        switch delimiter {
+        case "\t": return "TSV (Tab)"
+        case "|": return "Pipe (|)"
+        default: return "CSV (,)"
+        }
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Toolbar
             HStack {
                 Text("Format:")
-                    .font(.caption)
+                    .font(.dsCaption)
                     .foregroundColor(.secondary)
                 
-                Picker("", selection: $delimiter) {
-                    Text("CSV (,)").tag(",")
-                    Text("TSV (Tab)").tag("\t")
-                    Text("Pipe (|)").tag("|")
+                Menu {
+                    Button("CSV (,)") { delimiter = "," }
+                    Button("TSV (Tab)") { delimiter = "\t" }
+                    Button("Pipe (|)") { delimiter = "|" }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(delimiterLabel).lineLimit(1)
+                        Spacer(minLength: 4)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(.secondary)
+                    }
+                    .compactMenuLabel(width: 120)
                 }
-                .pickerStyle(.menu)
-                .frame(width: 120)
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
                 .onChange(of: delimiter) { oldValue, newValue in
                     parseData()
                 }
                 
                 TextField("Search...", text: $searchText)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 200)
+                    .dsTextField(width: 200)
                 
                 Spacer()
                 
                 Text("\(parsedData.count) rows, \(headers.count) columns")
-                    .font(.caption)
+                    .font(.dsCaption)
                     .foregroundColor(.secondary)
             }
             .padding(.horizontal, 16)
@@ -199,7 +215,7 @@ struct TableView: View {
                 ProgressView()
                     .scaleEffect(0.7)
                 Text("Loading more rows...")
-                    .font(.caption)
+                    .font(.dsCaption)
                     .foregroundColor(.secondary)
             }
         }
@@ -235,7 +251,7 @@ struct TableCell: View {
     
     var body: some View {
         Text(content)
-            .font(isHeader ? .caption.bold() : .caption)
+            .font(isHeader ? .dsCaption.bold() : .dsCaption)
             .foregroundColor(isHeader ? .primary : .secondary)
             .textSelection(.enabled)
             .padding(8)

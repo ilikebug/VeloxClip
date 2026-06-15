@@ -38,7 +38,7 @@ struct ImagePreviewView: View {
     private var loadingPlaceholder: some View {
         VStack(spacing: 12) {
             ProgressView()
-            Text("Loading image...").font(.caption).foregroundColor(.secondary)
+            Text("Loading image...").font(.dsCaption).foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity).padding(.vertical, 40)
     }
@@ -59,17 +59,17 @@ struct ImagePreviewView: View {
             Button(action: { zoomLevel = max(0.25, zoomLevel - 0.25) }) {
                 Image(systemName: "minus.magnifyingglass")
             }
-            .buttonStyle(.bordered).controlSize(.small)
-            
+            .dsButton(small: true)
+
             Text("\(Int(zoomLevel * 100))%")
-                .font(.caption).foregroundColor(.secondary).frame(width: 60)
-            
+                .font(.dsCaption).foregroundColor(.secondary).frame(width: 60)
+
             Button(action: { zoomLevel = min(3.0, zoomLevel + 0.25) }) {
                 Image(systemName: "plus.magnifyingglass")
             }
-            .buttonStyle(.bordered).controlSize(.small)
-            
-            Button("Fit") { zoomLevel = 1.0 }.buttonStyle(.bordered).controlSize(.small)
+            .dsButton(small: true)
+
+            Button("Fit") { zoomLevel = 1.0 }.dsButton(small: true)
             
             Spacer()
         }
@@ -80,7 +80,7 @@ struct ImagePreviewView: View {
     private var infoSection: some View {
         if let info = imageInfo {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Information").font(.headline)
+                Text("Information").font(.dsHeadline)
                 Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 8) {
                     imageInfoRow(label: "Dimensions", value: "\(Int(info.size.width)) × \(Int(info.size.height)) px")
                     imageInfoRow(label: "File Size", value: formatFileSize(info.fileSize))
@@ -97,10 +97,10 @@ struct ImagePreviewView: View {
     private func imageInfoRow(label: String, value: String) -> some View {
         GridRow {
             Text(label)
-                .font(.caption.bold())
+                .font(.dsCaption.bold())
                 .foregroundColor(.secondary)
             Text(value)
-                .font(.caption)
+                .font(.dsCaption)
         }
     }
     
