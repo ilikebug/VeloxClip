@@ -25,7 +25,7 @@ enum CommandResolver {
         cmds.append(contentsOf: [
             Command(id: "favorite", title: "收藏",            keyHint: nil,     icon: "star"),
             Command(id: "stack",    title: "加入 Paste Stack", keyHint: "space", icon: "square.stack"),
-            Command(id: "delete",   title: "删除",            keyHint: "⌫",     icon: "trash"),
+            Command(id: "delete",   title: "删除",            keyHint: nil,     icon: "trash"),
         ])
         return cmds
     }

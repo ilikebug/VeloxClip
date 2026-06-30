@@ -315,6 +315,11 @@ struct MainView: View {
 
         // Key codes: left=123 right=124 down=125 up=126 return=36 keypadEnter=76 esc=53 tab=48 space=49
         if detailItem != nil {
+            // While editing a tag (or any focused text field) in detail mode, let
+            // ←, Esc, and ⏎ reach the field editor: ← moves the caret, Esc cancels,
+            // and ⏎ commits the tag via PreviewView's .onSubmit. Hijacking them here
+            // would make adding a tag impossible.
+            if editingText { return false }
             switch key {
             case 123, 53: // ← or Esc → back to list
                 withAnimation(.easeInOut(duration: 0.18)) { detailItem = nil }
