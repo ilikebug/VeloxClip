@@ -20,6 +20,37 @@ extension NSScreen {
     }
 }
 
+struct WindowTargetPolicy {
+    static func rememberedTargetProcessID(currentFrontmostProcessID: pid_t?,
+                                          previousTargetProcessID: pid_t?,
+                                          ownProcessID: pid_t) -> pid_t? {
+        guard let currentFrontmostProcessID else {
+            return previousTargetProcessID
+        }
+        if currentFrontmostProcessID == ownProcessID {
+            return previousTargetProcessID
+        }
+        return currentFrontmostProcessID
+    }
+
+    static func pasteTargetProcessID(rememberedTargetProcessID: pid_t?,
+                                     currentFrontmostProcessID: pid_t?,
+                                     ownProcessID: pid_t) -> pid_t? {
+        if let rememberedTargetProcessID, rememberedTargetProcessID != ownProcessID {
+            return rememberedTargetProcessID
+        }
+        if let currentFrontmostProcessID, currentFrontmostProcessID != ownProcessID {
+            return currentFrontmostProcessID
+        }
+        return nil
+    }
+
+    static func shouldRememberActivatedApp(activatedProcessID: pid_t,
+                                           ownProcessID: pid_t) -> Bool {
+        activatedProcessID != ownProcessID
+    }
+}
+
 class OverlayWindow: NSWindow {
     override var canBecomeKey: Bool { return true }
     override var canBecomeMain: Bool { return true }
@@ -62,6 +93,10 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
     // before the injected Cmd+V reads it, pasting the wrong item.
     private var pasteInFlight = false
 
+    private var ownProcessID: pid_t {
+        ProcessInfo.processInfo.processIdentifier
+    }
+
     override private init() {
         super.init()
         // The resign-key handler keeps the window visible while a popover is key,
@@ -75,6 +110,21 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
                 WindowManager.shared.hideOverlay()
             }
         }
+
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { notification in
+            let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+            Task { @MainActor in
+                WindowManager.shared.rememberPotentialTargetApp(app)
+            }
+        }
+    }
+
+    func startTrackingTargetApps() {
+        rememberPotentialTargetApp(NSWorkspace.shared.frontmostApplication)
     }
 
     func toggleWindow() {
@@ -96,8 +146,9 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
     }
 
     private func showWindow() {
-        // Record the current frontmost app so we can return focus to it later
-        lastActiveApp = NSWorkspace.shared.frontmostApplication
+        // Record the non-VeloxClip frontmost app so we can return focus to it later.
+        // MenuBarExtra(.window) makes VeloxClip frontmost before its buttons run.
+        rememberPotentialTargetApp(NSWorkspace.shared.frontmostApplication)
 
         if window == nil {
             let contentView = MainView()
@@ -105,7 +156,12 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
             let hostingController = NSHostingController(rootView: contentView)
 
             let win = OverlayWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 560, height: 600),
+                contentRect: NSRect(
+                    x: 0,
+                    y: 0,
+                    width: OverlayWindowLayout.width,
+                    height: OverlayWindowLayout.height
+                ),
                 styleMask: [.borderless],
                 backing: .buffered,
                 defer: false
@@ -187,8 +243,17 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
     }
 
     func selectAndPaste(_ item: ClipboardItem) {
-        // 1. Record target app BEFORE hiding window (more accurate)
-        let targetApp = lastActiveApp ?? NSWorkspace.shared.frontmostApplication
+        // 1. Resolve target app BEFORE hiding window (more accurate), but never
+        // target VeloxClip itself when opened from the menu-bar dashboard.
+        let frontmostApp = NSWorkspace.shared.frontmostApplication
+        let targetApp = appMatching(
+            processID: WindowTargetPolicy.pasteTargetProcessID(
+                rememberedTargetProcessID: lastActiveApp?.processIdentifier,
+                currentFrontmostProcessID: frontmostApp?.processIdentifier,
+                ownProcessID: ownProcessID
+            ),
+            preferredApps: [lastActiveApp, frontmostApp]
+        )
 
         pasteInFlight = true
         Task { @MainActor in
@@ -249,6 +314,31 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
         let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
         AXIsProcessTrustedWithOptions(options)
         return false
+    }
+
+    private func rememberPotentialTargetApp(_ app: NSRunningApplication?) {
+        guard let app else { return }
+        guard WindowTargetPolicy.shouldRememberActivatedApp(
+            activatedProcessID: app.processIdentifier,
+            ownProcessID: ownProcessID
+        ) else { return }
+
+        lastActiveApp = appMatching(
+            processID: WindowTargetPolicy.rememberedTargetProcessID(
+                currentFrontmostProcessID: app.processIdentifier,
+                previousTargetProcessID: lastActiveApp?.processIdentifier,
+                ownProcessID: ownProcessID
+            ),
+            preferredApps: [app, lastActiveApp]
+        )
+    }
+
+    private func appMatching(processID: pid_t?,
+                             preferredApps: [NSRunningApplication?]) -> NSRunningApplication? {
+        guard let processID else { return nil }
+        return preferredApps.compactMap { $0 }.first {
+            $0.processIdentifier == processID && !$0.isTerminated
+        }
     }
 
     private func injectPasteEvent(to app: NSRunningApplication) {

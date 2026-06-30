@@ -2,6 +2,64 @@ import SwiftUI
 import SwiftData
 import AppKit
 
+struct MainSearchBarLayout {
+    static let fontSize: CGFloat = 14
+    static let verticalPadding: CGFloat = 14
+}
+
+struct MainKeyRoutingPolicy {
+    static func shouldStageOnSpace(isComposingText: Bool) -> Bool {
+        false
+    }
+
+    static func shouldStageOnCommandReturn(isComposingText: Bool) -> Bool {
+        !isComposingText
+    }
+
+    static func shouldOpenDetailOnRightArrow(isCommandPressed: Bool,
+                                             isComposingText: Bool) -> Bool {
+        isCommandPressed && !isComposingText
+    }
+
+    static func shouldPasteOnReturn(isCommandPressed: Bool,
+                                    isComposingText: Bool) -> Bool {
+        !isCommandPressed && !isComposingText
+    }
+
+    static func shouldHandleEscape(isComposingText: Bool) -> Bool {
+        !isComposingText
+    }
+
+    static func shouldSwitchTabsOnTab(isComposingText: Bool) -> Bool {
+        !isComposingText
+    }
+}
+
+enum MainListInteraction {
+    case rowSelection
+    case rowControl
+    case keyboardSelection
+}
+
+struct MainFocusRoutingPolicy {
+    static func shouldBlurSearchOnListInteraction(hasSelectableItems: Bool) -> Bool {
+        false
+    }
+
+    static func shouldRestoreSearchFocus(isDetailPresented: Bool,
+                                         isCommandPalettePresented: Bool) -> Bool {
+        !isDetailPresented && !isCommandPalettePresented
+    }
+
+    static func shouldRestoreSearchFocusAfterListInteraction(_ interaction: MainListInteraction) -> Bool {
+        true
+    }
+
+    static func shouldClearSearchFocusWhenPresentingDetail() -> Bool {
+        true
+    }
+}
+
 enum ViewMode {
     case favorites
     case history
@@ -46,6 +104,37 @@ struct MainView: View {
     private var emptyKind: EmptyKind {
         if !searchText.isEmpty { return .noMatch }
         return viewMode == .favorites ? .favoritesEmpty : .historyEmpty
+    }
+
+    private func restoreSearchFocusSoon() {
+        guard MainFocusRoutingPolicy.shouldRestoreSearchFocus(
+            isDetailPresented: detailItem != nil,
+            isCommandPalettePresented: showCommandPalette
+        ) else { return }
+
+        isSearchFocused = true
+        Task { @MainActor in
+            await Task.yield()
+            guard MainFocusRoutingPolicy.shouldRestoreSearchFocus(
+                isDetailPresented: detailItem != nil,
+                isCommandPalettePresented: showCommandPalette
+            ) else { return }
+            isSearchFocused = true
+        }
+    }
+
+    private func restoreSearchFocusAfterListInteraction(_ interaction: MainListInteraction) {
+        guard MainFocusRoutingPolicy.shouldRestoreSearchFocusAfterListInteraction(interaction) else { return }
+        restoreSearchFocusSoon()
+    }
+
+    private func openDetail(_ item: ClipboardItem) {
+        if MainFocusRoutingPolicy.shouldClearSearchFocusWhenPresentingDetail() {
+            isSearchFocused = false
+        }
+        withAnimation(.easeInOut(duration: 0.18)) {
+            detailItem = item
+        }
     }
 
     private func updateSearchResults() {
@@ -172,7 +261,7 @@ struct MainView: View {
         // ⌘K palette closes — neither of which holds SwiftUI keyboard focus.
         let base = rootContent(c)
             .background(KeyMonitor(onKeyDown: handleKeyDown))
-            .frame(width: 560, height: 600)
+            .frame(width: OverlayWindowLayout.width, height: OverlayWindowLayout.height)
             .background(DesignSystem.backgroundBlur)
             .cornerRadius(16)
             .overlay(
@@ -226,6 +315,7 @@ struct MainView: View {
             } else {
                 selectedItem = nil
             }
+            restoreSearchFocusSoon()
         }
         .onChange(of: typeFilter) { _, _ in
             // Keep the selection inside the filtered list
@@ -233,9 +323,20 @@ struct MainView: View {
                 selectedItem = displayItems.first
                 scrollTarget = displayItems.first?.id
             }
+            restoreSearchFocusSoon()
         }
         .onChange(of: searchText) { _, _ in
             updateSearchResults()
+        }
+        .onChange(of: showCommandPalette) { _, isPresented in
+            if !isPresented {
+                restoreSearchFocusSoon()
+            }
+        }
+        .onChange(of: detailItem?.id) { _, detailID in
+            if detailID == nil {
+                restoreSearchFocusSoon()
+            }
         }
         .onChange(of: store.items) { _, newItems in
             // Deleting an item must not leave a ghost row in active search results
@@ -243,21 +344,13 @@ struct MainView: View {
             let validIDs = Set(newItems.map(\.id))
             searchResults.removeAll { !validIDs.contains($0.id) }
         }
-        .onChange(of: selectedItem) { _, _ in
-            // Clicking a row makes the List the first responder, dropping search
-            // focus; bring it back so subsequent typing enters the search field.
-            // Guarded so we don't steal focus from the detail tag field or palette.
-            if detailItem == nil, !showCommandPalette, !isSearchFocused {
-                isSearchFocused = true
-            }
-        }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { notification in
             // Only react to the overlay window itself — other windows (Settings,
             // popovers) becoming key must not steal the search focus
             guard notification.object is OverlayWindow else { return }
             // Only re-arm search focus in list mode; in detail mode the search field
             // isn't in the tree (this would be a no-op anyway — kept for symmetry).
-            if detailItem == nil { isSearchFocused = true }
+            if detailItem == nil { restoreSearchFocusSoon() }
         }
         .onReceive(NotificationCenter.default.publisher(for: .veloxOverlayWillShow)) { _ in
             // Reset state only when the overlay is (re)opened, not every time it
@@ -313,6 +406,7 @@ struct MainView: View {
         // must fall through to the responder chain rather than being hijacked for
         // copy-item / open-detail.
         let editingText = event.window?.firstResponder is NSTextView
+        let isComposingText = (event.window?.firstResponder as? NSTextView)?.hasMarkedText() ?? false
 
         // ⌘C copies the detail/selected item with its full payload (works in both
         // list and detail mode) — makes the palette's `⌘C` hint truthful. But when
@@ -331,15 +425,18 @@ struct MainView: View {
         // Key codes: left=123 right=124 down=125 up=126 return=36 keypadEnter=76 esc=53 tab=48 space=49
         if detailItem != nil {
             // While editing a tag (or any focused text field) in detail mode, let
-            // ←, Esc, and ⏎ reach the field editor: ← moves the caret, Esc cancels,
-            // and ⏎ commits the tag via PreviewView's .onSubmit. Hijacking them here
-            // would make adding a tag impossible.
+            // editing keys reach the field editor. Hijacking them here would make
+            // adding a tag or selecting preview text impossible.
             if editingText { return false }
             switch key {
-            case 123, 53: // ← or Esc → back to list
+            case 123 where isCmd, 53: // ⌘← or Esc → back to list
                 withAnimation(.easeInOut(duration: 0.18)) { detailItem = nil }
                 return true
             case 36, 76: // ⏎ → paste
+                if !MainKeyRoutingPolicy.shouldPasteOnReturn(
+                    isCommandPressed: isCmd,
+                    isComposingText: isComposingText
+                ) { return false }
                 executeSelection()
                 return true
             default:
@@ -352,32 +449,59 @@ struct MainView: View {
         if isCmd, event.charactersIgnoringModifiers?.lowercased() == "k" {
             showCommandPalette = true; return true
         }
+        // ⌘⏎ toggles paste-stack staging for the selected row.
+        if isCmd, (key == 36 || key == 76) {
+            if MainKeyRoutingPolicy.shouldStageOnCommandReturn(isComposingText: isComposingText),
+               let item = selectedItem {
+                PasteStackService.shared.toggleStaged(item)
+                return true
+            }
+            return false
+        }
+        // ⌘→ opens detail. Plain → belongs to the search field for caret movement.
+        if key == 124 {
+            if !MainKeyRoutingPolicy.shouldOpenDetailOnRightArrow(
+                isCommandPressed: isCmd,
+                isComposingText: isComposingText
+            ) { return false }
+            if let item = selectedItem { openDetail(item) }
+            return selectedItem != nil
+        }
         // ⌘1–9 pastes the Nth row
         if isCmd, let ch = event.charactersIgnoringModifiers, let n = Int(ch), n >= 1, n <= 9,
            displayItems.indices.contains(n - 1) {
             WindowManager.shared.selectAndPaste(displayItems[n - 1]); return true
         }
         switch key {
-        case 126: moveSelection(direction: -1); return true   // ↑
-        case 125: moveSelection(direction: 1); return true    // ↓
-        case 124:                                              // → open detail
-            // The search field is always the first responder in list mode, so
-            // `editingText` is true throughout normal browsing. Only fall through
-            // to native caret movement when there's actually text to move through;
-            // with an empty search field (the default) let → open detail.
-            // (← keyCode 123 already falls through in list mode.)
-            if editingText, !searchText.isEmpty { return false }
-            if let item = selectedItem { withAnimation(.easeInOut(duration: 0.18)) { detailItem = item } }
-            return selectedItem != nil
-        case 36, 76: executeSelection(); return true           // ⏎ paste
+        case 126:
+            if isComposingText { return false }
+            moveSelection(direction: -1); return true          // ↑
+        case 125:
+            if isComposingText { return false }
+            moveSelection(direction: 1); return true           // ↓
+        case 36, 76:
+            if !MainKeyRoutingPolicy.shouldPasteOnReturn(
+                isCommandPressed: isCmd,
+                isComposingText: isComposingText
+            ) { return false }
+            executeSelection(); return true                    // ⏎ paste
         case 53:                                               // Esc: clear query first, else close overlay
+            if !MainKeyRoutingPolicy.shouldHandleEscape(isComposingText: isComposingText) {
+                return false
+            }
             if !searchText.isEmpty { searchText = ""; return true }
             WindowManager.shared.toggleWindow(); return true
         case 48:                                               // Tab switch tabs
+            if !MainKeyRoutingPolicy.shouldSwitchTabsOnTab(isComposingText: isComposingText) {
+                return false
+            }
             withAnimation(.easeInOut(duration: 0.2)) { viewMode = (viewMode == .history ? .favorites : .history) }
             return true
-        case 49:                                               // Space: stage only when search empty
-            if searchText.isEmpty, let item = selectedItem {
+        case 49:                                               // Space always belongs to text input / IME
+            if MainKeyRoutingPolicy.shouldStageOnSpace(
+                isComposingText: isComposingText
+            ),
+               let item = selectedItem {
                 PasteStackService.shared.toggleStaged(item); return true
             }
             return false   // otherwise let the space type into the search field
@@ -406,16 +530,14 @@ struct MainView: View {
 
                 TextField("搜索剪贴…", text: $searchText)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 13))
+                    .font(.system(size: MainSearchBarLayout.fontSize))
                     .focused($isSearchFocused)
                     .onSubmit {
                         executeSelection()
                     }
-
-                DSKeyBadge(label: "⌘V")
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.vertical, MainSearchBarLayout.verticalPadding)
             .background(DesignSystem.backgroundBlur)
 
             Divider().overlay(c.divider)
@@ -430,17 +552,23 @@ struct MainView: View {
             .padding(.top, 9)
             .padding(.bottom, 8)
             Divider().overlay(c.divider)
-            ClipboardListView(selectedItem: $selectedItem, items: displayItems, scrollTarget: $scrollTarget, emptyKind: emptyKind)
+            ClipboardListView(
+                selectedItem: $selectedItem,
+                items: displayItems,
+                scrollTarget: $scrollTarget,
+                emptyKind: emptyKind,
+                onUserInteract: { interaction in
+                    restoreSearchFocusAfterListInteraction(interaction)
+                }
+            )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             // Bottom action bar
             Divider().overlay(c.divider)
             HStack(spacing: 14) {
                 actionHint("粘贴", "⏎")
-                // → only opens detail when the search field is empty; hide the key
-                // hint otherwise so the bar never advertises an inactive shortcut.
-                actionHint("详情", searchText.isEmpty ? "→" : nil)
-                actionHint("入栈", "space")
+                actionHint("详情", "⌘→")
+                actionHint("入栈", "⌘⏎")
                 actionHint("动作", "⌘K")
                 Spacer()
                 Text("\(displayItems.count) 条")
@@ -483,7 +611,7 @@ struct MainView: View {
         case "copy":
             if let i = item { copyItem(i) }
         case "detail":
-            if let i = item { withAnimation(.easeInOut(duration: 0.18)) { detailItem = i } }
+            if let i = item { openDetail(i) }
         case "copyHex":
             if let content = item?.content {
                 copyString(ColorFormatting.hex(from: content) ?? content)
@@ -539,6 +667,7 @@ struct MainView: View {
 
         if nextIndex >= 0 && nextIndex < items.count {
             selectedItem = items[nextIndex]
+            restoreSearchFocusAfterListInteraction(.keyboardSelection)
             // Keyboard navigation keeps the selection in view; mouse clicks never scroll
             scrollTarget = items[nextIndex].id
         }

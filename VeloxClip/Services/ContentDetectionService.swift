@@ -62,12 +62,12 @@ actor ContentDetectionService {
         guard lines.count >= 2 else { return false }
 
         // Real tabular data has the same delimiter count on every row.
-        // Commas additionally require >= 2 columns-worth, or any prose with
-        // a comma per line would render as a table.
+        // Comma and pipe content require >= 3 columns; otherwise short notes like
+        // "状态 | 说明" can look like tables and show the table toolbar.
         for delimiter in ["\t", "|", ","] {
             let counts = lines.map { $0.components(separatedBy: delimiter).count - 1 }
             guard let first = counts.first, first >= 1, counts.allSatisfy({ $0 == first }) else { continue }
-            if delimiter == "," && first < 2 { continue }
+            if (delimiter == "," || delimiter == "|") && first < 2 { continue }
             return true
         }
         return false

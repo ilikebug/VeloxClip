@@ -16,60 +16,253 @@ struct VeloxClipApp: App {
         .defaultSize(width: 500, height: 350)
         
         MenuBarExtra {
-            Button("Show Clipboard") {
-                WindowManager.shared.toggleWindow()
-            }
-            .keyboardShortcut("v", modifiers: [.command, .shift])
-
-            Button("Paste Image") {
-                PasteImageService.shared.showPasteImage()
-            }
-
-            MenuBarQueueSection()
-
-            Divider()
-
-            Button("Preferences...") {
+            MenuBarDashboard(openSettings: {
                 openWindow(id: "settings")
                 NSApp.activate(ignoringOtherApps: true)
-            }
-            .keyboardShortcut(",", modifiers: .command)
-
-            Divider()
-
-            Button("Quit Velox Clip") {
-                NSApplication.shared.terminate(nil)
-            }
-            .keyboardShortcut("q", modifiers: .command)
+            })
         } label: {
             MenuBarLabel()
         }
+        .menuBarExtraStyle(.window)
     }
 }
 
-// Queue controls in the menu-bar menu — the only way to resume/cancel a
-// stack when the HUD is disabled in settings
-struct MenuBarQueueSection: View {
+struct MenuBarDashboard: View {
+    @ObservedObject var store = ClipboardStore.shared
     @ObservedObject var stack = PasteStackService.shared
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.dismiss) private var dismiss
+    let openSettings: () -> Void
 
     var body: some View {
-        if stack.phase == .active || stack.phase == .paused {
-            Divider()
-            if stack.phase == .paused {
-                Button("Resume Paste Queue (\(progress))") {
-                    stack.resume()
-                }
-            } else {
-                Text("Paste Queue: \(progress)")
-            }
-            Button("Cancel Paste Queue") {
-                stack.cancel()
-            }
+        let c = DSColors(scheme: scheme)
+        VStack(spacing: 0) {
+            header(c)
+            stats(c)
+            quickActions(c)
+            queueControls(c)
+            footer(c)
+        }
+        .frame(width: 330)
+        .background(c.window)
+        .onAppear {
+            store.loadFavorites()
         }
     }
 
-    private var progress: String {
-        "\(min(stack.cursor + 1, stack.queue.count))/\(stack.queue.count)"
+    private var presentation: MenuBarDashboardPresentation {
+        MenuBarDashboardPresentation(
+            historyCount: store.items.count,
+            favoriteCount: store.favoriteItems.count,
+            stagedCount: stack.staged.count,
+            queueCount: stack.queue.count,
+            cursor: stack.cursor,
+            phase: stack.phase
+        )
+    }
+
+    private func header(_ c: DSColors) -> some View {
+        HStack(spacing: 10) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(c.accent)
+                Image(systemName: "paperclip")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+            .frame(width: 36, height: 36)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("VeloxClip")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(c.text)
+                Text(presentation.statusText)
+                    .font(.system(size: 11.5))
+                    .foregroundColor(c.text2)
+            }
+
+            Spacer()
+
+            Button {
+                performDashboardAction(.settings) {
+                    openSettings()
+                }
+            } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(c.text2)
+                    .frame(width: 28, height: 28)
+                    .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(c.chip))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 14)
+        .padding(.bottom, 12)
+    }
+
+    private func stats(_ c: DSColors) -> some View {
+        HStack(spacing: 8) {
+            statCard("历史", presentation.historyValue, icon: "clock.arrow.circlepath", c)
+            statCard("收藏", presentation.favoriteValue, icon: "star", c)
+            statCard("队列", presentation.queueValue, icon: "square.stack.3d.up", c)
+        }
+        .padding(.horizontal, 14)
+        .padding(.bottom, 12)
+    }
+
+    private func statCard(_ label: String, _ value: String, icon: String, _ c: DSColors) -> some View {
+        VStack(spacing: 5) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(c.text2)
+            Text(value)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(c.text)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+            Text(label)
+                .font(.system(size: 10.5))
+                .foregroundColor(c.text2)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 74)
+        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(c.card))
+    }
+
+    private func quickActions(_ c: DSColors) -> some View {
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
+            dashboardAction("打开剪贴板", icon: "rectangle.stack", isPrimary: true, c: c) {
+                performDashboardAction(.openClipboard) {
+                    WindowManager.shared.toggleWindow()
+                }
+            }
+            dashboardAction("粘贴图片", icon: "photo.on.rectangle", c: c) {
+                performDashboardAction(.pasteImage) {
+                    PasteImageService.shared.showPasteImage()
+                }
+            }
+            dashboardAction("屏幕取词", icon: "text.viewfinder", c: c) {
+                performDashboardAction(.captureText) {
+                    TextCaptureService.shared.captureText()
+                }
+            }
+            dashboardAction("设置", icon: "gearshape", c: c) {
+                performDashboardAction(.settings) {
+                    openSettings()
+                }
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.bottom, 12)
+    }
+
+    private func dashboardAction(_ title: String,
+                                 icon: String,
+                                 isPrimary: Bool = false,
+                                 c: DSColors,
+                                 action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.system(size: 13, weight: .semibold))
+                Text(title)
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+            }
+            .foregroundColor(isPrimary ? .white : c.text)
+            .frame(maxWidth: .infinity)
+            .frame(height: 42)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(isPrimary ? c.accent : c.chip)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func queueControls(_ c: DSColors) -> some View {
+        if stack.phase == .active || stack.phase == .paused {
+            VStack(spacing: 8) {
+                Divider().overlay(c.divider)
+                HStack(spacing: 8) {
+                    if stack.phase == .paused {
+                        dashboardAction("继续队列", icon: "play.fill", isPrimary: true, c: c) {
+                            performDashboardAction(.resumeQueue) {
+                                stack.resume()
+                            }
+                        }
+                    }
+                    dashboardAction("取消队列", icon: "xmark", c: c) {
+                        performDashboardAction(.cancelQueue) {
+                            stack.cancel()
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.bottom, 12)
+        } else if !stack.staged.isEmpty {
+            VStack(spacing: 8) {
+                Divider().overlay(c.divider)
+                HStack(spacing: 8) {
+                    dashboardAction("开始队列", icon: "play.fill", isPrimary: true, c: c) {
+                        Task { @MainActor in
+                            await stack.startIfStaged()
+                            finishDashboardAction(.startQueue)
+                        }
+                    }
+                    dashboardAction("清空队列", icon: "trash", c: c) {
+                        performDashboardAction(.clearQueue) {
+                            stack.clearStaged()
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.bottom, 12)
+        }
+    }
+
+    private func performDashboardAction(_ dashboardAction: MenuBarDashboardAction,
+                                        operation: () -> Void) {
+        operation()
+        finishDashboardAction(dashboardAction)
+    }
+
+    private func finishDashboardAction(_ dashboardAction: MenuBarDashboardAction) {
+        if dashboardAction.dismissesPanel {
+            dismiss()
+        }
+        if dashboardAction.hidesAppAfterAction {
+            NSApp.hide(nil)
+        }
+    }
+
+    private func footer(_ c: DSColors) -> some View {
+        VStack(spacing: 0) {
+            Divider().overlay(c.divider)
+            HStack {
+                if let footerShortcutHint = presentation.footerShortcutHint {
+                    Text(footerShortcutHint)
+                        .font(.system(size: 10.8))
+                        .foregroundColor(c.text2)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                Spacer()
+                Button("退出") {
+                    NSApplication.shared.terminate(nil)
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 11.5, weight: .medium))
+                .foregroundColor(c.text2)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+        }
     }
 }
 
@@ -104,6 +297,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Register all global shortcuts
         ShortcutManager.shared.registerAllShortcuts()
+        WindowManager.shared.startTrackingTargetApps()
 
         // Paste stack HUD reacts to PasteStackService phase changes
         Task { @MainActor in

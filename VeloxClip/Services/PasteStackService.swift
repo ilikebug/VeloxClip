@@ -54,6 +54,11 @@ final class PasteStackService: ObservableObject {
         }
     }
 
+    func clearStaged() {
+        guard phase == .idle else { return }
+        staged.removeAll()
+    }
+
     // MARK: - Lifecycle
 
     // Same prompt flow as screenshot/paste injection: when the permission is

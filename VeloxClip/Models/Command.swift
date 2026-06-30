@@ -16,16 +16,16 @@ enum CommandResolver {
         var cmds: [Command] = [
             Command(id: "paste",  title: "粘贴", keyHint: "↵",  icon: "doc.on.clipboard"),
             Command(id: "copy",   title: "复制", keyHint: "⌘C", icon: "doc.on.doc"),
-            Command(id: "detail", title: "详情", keyHint: "→",  icon: "doc.text.magnifyingglass"),
+            Command(id: "detail", title: "详情", keyHint: "⌘→",  icon: "doc.text.magnifyingglass"),
         ]
         if type == "color" {
             cmds.append(Command(id: "copyHex", title: "复制 HEX", keyHint: nil, icon: "number"))
             cmds.append(Command(id: "copyRgb", title: "复制 RGB", keyHint: nil, icon: "number"))
         }
         cmds.append(contentsOf: [
-            Command(id: "favorite", title: "收藏",            keyHint: nil,     icon: "star"),
-            Command(id: "stack",    title: "加入 Paste Stack", keyHint: "space", icon: "square.stack"),
-            Command(id: "delete",   title: "删除",            keyHint: nil,     icon: "trash"),
+            Command(id: "favorite", title: "收藏",       keyHint: nil,    icon: "star"),
+            Command(id: "stack",    title: "加入粘贴队列", keyHint: "⌘⏎", icon: "square.stack"),
+            Command(id: "delete",   title: "删除",       keyHint: nil,    icon: "trash"),
         ])
         return cmds
     }

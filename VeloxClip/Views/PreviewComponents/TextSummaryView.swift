@@ -20,10 +20,10 @@ struct TextSummaryView: View {
         VStack(alignment: .leading, spacing: 12) {
             // Statistics
             HStack(spacing: 16) {
-                StatItem(icon: "text.word.spacing", label: "Words", value: "\(wordCount)")
-                StatItem(icon: "textformat", label: "Characters", value: "\(text.count)")
-                StatItem(icon: "line.3.horizontal", label: "Lines", value: "\(lineCount)")
-                StatItem(icon: "paragraph", label: "Paragraphs", value: "\(paragraphCount)")
+                StatItem(icon: "text.word.spacing", label: TextSummaryPresentation.wordsLabel, value: "\(wordCount)")
+                StatItem(icon: "textformat", label: TextSummaryPresentation.charactersLabel, value: "\(text.count)")
+                StatItem(icon: "line.3.horizontal", label: TextSummaryPresentation.linesLabel, value: "\(lineCount)")
+                StatItem(icon: "paragraph", label: TextSummaryPresentation.paragraphsLabel, value: "\(paragraphCount)")
             }
             .padding(16)
             .background(Color.secondary.opacity(0.05))
@@ -33,13 +33,13 @@ struct TextSummaryView: View {
             if let summary = summary {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
-                        Text("Summary")
+                        Text(TextSummaryPresentation.summaryTitle)
                             .font(.dsHeadline)
 
                         Spacer()
 
                         Button(action: { copyText(summary) }) {
-                            Label("Copy", systemImage: "doc.on.doc")
+                            Label(TextSummaryPresentation.copyButtonTitle, systemImage: "doc.on.doc")
                         }
                         .dsButton(small: true)
                     }
@@ -54,7 +54,7 @@ struct TextSummaryView: View {
                 .cornerRadius(12)
             } else if text.count > 200 {
                 Button(action: generateSummary) {
-                    Label("Generate Summary", systemImage: "text.alignleft")
+                    Label(TextSummaryPresentation.generateSummaryButtonTitle, systemImage: "text.alignleft")
                 }
                 .dsButton()
             }
@@ -62,7 +62,7 @@ struct TextSummaryView: View {
             // Keywords
             if !keywords.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Keywords")
+                    Text(TextSummaryPresentation.keywordsTitle)
                         .font(.dsHeadline)
                     
                     FlowLayout(spacing: 8) {
@@ -85,7 +85,8 @@ struct TextSummaryView: View {
             // Full text toggle
             if text.count > 500 {
                 Button(action: { showFullText.toggle() }) {
-                    Label(showFullText ? "Show Summary" : "Show Full Text", systemImage: showFullText ? "eye.slash" : "eye")
+                    Label(showFullText ? TextSummaryPresentation.showSummaryTitle : TextSummaryPresentation.showFullTextTitle,
+                          systemImage: showFullText ? "eye.slash" : "eye")
                 }
                 .dsButton()
             }
@@ -228,7 +229,7 @@ struct TextSummaryView: View {
             if isLoadingMore {
                 ProgressView()
                     .scaleEffect(0.7)
-                Text("Loading more paragraphs...")
+                Text(TextSummaryPresentation.loadingMoreParagraphsTitle)
                     .font(.dsCaption)
                     .foregroundColor(.secondary)
             }
@@ -326,4 +327,3 @@ struct FlowLayout: Layout {
         }
     }
 }
-

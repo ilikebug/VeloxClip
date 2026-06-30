@@ -46,7 +46,7 @@ struct MultiFilePreview: View {
                     .foregroundColor(.blue)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("\(entries.count) Files")
+                    Text(FilePreviewPresentation.filesTitle(count: entries.count))
                         .font(.dsTitle3.bold())
                     Text(summaryLine)
                         .font(.dsCaption)
@@ -86,7 +86,7 @@ struct MultiFilePreview: View {
         var parts = [formatter.string(fromByteCount: totalSize)]
         let missingCount = entries.count - existing.count
         if missingCount > 0 {
-            parts.append("\(missingCount) missing")
+            parts.append(FilePreviewPresentation.missingSummary(count: missingCount))
         }
         return parts.joined(separator: " · ")
     }
@@ -121,15 +121,15 @@ struct MultiFilePreview: View {
                     Image(systemName: "folder")
                 }
                 .buttonStyle(.plain)
-                .help("Reveal in Finder")
+                .help(FilePreviewPresentation.revealInFinderHelp)
 
                 Button(action: { copySingleFile(entry) }) {
                     Image(systemName: "doc.on.doc")
                 }
                 .buttonStyle(.plain)
-                .help("Copy just this file")
+                .help(FilePreviewPresentation.copySingleFileHelp)
             } else {
-                Text("Missing")
+                Text(FilePreviewPresentation.missingBadge)
                     .font(.dsCaption.bold())
                     .foregroundColor(.orange)
                     .padding(.horizontal, 6)
@@ -233,14 +233,14 @@ struct SingleFilePreview: View {
                 // File info
                 if info.exists {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("File Details")
+                        Text(FilePreviewPresentation.detailsTitle)
                             .font(.dsHeadline)
                         
                         Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 12) {
-                            fileInfoRow(label: "Size", value: formatFileSize(info.size))
-                            fileInfoRow(label: "Type", value: info.type)
+                            fileInfoRow(label: FilePreviewPresentation.sizeLabel, value: formatFileSize(info.size))
+                            fileInfoRow(label: FilePreviewPresentation.typeLabel, value: info.type)
                             if let modified = info.modifiedDate {
-                                fileInfoRow(label: "Modified", value: "\(modified.formatted(date: .abbreviated, time: .shortened))")
+                                fileInfoRow(label: FilePreviewPresentation.modifiedLabel, value: "\(modified.formatted(date: .abbreviated, time: .shortened))")
                             }
                         }
                     }
@@ -251,22 +251,22 @@ struct SingleFilePreview: View {
                     // Actions
                     HStack {
                         Button(action: openFile) {
-                            Label("Open File", systemImage: "doc")
+                            Label(FilePreviewPresentation.openFileButtonTitle, systemImage: "doc")
                         }
                         .dsButton(.prominent)
 
                         Button(action: revealInFinder) {
-                            Label("Reveal in Finder", systemImage: "folder")
+                            Label(FilePreviewPresentation.revealInFinderButtonTitle, systemImage: "folder")
                         }
                         .dsButton()
 
                         Button(action: copyPath) {
-                            Label("Copy Path", systemImage: "doc.on.doc")
+                            Label(FilePreviewPresentation.copyPathButtonTitle, systemImage: "doc.on.doc")
                         }
                         .dsButton()
 
                         Button(action: copyName) {
-                            Label("Copy Name", systemImage: "text")
+                            Label(FilePreviewPresentation.copyNameButtonTitle, systemImage: "text")
                         }
                         .dsButton()
                         
@@ -276,7 +276,7 @@ struct SingleFilePreview: View {
                     HStack {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundColor(.orange)
-                        Text("File does not exist")
+                        Text(FilePreviewPresentation.fileDoesNotExistMessage)
                             .foregroundColor(.orange)
                     }
                     .padding(12)
@@ -311,7 +311,7 @@ struct SingleFilePreview: View {
         
         var exists = false
         var size: Int64 = 0
-        var type = "Unknown"
+        var type = FilePreviewPresentation.unknownType
         var modifiedDate: Date?
         
         if FileManager.default.fileExists(atPath: path) {
@@ -331,7 +331,7 @@ struct SingleFilePreview: View {
                 type = uti
             } else {
                 let pathExtension = url.pathExtension.lowercased()
-                type = pathExtension.isEmpty ? "File" : pathExtension.uppercased() + " File"
+                type = pathExtension.isEmpty ? FilePreviewPresentation.genericFileType : pathExtension.uppercased() + " \(FilePreviewPresentation.genericFileType)"
             }
         }
         
@@ -393,4 +393,3 @@ struct SingleFilePreview: View {
         pasteboard.setString(info.name, forType: .string)
     }
 }
-

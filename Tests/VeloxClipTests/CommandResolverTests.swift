@@ -20,4 +20,10 @@ final class CommandResolverTests: XCTestCase {
             XCTAssertEqual(Set(["paste","copy","favorite","stack","delete"]).subtracting(ids), [])
         }
     }
+
+    func testMainActionKeyHintsMatchCurrentRouting() {
+        let commands = Dictionary(uniqueKeysWithValues: CommandResolver.commands(forType: "text").map { ($0.id, $0) })
+        XCTAssertEqual(commands["detail"]?.keyHint, "⌘→")
+        XCTAssertEqual(commands["stack"]?.keyHint, "⌘⏎")
+    }
 }

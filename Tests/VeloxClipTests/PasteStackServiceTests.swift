@@ -82,6 +82,21 @@ final class PasteStackServiceTests: XCTestCase {
         XCTAssertNil(service.stagedIndex(of: items[0].id))
     }
 
+    func testClearStagedOnlyWhileIdle() async {
+        let items = makeItems(2)
+        items.forEach { service.toggleStaged($0) }
+
+        service.clearStaged()
+        XCTAssertTrue(service.staged.isEmpty)
+
+        items.forEach { service.toggleStaged($0) }
+        await service.startIfStaged()
+        service.clearStaged()
+
+        XCTAssertEqual(service.phase, .active)
+        XCTAssertEqual(service.queue.map(\.id), items.map(\.id))
+    }
+
     func testStartWritesFirstItemAndActivates() async {
         let items = makeItems(2)
         items.forEach { service.toggleStaged($0) }

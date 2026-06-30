@@ -17,7 +17,7 @@ struct DateTimePreviewView: View {
             if parsedDate != nil {
                 // Date display
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Date/Time Formats")
+                    Text(DateTimePreviewPresentation.title)
                         .font(.dsHeadline)
                         .padding(.bottom, 4)
                     
@@ -56,17 +56,17 @@ struct DateTimePreviewView: View {
                 // Quick actions
                 HStack {
                     Button(action: { copyFormat(formats.first?.value ?? "") }) {
-                        Label("Copy ISO", systemImage: "doc.on.doc")
+                        Label(DateTimePreviewPresentation.copyISOButtonTitle, systemImage: "doc.on.doc")
                     }
                     .dsButton()
 
                     Button(action: { copyUnixTimestamp() }) {
-                        Label("Copy Unix", systemImage: "number")
+                        Label(DateTimePreviewPresentation.copyUnixButtonTitle, systemImage: "number")
                     }
                     .dsButton()
 
                     Button(action: { copyAllFormats() }) {
-                        Label("Copy All", systemImage: "doc.on.doc.fill")
+                        Label(DateTimePreviewPresentation.copyAllButtonTitle, systemImage: "doc.on.doc.fill")
                     }
                     .dsButton()
                     
@@ -125,13 +125,13 @@ struct DateTimePreviewView: View {
     private func generateFormats(date: Date) {
         formats = [
             DateFormat(name: "ISO 8601", value: ISO8601DateFormatter().string(from: date)),
-            DateFormat(name: "Unix Timestamp", value: String(Int(date.timeIntervalSince1970))),
-            DateFormat(name: "Relative", value: relativeTimeString(from: date)),
-            DateFormat(name: "Human Readable", value: humanReadableString(from: date)),
-            DateFormat(name: "Date Only", value: DateFormatter.localizedString(from: date, dateStyle: .long, timeStyle: .none)),
-            DateFormat(name: "Time Only", value: DateFormatter.localizedString(from: date, dateStyle: .none, timeStyle: .medium)),
-            DateFormat(name: "Full", value: DateFormatter.localizedString(from: date, dateStyle: .full, timeStyle: .full)),
-            DateFormat(name: "Short", value: DateFormatter.localizedString(from: date, dateStyle: .short, timeStyle: .short))
+            DateFormat(name: "Unix 时间戳", value: String(Int(date.timeIntervalSince1970))),
+            DateFormat(name: "相对时间", value: relativeTimeString(from: date)),
+            DateFormat(name: "易读格式", value: humanReadableString(from: date)),
+            DateFormat(name: "仅日期", value: DateFormatter.localizedString(from: date, dateStyle: .long, timeStyle: .none)),
+            DateFormat(name: "仅时间", value: DateFormatter.localizedString(from: date, dateStyle: .none, timeStyle: .medium)),
+            DateFormat(name: "完整格式", value: DateFormatter.localizedString(from: date, dateStyle: .full, timeStyle: .full)),
+            DateFormat(name: "短格式", value: DateFormatter.localizedString(from: date, dateStyle: .short, timeStyle: .short))
         ]
     }
     
@@ -139,17 +139,7 @@ struct DateTimePreviewView: View {
         let now = Date()
         let interval = now.timeIntervalSince(date)
         
-        if interval < 60 {
-            return "\(Int(interval)) seconds ago"
-        } else if interval < 3600 {
-            return "\(Int(interval / 60)) minutes ago"
-        } else if interval < 86400 {
-            return "\(Int(interval / 3600)) hours ago"
-        } else if interval < 604800 {
-            return "\(Int(interval / 86400)) days ago"
-        } else {
-            return "\(Int(interval / 604800)) weeks ago"
-        }
+        return DateTimePreviewPresentation.relativeTime(secondsAgo: interval)
     }
     
     private func humanReadableString(from date: Date) -> String {
@@ -175,4 +165,3 @@ struct DateTimePreviewView: View {
         copyFormat(allFormats)
     }
 }
-

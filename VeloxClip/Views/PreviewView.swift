@@ -1,6 +1,10 @@
 import SwiftUI
 import Foundation
 
+struct PreviewSurfaceStyle {
+    static let usesOpaqueWindowBackground = true
+}
+
 struct PreviewView: View {
     @Environment(\.colorScheme) private var scheme
     let item: ClipboardItem?
@@ -48,6 +52,11 @@ struct PreviewView: View {
             } else {
                 ContentUnavailableView("请选择一个项目", systemImage: "paperclip", description: Text("从历史记录中选择一条剪贴内容以预览。"))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .background {
+            if PreviewSurfaceStyle.usesOpaqueWindowBackground {
+                DSColors(scheme: scheme).window
             }
         }
         .animation(.easeInOut(duration: 0.2), value: debouncedItem?.id)
@@ -330,9 +339,9 @@ struct PreviewView: View {
     @ViewBuilder
     private func standardTextTools(content: String) -> some View {
         Group {
-            Button("UPPERCASE") { viewModel.copyTransformedText(AIService.shared.convertCase(content, to: .uppercase)) }
-            Button("lowercase") { viewModel.copyTransformedText(AIService.shared.convertCase(content, to: .lowercase)) }
-            Button("清理空白") { viewModel.copyTransformedText(AIService.shared.cleanupText(content)) }
+            Button(TextToolsPresentation.uppercaseButtonTitle) { viewModel.copyTransformedText(AIService.shared.convertCase(content, to: .uppercase)) }
+            Button(TextToolsPresentation.lowercaseButtonTitle) { viewModel.copyTransformedText(AIService.shared.convertCase(content, to: .lowercase)) }
+            Button(TextToolsPresentation.cleanupWhitespaceButtonTitle) { viewModel.copyTransformedText(AIService.shared.cleanupText(content)) }
         }
     }
     

@@ -36,6 +36,7 @@ struct ClipboardListView: View {
     // or rows shift under the cursor and selection feels janky
     @Binding var scrollTarget: UUID?
     var emptyKind: EmptyKind
+    var onUserInteract: (MainListInteraction) -> Void = { _ in }
 
     var body: some View {
         if items.isEmpty {
@@ -51,12 +52,14 @@ struct ClipboardListView: View {
                         stagedIndex: pasteStack.stagedIndex(of: item.id),
                         onSelect: {
                             selectedItem = item
+                            onUserInteract(.rowSelection)
                         },
                         onDoubleClick: {
                             WindowManager.shared.selectAndPaste(item)
                         },
                         onToggleStage: {
                             pasteStack.toggleStaged(item)
+                            onUserInteract(.rowControl)
                         }
                     )
                     .tag(item)
@@ -141,7 +144,7 @@ struct ClipboardItemRow: View {
                         .foregroundColor(isSelected ? .white : c.text2)
                 }
                 .buttonStyle(.plain)
-                .help("加入粘贴队列（Space）")
+                .help("加入粘贴队列（⌘⏎）")
             } else if isSelected {
                 DSKeyBadge(label: "⏎", role: .onAccent)
             } else if index < 9 {

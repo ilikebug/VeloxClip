@@ -10,25 +10,21 @@ struct TablePreviewView: View {
     @State private var searchText: String = ""
 
     private var delimiterLabel: String {
-        switch delimiter {
-        case "\t": return "TSV (Tab)"
-        case "|": return "Pipe (|)"
-        default: return "CSV (,)"
-        }
+        TablePreviewPresentation.delimiterLabel(for: delimiter)
     }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Toolbar
             HStack {
-                Text("Format:")
+                Text(TablePreviewPresentation.formatLabel)
                     .font(.dsCaption)
                     .foregroundColor(.secondary)
                 
                 Menu {
-                    Button("CSV (,)") { delimiter = "," }
-                    Button("TSV (Tab)") { delimiter = "\t" }
-                    Button("Pipe (|)") { delimiter = "|" }
+                    Button(TablePreviewPresentation.delimiterLabel(for: ",")) { delimiter = "," }
+                    Button(TablePreviewPresentation.delimiterLabel(for: "\t")) { delimiter = "\t" }
+                    Button(TablePreviewPresentation.delimiterLabel(for: "|")) { delimiter = "|" }
                 } label: {
                     HStack(spacing: 4) {
                         Text(delimiterLabel).lineLimit(1)
@@ -45,12 +41,12 @@ struct TablePreviewView: View {
                     parseData()
                 }
                 
-                TextField("Search...", text: $searchText)
+                TextField(TablePreviewPresentation.searchPlaceholder, text: $searchText)
                     .dsTextField(width: 200)
                 
                 Spacer()
                 
-                Text("\(parsedData.count) rows, \(headers.count) columns")
+                Text(TablePreviewPresentation.rowColumnSummary(rows: parsedData.count, columns: headers.count))
                     .font(.dsCaption)
                     .foregroundColor(.secondary)
             }
@@ -69,7 +65,7 @@ struct TablePreviewView: View {
                 .background(Color.clear)
             }
  else {
-                Text("No table data found")
+                Text(TablePreviewPresentation.emptyMessage)
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding()
@@ -214,7 +210,7 @@ struct TableView: View {
             if isLoadingMore {
                 ProgressView()
                     .scaleEffect(0.7)
-                Text("Loading more rows...")
+                Text(TablePreviewPresentation.loadingMoreRowsTitle)
                     .font(.dsCaption)
                     .foregroundColor(.secondary)
             }
@@ -259,4 +255,3 @@ struct TableCell: View {
             .lineLimit(2)
     }
 }
-

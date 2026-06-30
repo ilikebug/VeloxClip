@@ -2,6 +2,28 @@ import SwiftUI
 import AppKit
 import Carbon
 
+struct ShortcutRecorderChrome: Equatable {
+    let backgroundWhite: CGFloat
+    let backgroundAlpha: CGFloat
+    let borderWhite: CGFloat
+    let borderAlpha: CGFloat
+
+    init(isDark: Bool) {
+        backgroundWhite = isDark ? 1.0 : 0.0
+        backgroundAlpha = isDark ? 0.08 : 0.045
+        borderWhite = isDark ? 1.0 : 0.0
+        borderAlpha = 0.14
+    }
+
+    var backgroundColor: NSColor {
+        NSColor(white: backgroundWhite, alpha: backgroundAlpha)
+    }
+
+    var borderColor: NSColor {
+        NSColor(white: borderWhite, alpha: borderAlpha)
+    }
+}
+
 struct ShortcutRecorder: NSViewRepresentable {
     @Binding var shortcut: String
     
@@ -41,6 +63,11 @@ class ShortcutRecorderView: NSView {
             stopMonitoring()
         }
     }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        applyButtonChrome()
+    }
     
     func updateShortcut(_ newShortcut: String) {
         if !isRecording {
@@ -58,8 +85,6 @@ class ShortcutRecorderView: NSView {
         button.font = .systemFont(ofSize: 12, weight: .medium)
         button.layer?.cornerRadius = 6
         button.layer?.borderWidth = 1
-        button.layer?.backgroundColor = NSColor(white: 1.0, alpha: 0.08).cgColor
-        button.layer?.borderColor = NSColor(white: 1.0, alpha: 0.14).cgColor
         button.translatesAutoresizingMaskIntoConstraints = false
         addSubview(button)
         
@@ -71,7 +96,16 @@ class ShortcutRecorderView: NSView {
         ])
         
         self.button = button
+        applyButtonChrome()
         updateButton()
+    }
+
+    private func applyButtonChrome() {
+        guard let button else { return }
+        let isDark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        let chrome = ShortcutRecorderChrome(isDark: isDark)
+        button.layer?.backgroundColor = chrome.backgroundColor.cgColor
+        button.layer?.borderColor = chrome.borderColor.cgColor
     }
     
     @objc private func startRecording() {
@@ -212,4 +246,3 @@ class ShortcutRecorderView: NSView {
         }
     }
 }
-

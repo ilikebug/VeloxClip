@@ -60,8 +60,13 @@ final class ContentDetectionServiceTests: XCTestCase {
     }
 
     func testDetectsPipeSeparatedTable() async {
-        let result = await detect("a | b\nc | d")
+        let result = await detect("name | age | city\nalice | 30 | Paris")
         XCTAssertEqual(result, .table)
+    }
+
+    func testProseWithSinglePipePerLineIsNotTable() async {
+        let result = await detect("状态 | 需要确认\n结果 | 暂时未知")
+        XCTAssertNotEqual(result, .table)
     }
 
     func testProseWithOneCommaPerLineIsNotTable() async {
