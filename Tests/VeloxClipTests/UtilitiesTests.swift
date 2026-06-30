@@ -60,26 +60,6 @@ final class FIFOCacheTests: XCTestCase {
     }
 }
 
-final class StableHashTests: XCTestCase {
-    func testDeterministicAcrossCalls() {
-        XCTAssertEqual("json".stableHash, "json".stableHash)
-        XCTAssertEqual("中文标签".stableHash, "中文标签".stableHash)
-    }
-
-    func testKnownValueGuardsAgainstAlgorithmChanges() {
-        // Changing the algorithm silently reshuffles every user's tag colors —
-        // this pinned value makes that an explicit decision
-        XCTAssertEqual("json".stableHash, 3271912)
-        XCTAssertEqual("".stableHash, 0)
-    }
-
-    func testAlwaysNonNegative() {
-        for tag in ["a", "URL", "Code", "🎉", "很长的一个标签名称用来测试溢出行为"] {
-            XCTAssertGreaterThanOrEqual(tag.stableHash, 0)
-        }
-    }
-}
-
 final class ThumbnailProviderTests: XCTestCase {
     func testMakeThumbnailDownscalesToMaxPixelSize() throws {
         let rep = try XCTUnwrap(NSBitmapImageRep(

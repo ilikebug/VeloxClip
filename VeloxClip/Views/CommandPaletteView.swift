@@ -23,7 +23,8 @@ struct CommandPaletteView: View {
 
     /// Parsed color for a color item (from its hex `content`); nil otherwise.
     private var itemColor: Color? {
-        guard item?.type == "color", let hex = item?.content else { return nil }
+        guard item?.type == "color", let content = item?.content,
+              let hex = ColorFormatting.hex(from: content) else { return nil }
         return Color(hex: hex)
     }
 

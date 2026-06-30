@@ -38,11 +38,3 @@ struct FIFOCache<Key: Hashable, Value> {
         insertionOrder.removeAll()
     }
 }
-
-extension String {
-    // Deterministic across launches — String.hashValue is seeded per process,
-    // so anything user-visible derived from it (e.g. tag colors) must use this instead
-    var stableHash: Int {
-        utf8.reduce(0) { ($0 &* 31 &+ Int($1)) & 0x7fffffff }
-    }
-}

@@ -215,6 +215,19 @@ struct PasteStackHUDView: View {
                 Text("\(min(stack.cursor + 1, stack.queue.count)) / \(stack.queue.count)")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(c.text2)
+                if stack.phase == .active {
+                    Button(action: { stack.cancel() }) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(c.text2)
+                            .frame(width: 18, height: 18)
+                            .background(
+                                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                    .fill(c.chip)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
             }
             .padding(.horizontal, 13)
             .padding(.top, 13)
