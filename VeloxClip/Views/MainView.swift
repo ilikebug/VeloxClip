@@ -297,6 +297,13 @@ struct MainView: View {
         let isCmd = mods.contains(.command)
         let key = event.keyCode
 
+        // ⌘C copies the detail/selected item with its full payload (works in both
+        // list and detail mode) — makes the palette's `⌘C` hint truthful.
+        if isCmd, event.charactersIgnoringModifiers?.lowercased() == "c" {
+            if let i = detailItem ?? selectedItem { copyItem(i) }
+            return true
+        }
+
         // Key codes: left=123 right=124 down=125 up=126 return=36 keypadEnter=76 esc=53 tab=48 space=49
         if detailItem != nil {
             switch key {
@@ -429,16 +436,16 @@ struct MainView: View {
         case "paste":
             if let i = item { WindowManager.shared.selectAndPaste(i) }
         case "copy":
-            copyToPasteboard(item?.content)
+            if let i = item { copyItem(i) }
         case "detail":
             if let i = item { withAnimation(.easeInOut(duration: 0.18)) { detailItem = i } }
         case "copyHex":
             if let content = item?.content {
-                copyToPasteboard(ColorFormatting.hex(from: content) ?? content)
+                copyString(ColorFormatting.hex(from: content) ?? content)
             }
         case "copyRgb":
             if let content = item?.content {
-                copyToPasteboard(ColorFormatting.rgb(from: content) ?? content)
+                copyString(ColorFormatting.rgb(from: content) ?? content)
             }
         case "favorite":
             if let i = item { ClipboardStore.shared.toggleFavorite(for: i) }
@@ -458,8 +465,21 @@ struct MainView: View {
         }
     }
 
-    private func copyToPasteboard(_ string: String?) {
-        guard let string else { return }
+    // Copy the full item to the pasteboard, preserving its real payload
+    // (image/rtf blobs, file URLs) — mirrors WindowManager.selectAndPaste so
+    // ⌘K "复制" and ⌘C don't drop non-text content.
+    private func copyItem(_ item: ClipboardItem) {
+        Task { @MainActor in
+            var full = item
+            if full.data == nil, full.type == "image" || full.type == "rtf" {
+                full.data = await ClipboardStore.shared.loadData(for: item.id)
+            }
+            full.copyToPasteboard()
+        }
+    }
+
+    // Copy a plain string (used by copyHex/copyRgb — hex/rgb are text values).
+    private func copyString(_ string: String) {
         let pb = NSPasteboard.general
         pb.clearContents()
         pb.setString(string, forType: .string)

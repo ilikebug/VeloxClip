@@ -232,44 +232,6 @@ struct ColorPreviewView: View {
         self.formats = formats
     }
     
-    private func extractHEX(from string: String) -> String? {
-        let cleaned = string.replacingOccurrences(of: "#", with: "").uppercased()
-        if cleaned.count == 6 || cleaned.count == 8 {
-            return "#" + cleaned
-        }
-        return nil
-    }
-    
-    private func extractRGB(from string: String) -> (r: Int, g: Int, b: Int, a: Double)? {
-        // Try to parse hex color
-        var hexSanitized = string.trimmingCharacters(in: .whitespacesAndNewlines)
-        hexSanitized = hexSanitized.replacingOccurrences(of: "#", with: "")
-        
-        var rgb: UInt64 = 0
-        guard Scanner(string: hexSanitized).scanHexInt64(&rgb) else { return nil }
-        
-        let length = hexSanitized.count
-        var r: Double = 0.0
-        var g: Double = 0.0
-        var b: Double = 0.0
-        var a: Double = 1.0
-        
-        if length == 6 {
-            r = Double((rgb & 0xFF0000) >> 16) / 255.0
-            g = Double((rgb & 0x00FF00) >> 8) / 255.0
-            b = Double(rgb & 0x0000FF) / 255.0
-        } else if length == 8 {
-            r = Double((rgb & 0xFF000000) >> 24) / 255.0
-            g = Double((rgb & 0x00FF0000) >> 16) / 255.0
-            b = Double((rgb & 0x0000FF00) >> 8) / 255.0
-            a = Double(rgb & 0x000000FF) / 255.0
-        } else {
-            return nil
-        }
-        
-        return (Int(r * 255), Int(g * 255), Int(b * 255), a)
-    }
-    
     private func extractRGB(from color: Color) -> (r: Int, g: Int, b: Int, a: Double)? {
         let nsColor = NSColor(color)
         var r: CGFloat = 0

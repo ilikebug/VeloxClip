@@ -8,25 +8,6 @@ struct DesignSystem {
     }
 
     static let backgroundBlur = VisualEffectView(material: .underWindowBackground, blendingMode: .behindWindow)
-
-    struct Card: ViewModifier {
-        func body(content: Content) -> some View {
-            content
-                .padding()
-                .background(Color.white.opacity(0.12))
-                .cornerRadius(12)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.white.opacity(0.15), lineWidth: 1)
-                )
-        }
-    }
-}
-
-extension View {
-    func premiumCard() -> some View {
-        self.modifier(DesignSystem.Card())
-    }
 }
 
 // MARK: - Compact dropdown style
@@ -89,9 +70,7 @@ struct VisualEffectView: NSViewRepresentable {
 extension Font {
     static let dsCaption2    = Font.system(size: 10)
     static let dsCaption     = Font.system(size: 11)
-    static let dsFootnote    = Font.system(size: 11)
     static let dsSubheadline = Font.system(size: 12)
-    static let dsCallout     = Font.system(size: 12)
     static let dsBody        = Font.system(size: 13)
     static let dsHeadline    = Font.system(size: 13, weight: .semibold)
     static let dsTitle3      = Font.system(size: 15)
@@ -285,33 +264,6 @@ struct DSSegmented<Value: Hashable>: View {
         .background(
             RoundedRectangle(cornerRadius: 7, style: .continuous).fill(c.chip)
         )
-    }
-}
-
-// MARK: - Glass background (respects "Reduce Transparency")
-//
-// SwiftUI materials adapt to the accessibility setting automatically, but pinning
-// an explicit opaque fallback keeps the look predictable everywhere.
-struct GlassBackground: ViewModifier {
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    var cornerRadius: CGFloat
-
-    func body(content: Content) -> some View {
-        content.background {
-            let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            if reduceTransparency {
-                // Adapts to the active light/dark appearance
-                shape.fill(Color(nsColor: .windowBackgroundColor))
-            } else {
-                shape.fill(.ultraThinMaterial)
-            }
-        }
-    }
-}
-
-extension View {
-    func dsGlassBackground(cornerRadius: CGFloat) -> some View {
-        modifier(GlassBackground(cornerRadius: cornerRadius))
     }
 }
 

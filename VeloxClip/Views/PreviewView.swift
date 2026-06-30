@@ -90,17 +90,6 @@ struct PreviewView: View {
     
     @ViewBuilder
     private func headerView(for displayItem: ClipboardItem) -> some View {
-        // Push-in detail mode: kit header `‹ 类型名 · ★ · ✕` with a secondary
-        // metadata line. The side-pane (legacy) header is used when no closures.
-        if onBack != nil || onClose != nil {
-            detailHeaderView(for: displayItem)
-        } else {
-            legacyHeaderView(for: displayItem)
-        }
-    }
-
-    @ViewBuilder
-    private func detailHeaderView(for displayItem: ClipboardItem) -> some View {
         let c = DSColors(scheme: scheme)
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 10) {
@@ -146,38 +135,6 @@ struct PreviewView: View {
             }
             .font(.system(size: 11))
             .foregroundColor(c.text2)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(c.window)
-    }
-
-    @ViewBuilder
-    private func legacyHeaderView(for displayItem: ClipboardItem) -> some View {
-        let c = DSColors(scheme: scheme)
-        HStack(spacing: 10) {
-            Text(displayItem.localizedTypeName)
-                .font(.system(size: 13.5, weight: .semibold))
-                .foregroundColor(c.text)
-                .lineLimit(1)
-
-            Spacer(minLength: 8)
-
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(displayItem.createdAt, style: .date)
-                Text(displayItem.createdAt, style: .time)
-            }
-            .font(.system(size: 11))
-            .foregroundColor(c.text2)
-
-            if let app = displayItem.sourceApp, !app.isEmpty {
-                Text(app)
-                    .font(.system(size: 11))
-                    .foregroundColor(c.text2)
-                    .lineLimit(1)
-            }
-
-            favoriteButton(for: displayItem)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)

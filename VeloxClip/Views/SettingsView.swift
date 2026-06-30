@@ -274,18 +274,9 @@ private struct ShortcutsSection: View {
             shortcutRow("屏幕取词", shortcut: $settings.textCaptureShortcut)
             shortcutRow("粘贴图片", shortcut: $settings.pasteImageShortcut, bottom: 0)
         }
-        .onChange(of: settings.globalShortcut) { _, newValue in
-            ShortcutManager.shared.updateShortcut(newValue)
-        }
-        .onChange(of: settings.screenshotShortcut) { _, newValue in
-            ShortcutManager.shared.updateScreenshotShortcut(newValue)
-        }
-        .onChange(of: settings.pasteImageShortcut) { _, newValue in
-            ShortcutManager.shared.updatePasteImageShortcut(newValue)
-        }
-        .onChange(of: settings.textCaptureShortcut) { _, newValue in
-            ShortcutManager.shared.updateTextCaptureShortcut(newValue)
-        }
+        // Re-registration is driven by AppSettings' didSet on each shortcut
+        // property, so binding changes here already update ShortcutManager —
+        // no per-field .onChange needed (those were a redundant double-call).
     }
 
     private func shortcutRow(_ label: String, shortcut: Binding<String>, bottom: CGFloat = 14) -> some View {
