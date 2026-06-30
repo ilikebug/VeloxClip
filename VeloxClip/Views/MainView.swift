@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import AppKit
 
 enum ViewMode {
     case favorites
@@ -17,7 +18,8 @@ struct MainView: View {
     @State private var searchResults: [ClipboardItem] = []
     @State private var isSearching = false
     @State private var scrollTarget: UUID?
-    
+    @State private var showCommandPalette = false
+
     // Debounced search text for semantic search
     @State private var searchTask: Task<Void, Never>?
     
@@ -181,9 +183,13 @@ struct MainView: View {
             .padding(.vertical, 10)
             .background(DesignSystem.backgroundBlur)
             .onKeyPress { press in
+                // ⌘K opens the command palette.
+                if press.modifiers.contains(.command), press.characters == "k" {
+                    showCommandPalette = true
+                    return .handled
+                }
                 // ⌘1–9 pastes the corresponding visible row. Returns .ignored for
-                // anything else (incl. ⌘K, reserved for Task 8) so the other
-                // handlers below still run.
+                // anything else so the other handlers below still run.
                 guard press.modifiers.contains(.command),
                       let n = Int(press.characters), n >= 1, n <= 9,
                       displayItems.indices.contains(n - 1) else { return .ignored }
@@ -219,6 +225,9 @@ struct MainView: View {
                 return .handled
             }
             .onKeyPress(.escape) {
+                // The palette's own handler closes it first; only toggle the
+                // overlay when the palette isn't open.
+                guard !showCommandPalette else { return .ignored }
                 WindowManager.shared.toggleWindow()
                 return .handled
             }
@@ -273,6 +282,17 @@ struct MainView: View {
             RoundedRectangle(cornerRadius: 16)
                 .stroke(Color.white.opacity(0.1), lineWidth: 1)
         )
+        .overlay {
+            if showCommandPalette {
+                ZStack {
+                    Color.black.opacity(0.12).ignoresSafeArea()
+                        .onTapGesture { showCommandPalette = false }
+                    CommandPaletteView(item: selectedItem,
+                                       onExecute: { executeCommand($0) },
+                                       onClose: { showCommandPalette = false })
+                }
+            }
+        }
         .onAppear {
             isSearchFocused = true
             // First open: the focus set above is dropped if the window isn't key yet,
@@ -355,6 +375,54 @@ struct MainView: View {
         }
     }
     
+    private func executeCommand(_ cmd: Command) {
+        let item = selectedItem
+        switch cmd.id {
+        case "paste":
+            if let i = item { WindowManager.shared.selectAndPaste(i) }
+        case "copy", "copyHex":
+            copyToPasteboard(item?.content)
+        case "copyRgb":
+            copyToPasteboard(rgbString(from: item?.content) ?? item?.content)
+        case "favorite":
+            if let i = item { ClipboardStore.shared.toggleFavorite(for: i) }
+        case "stack":
+            if let i = item { PasteStackService.shared.toggleStaged(i) }
+        case "delete":
+            if let i = item, let idx = displayItems.firstIndex(where: { $0.id == i.id }) {
+                let items = displayItems
+                Task { await ClipboardStore.shared.deleteItems(at: IndexSet(integer: idx), in: items) }
+            }
+        default:
+            break
+        }
+        // Paste dismisses the overlay itself; everything else just closes the palette.
+        if cmd.id != "paste" {
+            showCommandPalette = false
+        }
+    }
+
+    private func copyToPasteboard(_ string: String?) {
+        guard let string else { return }
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(string, forType: .string)
+    }
+
+    /// Parses a "#RRGGBB" hex string into a space-separated "R G B" string.
+    /// Returns nil if it can't be parsed.
+    private func rgbString(from hex: String?) -> String? {
+        guard var s = hex?.trimmingCharacters(in: .whitespacesAndNewlines) else { return nil }
+        s = s.replacingOccurrences(of: "#", with: "")
+        guard s.count == 6 else { return nil }
+        var rgb: UInt64 = 0
+        guard Scanner(string: s).scanHexInt64(&rgb) else { return nil }
+        let r = (rgb & 0xFF0000) >> 16
+        let g = (rgb & 0x00FF00) >> 8
+        let b = rgb & 0x0000FF
+        return "\(r) \(g) \(b)"
+    }
+
     private func moveSelection(direction: Int) {
         let items = displayItems
         guard !items.isEmpty else { return }
