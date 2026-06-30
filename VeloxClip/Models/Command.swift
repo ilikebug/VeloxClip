@@ -14,8 +14,9 @@ enum CommandResolver {
     /// Context-aware action list for an item of the given clipboard `type`.
     static func commands(forType type: String) -> [Command] {
         var cmds: [Command] = [
-            Command(id: "paste", title: "粘贴", keyHint: "↵",  icon: "doc.on.clipboard"),
-            Command(id: "copy",  title: "复制", keyHint: "⌘C", icon: "doc.on.doc"),
+            Command(id: "paste",  title: "粘贴", keyHint: "↵",  icon: "doc.on.clipboard"),
+            Command(id: "copy",   title: "复制", keyHint: "⌘C", icon: "doc.on.doc"),
+            Command(id: "detail", title: "详情", keyHint: "→",  icon: "doc.text.magnifyingglass"),
         ]
         if type == "color" {
             cmds.append(Command(id: "copyHex", title: "复制 HEX", keyHint: nil, icon: "number"))

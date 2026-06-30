@@ -105,7 +105,7 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
             let hostingController = NSHostingController(rootView: contentView)
 
             let win = OverlayWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 850, height: 600),
+                contentRect: NSRect(x: 0, y: 0, width: 560, height: 600),
                 styleMask: [.borderless],
                 backing: .buffered,
                 defer: false

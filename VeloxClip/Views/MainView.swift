@@ -19,6 +19,8 @@ struct MainView: View {
     @State private var isSearching = false
     @State private var scrollTarget: UUID?
     @State private var showCommandPalette = false
+    // Push-in detail: nil = list mode; non-nil = detail mode (replaces search+list)
+    @State private var detailItem: ClipboardItem?
 
     // Debounced search text for semantic search
     @State private var searchTask: Task<Void, Never>?
@@ -162,124 +164,94 @@ struct MainView: View {
     
     var body: some View {
         let c = DSColors(scheme: scheme)
+        // Key handlers live on this always-present outer VStack so Esc / ← / ⏎
+        // still reach them in detail mode (where the search field is hidden).
         VStack(spacing: 0) {
-            // Top: Compact Search Bar
-            HStack(spacing: 10) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 14))
-                    .foregroundColor(c.text2)
-
-                TextField("搜索剪贴…", text: $searchText)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 13))
-                    .focused($isSearchFocused)
-                    .onSubmit {
-                        executeSelection()
-                    }
-
-                DSKeyBadge(label: "⌘V")
+            if detailItem == nil {
+                listContent(c)
+                    .transition(.move(edge: .leading).combined(with: .opacity))
+            } else {
+                detailContent(c)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(DesignSystem.backgroundBlur)
-            // NOTE: use FILTERED key handlers (keyed `onKeyPress(keys:)`), never an
-            // unfiltered `onKeyPress { }` catch-all here — an unfiltered handler
-            // alongside the keyed ones below stops the keyed handlers (arrows /
-            // return / tab / space / escape) from firing.
-            .onKeyPress(keys: ["k"]) { press in
-                // ⌘K opens the command palette.
-                guard press.modifiers.contains(.command) else { return .ignored }
-                showCommandPalette = true
-                return .handled
-            }
-            .onKeyPress(keys: ["1", "2", "3", "4", "5", "6", "7", "8", "9"]) { press in
-                // ⌘1–9 pastes the corresponding visible row.
-                guard press.modifiers.contains(.command),
-                      let n = Int(press.characters), n >= 1, n <= 9,
-                      displayItems.indices.contains(n - 1) else { return .ignored }
-                WindowManager.shared.selectAndPaste(displayItems[n - 1])
-                return .handled
-            }
-            .onKeyPress(.upArrow) {
-                moveSelection(direction: -1)
-                return .handled
-            }
-            .onKeyPress(.downArrow) {
-                moveSelection(direction: 1)
-                return .handled
-            }
-            .onKeyPress(.return) {
-                executeSelection()
-                return .handled
-            }
-            .onKeyPress(.tab) {
-                if isSearchFocused {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        viewMode = viewMode == .history ? .favorites : .history
-                    }
-                    return .handled
-                }
-                return .ignored
-            }
-            .onKeyPress(.space) {
-                // Space stages only while the query is empty — otherwise it
-                // must keep typing spaces into the search field
-                guard searchText.isEmpty, let item = selectedItem else { return .ignored }
-                PasteStackService.shared.toggleStaged(item)
-                return .handled
-            }
-            .onKeyPress(.escape) {
-                // The palette's own handler closes it first; only toggle the
-                // overlay when the palette isn't open.
-                guard !showCommandPalette else { return .ignored }
-                WindowManager.shared.toggleWindow()
-                return .handled
-            }
-            
-            Divider().overlay(c.divider)
-
-            // Bottom Content: List and Preview
-            HStack(spacing: 0) {
-                // Left: Clipboard List (History)
-                VStack(spacing: 0) {
-                    HStack {
-                        viewModeTabs
-                        Spacer()
-                        typeFilterBar
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.top, 9)
-                    .padding(.bottom, 8)
-                    Divider().overlay(c.divider)
-                    ClipboardListView(selectedItem: $selectedItem, items: displayItems, scrollTarget: $scrollTarget, emptyKind: emptyKind)
-                }
-                .frame(width: 320)
-                .background(Color.primary.opacity(0.03))
-                
-                Divider().overlay(c.divider)
-
-                // Right: Detail View (Preview)
-                PreviewView(item: selectedItem)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color.primary.opacity(0.08))
-            }
-
-            // Bottom action bar
-            Divider().overlay(c.divider)
-            HStack(spacing: 14) {
-                actionHint("粘贴", "⏎")
-                actionHint("详情", nil)
-                actionHint("入栈", "space")
-                actionHint("动作", "⌘K")
-                Spacer()
-                Text("\(displayItems.count) 条")
-                    .font(.system(size: 11))
-                    .foregroundColor(c.text3)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
         }
-        .frame(width: 850, height: 600)
+        // NOTE: use FILTERED key handlers (keyed `onKeyPress(keys:)`), never an
+        // unfiltered `onKeyPress { }` catch-all here — an unfiltered handler
+        // alongside the keyed ones below stops the keyed handlers (arrows /
+        // return / tab / space / escape) from firing.
+        .onKeyPress(keys: ["k"]) { press in
+            // ⌘K opens the command palette (list mode only — see guard below it's fine in detail too but commands act on selection).
+            guard press.modifiers.contains(.command) else { return .ignored }
+            showCommandPalette = true
+            return .handled
+        }
+        .onKeyPress(keys: ["1", "2", "3", "4", "5", "6", "7", "8", "9"]) { press in
+            // ⌘1–9 pastes the corresponding visible row — list mode only.
+            guard detailItem == nil else { return .ignored }
+            guard press.modifiers.contains(.command),
+                  let n = Int(press.characters), n >= 1, n <= 9,
+                  displayItems.indices.contains(n - 1) else { return .ignored }
+            WindowManager.shared.selectAndPaste(displayItems[n - 1])
+            return .handled
+        }
+        .onKeyPress(.rightArrow) {
+            // → opens the push-in detail for the current selection (list mode only).
+            guard detailItem == nil, let item = selectedItem else { return .ignored }
+            withAnimation(.easeInOut(duration: 0.18)) { detailItem = item }
+            return .handled
+        }
+        .onKeyPress(.leftArrow) {
+            // ← returns to the list from detail mode.
+            guard detailItem != nil else { return .ignored }
+            withAnimation(.easeInOut(duration: 0.18)) { detailItem = nil }
+            return .handled
+        }
+        .onKeyPress(.upArrow) {
+            guard detailItem == nil else { return .ignored }
+            moveSelection(direction: -1)
+            return .handled
+        }
+        .onKeyPress(.downArrow) {
+            guard detailItem == nil else { return .ignored }
+            moveSelection(direction: 1)
+            return .handled
+        }
+        .onKeyPress(.return) {
+            // ⏎ pastes in both modes.
+            executeSelection()
+            return .handled
+        }
+        .onKeyPress(.tab) {
+            guard detailItem == nil else { return .ignored }
+            if isSearchFocused {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    viewMode = viewMode == .history ? .favorites : .history
+                }
+                return .handled
+            }
+            return .ignored
+        }
+        .onKeyPress(.space) {
+            // Space stages only in list mode while the query is empty — otherwise it
+            // must keep typing spaces into the search field.
+            guard detailItem == nil else { return .ignored }
+            guard searchText.isEmpty, let item = selectedItem else { return .ignored }
+            PasteStackService.shared.toggleStaged(item)
+            return .handled
+        }
+        .onKeyPress(.escape) {
+            // In detail mode Esc returns to the list (does NOT close the overlay).
+            if detailItem != nil {
+                withAnimation(.easeInOut(duration: 0.18)) { detailItem = nil }
+                return .handled
+            }
+            // The palette's own handler closes it first; only toggle the
+            // overlay when the palette isn't open.
+            guard !showCommandPalette else { return .ignored }
+            WindowManager.shared.toggleWindow()
+            return .handled
+        }
+        .frame(width: 560, height: 600)
         .background(DesignSystem.backgroundBlur)
         .cornerRadius(16)
         .overlay(
@@ -358,6 +330,7 @@ struct MainView: View {
             // Reset state only when the overlay is (re)opened, not every time it
             // regains key status (e.g. after closing a popover)
             isSearchFocused = true
+            detailItem = nil
             viewMode = .history
             typeFilter = .all
             searchText = ""
@@ -371,8 +344,79 @@ struct MainView: View {
         .errorAlert() // Add unified error handling
     }
     
+    // List mode: search bar + tabs/chips + single-column list + action bar.
+    @ViewBuilder
+    private func listContent(_ c: DSColors) -> some View {
+        VStack(spacing: 0) {
+            // Top: Compact Search Bar
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 14))
+                    .foregroundColor(c.text2)
+
+                TextField("搜索剪贴…", text: $searchText)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 13))
+                    .focused($isSearchFocused)
+                    .onSubmit {
+                        executeSelection()
+                    }
+
+                DSKeyBadge(label: "⌘V")
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(DesignSystem.backgroundBlur)
+
+            Divider().overlay(c.divider)
+
+            // Tabs + type chips, then the single-column list filling the width.
+            HStack {
+                viewModeTabs
+                Spacer()
+                typeFilterBar
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 9)
+            .padding(.bottom, 8)
+            Divider().overlay(c.divider)
+            ClipboardListView(selectedItem: $selectedItem, items: displayItems, scrollTarget: $scrollTarget, emptyKind: emptyKind)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            // Bottom action bar
+            Divider().overlay(c.divider)
+            HStack(spacing: 14) {
+                actionHint("粘贴", "⏎")
+                actionHint("详情", "→")
+                actionHint("入栈", "space")
+                actionHint("动作", "⌘K")
+                Spacer()
+                Text("\(displayItems.count) 条")
+                    .font(.system(size: 11))
+                    .foregroundColor(c.text3)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+        }
+    }
+
+    // Detail mode: push-in preview filling the window, with ‹ 返回 / ✕ 关闭.
+    @ViewBuilder
+    private func detailContent(_ c: DSColors) -> some View {
+        PreviewView(
+            item: detailItem,
+            onBack: { withAnimation(.easeInOut(duration: 0.18)) { detailItem = nil } },
+            onClose: { WindowManager.shared.toggleWindow() }
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.primary.opacity(0.04))
+    }
+
     private func executeSelection() {
-        if let item = selectedItem {
+        // In detail mode, paste the item being previewed.
+        if let detail = detailItem {
+            WindowManager.shared.selectAndPaste(detail)
+        } else if let item = selectedItem {
             WindowManager.shared.selectAndPaste(item)
         } else if let first = displayItems.first {
             WindowManager.shared.selectAndPaste(first)
@@ -386,6 +430,8 @@ struct MainView: View {
             if let i = item { WindowManager.shared.selectAndPaste(i) }
         case "copy":
             copyToPasteboard(item?.content)
+        case "detail":
+            if let i = item { withAnimation(.easeInOut(duration: 0.18)) { detailItem = i } }
         case "copyHex":
             if let content = item?.content {
                 copyToPasteboard(ColorFormatting.hex(from: content) ?? content)

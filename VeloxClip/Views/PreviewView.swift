@@ -4,6 +4,10 @@ import Foundation
 struct PreviewView: View {
     @Environment(\.colorScheme) private var scheme
     let item: ClipboardItem?
+    /// When non-nil, the header renders a leading ‹ 返回 button (push-in detail mode).
+    var onBack: (() -> Void)? = nil
+    /// When non-nil, the header renders a trailing ✕ 关闭 button (push-in detail mode).
+    var onClose: (() -> Void)? = nil
     @ObservedObject var store = ClipboardStore.shared
     @StateObject private var viewModel = PreviewViewModel()
     @State private var debouncedItem: ClipboardItem?
@@ -86,6 +90,70 @@ struct PreviewView: View {
     
     @ViewBuilder
     private func headerView(for displayItem: ClipboardItem) -> some View {
+        // Push-in detail mode: kit header `‹ 类型名 · ★ · ✕` with a secondary
+        // metadata line. The side-pane (legacy) header is used when no closures.
+        if onBack != nil || onClose != nil {
+            detailHeaderView(for: displayItem)
+        } else {
+            legacyHeaderView(for: displayItem)
+        }
+    }
+
+    @ViewBuilder
+    private func detailHeaderView(for displayItem: ClipboardItem) -> some View {
+        let c = DSColors(scheme: scheme)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 10) {
+                if let onBack {
+                    Button(action: onBack) {
+                        HStack(spacing: 3) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 13, weight: .semibold))
+                            Text("返回")
+                                .font(.system(size: 13))
+                        }
+                        .foregroundColor(c.text2)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Text(displayItem.localizedTypeName)
+                    .font(.system(size: 13.5, weight: .semibold))
+                    .foregroundColor(c.text)
+                    .lineLimit(1)
+
+                favoriteButton(for: displayItem)
+
+                Spacer(minLength: 8)
+
+                if let onClose {
+                    Button(action: onClose) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(c.text2)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            HStack(spacing: 8) {
+                Text(displayItem.createdAt, style: .date)
+                Text(displayItem.createdAt, style: .time)
+                if let app = displayItem.sourceApp, !app.isEmpty {
+                    Text("·")
+                    Text(app).lineLimit(1)
+                }
+            }
+            .font(.system(size: 11))
+            .foregroundColor(c.text2)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(c.window)
+    }
+
+    @ViewBuilder
+    private func legacyHeaderView(for displayItem: ClipboardItem) -> some View {
         let c = DSColors(scheme: scheme)
         HStack(spacing: 10) {
             Text(displayItem.localizedTypeName)
