@@ -8,6 +8,8 @@ struct ScreenshotEditorView: View {
     let onDone: (NSImage) -> Void
     let onClose: () -> Void
 
+    @Environment(\.colorScheme) private var scheme
+
     @State private var imageScale: CGFloat = 1.0
     @State private var imageOffset: CGSize = .zero
     @FocusState private var isTextFieldFocused: Bool
@@ -238,48 +240,40 @@ struct ScreenshotEditorView: View {
             }
             
             // UI Overlay Layer
+            let c = DSColors(scheme: scheme)
             VStack {
                 // Top Action Bar
                 HStack {
                     Button(action: onClose) {
                         Image(systemName: "xmark")
-                            .font(.system(size: 14, weight: .bold))
-                            .frame(width: 32, height: 32)
-                            .background(VisualEffectView(material: .hudWindow, blendingMode: .withinWindow).clipShape(Circle()))
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(c.text2)
+                            .frame(width: 30, height: 30)
+                            .background(RoundedRectangle(cornerRadius: 7).fill(c.card))
                     }
                     .buttonStyle(.plain)
-                    
+                    .help("关闭")
+
                     Spacer()
-                    
-                    HStack(spacing: 12) {
+
+                    HStack(spacing: 8) {
                         // Undo/Redo Group
-                        HStack(spacing: 0) {
-                            Button(action: { editorState.undo() }) {
-                                Image(systemName: "arrow.uturn.backward")
-                                    .frame(width: 40, height: 40)
+                        HStack(spacing: 4) {
+                            IconToolButton(systemName: "arrow.uturn.backward", help: "撤销", enabled: editorState.canUndo(), c: c) {
+                                editorState.undo()
                             }
-                            .buttonStyle(.plain)
-                            .disabled(!editorState.canUndo())
-                            .opacity(editorState.canUndo() ? 1 : 0.4)
-                            
-                            Divider().frame(height: 20).background(Color.white.opacity(0.1))
-                            
-                            Button(action: { editorState.redo() }) {
-                                Image(systemName: "arrow.uturn.forward")
-                                    .frame(width: 40, height: 40)
+                            IconToolButton(systemName: "arrow.uturn.forward", help: "重做", enabled: editorState.canRedo(), c: c) {
+                                editorState.redo()
                             }
-                            .buttonStyle(.plain)
-                            .disabled(!editorState.canRedo())
-                            .opacity(editorState.canRedo() ? 1 : 0.4)
                         }
-                        .background(VisualEffectView(material: .hudWindow, blendingMode: .withinWindow).cornerRadius(10))
-                        
-                        Button(action: { editorState.clear() }) {
-                            Image(systemName: "trash")
-                                .frame(width: 40, height: 40)
-                                .background(VisualEffectView(material: .hudWindow, blendingMode: .withinWindow).cornerRadius(10))
+                        .padding(4)
+                        .background(RoundedRectangle(cornerRadius: 10).fill(c.card))
+
+                        IconToolButton(systemName: "trash", help: "清除", enabled: true, c: c) {
+                            editorState.clear()
                         }
-                        .buttonStyle(.plain)
+                        .padding(4)
+                        .background(RoundedRectangle(cornerRadius: 10).fill(c.card))
                     }
                 }
                 .padding(24)
@@ -291,70 +285,72 @@ struct ScreenshotEditorView: View {
                     // Property Sub-toolbar
                     if showPropertyToolbar {
                         HStack(spacing: 16) {
-                            ColorPicker(editorState: editorState)
+                            ColorPicker(editorState: editorState, c: c)
 
-                            Divider().frame(height: 24).background(Color.white.opacity(0.1))
+                            Divider().frame(height: 24).overlay(c.divider)
 
-                            SizeSlider(editorState: editorState)
+                            SizeSlider(editorState: editorState, c: c)
 
-                            Divider().frame(height: 24).background(Color.white.opacity(0.1))
+                            Divider().frame(height: 24).overlay(c.divider)
 
-                            OpacitySlider(editorState: editorState)
+                            OpacitySlider(editorState: editorState, c: c)
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
-                        .background(VisualEffectView(material: .hudWindow, blendingMode: .withinWindow).cornerRadius(16))
+                        .background(RoundedRectangle(cornerRadius: 16).fill(c.panel))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.1), lineWidth: 1)
+                            RoundedRectangle(cornerRadius: 16).stroke(c.divider, lineWidth: 1)
                         )
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
-                    
+
                     // Main Toolbar
                     HStack(spacing: 8) {
                         // Tools
                         HStack(spacing: 4) {
                             ForEach(EditorTool.allCases) { tool in
-                                ToolButton(tool: tool, currentTool: $editorState.currentTool)
+                                ToolButton(tool: tool, currentTool: $editorState.currentTool, c: c)
                             }
                         }
-                        .padding(4)
-                        .background(Color.white.opacity(0.1).cornerRadius(10))
-                        
-                        Divider().frame(height: 32).background(Color.white.opacity(0.1))
-                        
+
+                        Divider().frame(height: 24).overlay(c.divider)
+
                         // Property Toggle
                         Button(action: { withAnimation(.spring(response: 0.3)) { showPropertyToolbar.toggle() } }) {
                             Image(systemName: "slider.horizontal.3")
-                                .font(.system(size: 16))
-                                .frame(width: 40, height: 40)
-                                .background(showPropertyToolbar ? AnyShapeStyle(Color(nsColor: .controlAccentColor)) : AnyShapeStyle(Color.clear))
-                                .cornerRadius(8)
+                                .font(.system(size: 15))
+                                .foregroundColor(showPropertyToolbar ? .white : c.text2)
+                                .frame(width: 30, height: 30)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 7)
+                                        .fill(showPropertyToolbar ? AnyShapeStyle(c.accent) : AnyShapeStyle(Color.clear))
+                                )
                         }
                         .buttonStyle(.plain)
-                        
-                        Divider().frame(height: 32).background(Color.white.opacity(0.1))
-                        
+                        .help("属性")
+
+                        Divider().frame(height: 24).overlay(c.divider)
+
                         // Action Buttons
-                        Group {
-                            ActionButton(icon: "square.and.arrow.down", label: "Save", color: .orange) {
-                                let editedImage = renderEditedImage()
-                                onSave(editedImage)
-                                // We don't call onCancel() here to let the user finish the save dialog
-                            }
-                            
-                            ActionButton(icon: "checkmark", label: "Done", color: .green) {
-                                let editedImage = renderEditedImage()
-                                onDone(editedImage)
-                            }
+                        Button("保存") {
+                            let editedImage = renderEditedImage()
+                            onSave(editedImage)
+                            // We don't call onCancel() here to let the user finish the save dialog
                         }
+                        .dsButton(.secondary)
+
+                        Button("完成") {
+                            let editedImage = renderEditedImage()
+                            onDone(editedImage)
+                        }
+                        .dsButton(.prominent)
                     }
                     .padding(8)
-                    .background(VisualEffectView(material: .hudWindow, blendingMode: .withinWindow).cornerRadius(20))
+                    .background(RoundedRectangle(cornerRadius: 16).fill(c.panel))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 20).stroke(Color.white.opacity(0.2), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: 16).stroke(c.divider, lineWidth: 1)
                     )
-                    .shadow(color: .black.opacity(0.3), radius: 20, x: 0, y: 10)
+                    .shadow(color: DesignSystem.panelShadow(scheme), radius: 18, x: 0, y: 8)
                 }
                 .padding(.bottom, 40)
             }
@@ -367,84 +363,107 @@ struct ScreenshotEditorView: View {
     struct ToolButton: View {
         let tool: EditorTool
         @Binding var currentTool: EditorTool
-        
+        let c: DSColors
+
         var body: some View {
+            let selected = currentTool == tool
             Button(action: { currentTool = tool }) {
                 Image(systemName: tool.icon)
-                    .font(.system(size: 16))
-                    .frame(width: 36, height: 36)
-                    .background(currentTool == tool ? AnyShapeStyle(Color(nsColor: .controlAccentColor)) : AnyShapeStyle(Color.clear))
-                    .foregroundColor(currentTool == tool ? .white : .secondary)
-                    .cornerRadius(8)
+                    .font(.system(size: 15))
+                    .frame(width: 30, height: 30)
+                    .background(
+                        RoundedRectangle(cornerRadius: 7)
+                            .fill(selected ? AnyShapeStyle(c.accent) : AnyShapeStyle(Color.clear))
+                    )
+                    .foregroundColor(selected ? .white : c.text2)
             }
             .buttonStyle(.plain)
             .help(tool.rawValue)
         }
     }
-    
-    struct ActionButton: View {
-        let icon: String
-        let label: String
-        let color: Color
+
+    // Token-styled 30×30 icon button used for undo/redo/clear/close-style controls.
+    struct IconToolButton: View {
+        let systemName: String
+        let help: String
+        let enabled: Bool
+        let c: DSColors
         let action: () -> Void
-        
+
         var body: some View {
             Button(action: action) {
-                HStack(spacing: 6) {
-                    Image(systemName: icon)
-                    Text(label).font(.system(size: 13, weight: .bold))
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(color.opacity(0.2))
-                .foregroundColor(color)
-                .cornerRadius(10)
+                Image(systemName: systemName)
+                    .font(.system(size: 15))
+                    .foregroundColor(enabled ? c.text2 : c.text3)
+                    .frame(width: 30, height: 30)
+                    .background(RoundedRectangle(cornerRadius: 7).fill(Color.clear))
+                    .contentShape(RoundedRectangle(cornerRadius: 7))
             }
             .buttonStyle(.plain)
+            .disabled(!enabled)
+            .help(help)
         }
     }
-    
+
     struct ColorPicker: View {
         @ObservedObject var editorState: EditorState
+        let c: DSColors
+
+        // Kit palette: red / blue / yellow / black (exact RGB).
+        private static let swatches: [Color] = [
+            Color(.sRGB, red: 255/255, green: 59/255, blue: 48/255),
+            Color(.sRGB, red: 10/255, green: 132/255, blue: 255/255),
+            Color(.sRGB, red: 254/255, green: 188/255, blue: 46/255),
+            Color(.sRGB, red: 29/255, green: 29/255, blue: 31/255)
+        ]
+
         var body: some View {
-            HStack(spacing: 8) {
-                ForEach(Array(Color.editorColors.prefix(8)), id: \.self) { color in
+            HStack(spacing: 10) {
+                ForEach(Self.swatches, id: \.self) { color in
+                    let selected = editorState.currentColor == color
                     Circle()
                         .fill(color)
-                        .frame(width: 22, height: 22)
+                        .frame(width: 16, height: 16)
                         .overlay(
-                            Circle().stroke(Color.white, lineWidth: editorState.currentColor == color ? 2 : 0)
+                            Group {
+                                if selected {
+                                    Circle().stroke(c.window, lineWidth: 1.5)
+                                        .overlay(Circle().stroke(c.accent, lineWidth: 1.5).padding(-1.5))
+                                }
+                            }
                         )
                         .onTapGesture { editorState.currentColor = color }
                 }
             }
         }
     }
-    
+
     struct SizeSlider: View {
         @ObservedObject var editorState: EditorState
+        let c: DSColors
         var body: some View {
             HStack(spacing: 12) {
                 Image(systemName: editorState.currentTool == .text ? "textformat.size" : "lineweight")
-                    .foregroundColor(.secondary)
-                
+                    .foregroundColor(c.text2)
+
                 DSSlider(value: editorState.currentTool == .text ? $editorState.fontSize : $editorState.lineWidth, in: editorState.currentTool == .text ? 6...120 : 1...30)
                     .frame(width: 120)
 
                 Text("\(Int(editorState.currentTool == .text ? editorState.fontSize : editorState.lineWidth))")
                     .font(.dsCaption.monospaced())
                     .frame(width: 30)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(c.text2)
             }
         }
     }
-    
+
     struct OpacitySlider: View {
         @ObservedObject var editorState: EditorState
+        let c: DSColors
         var body: some View {
             HStack(spacing: 12) {
                 Image(systemName: "circle.lefthalf.filled")
-                    .foregroundColor(.secondary)
+                    .foregroundColor(c.text2)
 
                 DSSlider(value: $editorState.opacity, in: 0.1...1.0)
                     .frame(width: 100)
@@ -452,7 +471,7 @@ struct ScreenshotEditorView: View {
                 Text("\(Int(editorState.opacity * 100))%")
                     .font(.dsCaption.monospaced())
                     .frame(width: 40)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(c.text2)
             }
         }
     }
@@ -645,6 +664,7 @@ struct FloatingTextInput: View {
     let fontSize: CGFloat
     let textColor: Color
     let opacity: Double
+    @Environment(\.colorScheme) private var scheme
     @GestureState private var localDragOffset: CGSize = .zero
     @FocusState.Binding var isTextFieldFocused: Bool
     let onDragEnded: (CGFloat, CGFloat) -> Void
@@ -660,7 +680,8 @@ struct FloatingTextInput: View {
         
         let fontSizeOffset = max(fontSize * scaleY, 20)
         let inputBoxOffset = fontSizeOffset + 30
-        
+        let c = DSColors(scheme: scheme)
+
         ZStack {
             if !editingText.isEmpty {
                 Text(editingText)
@@ -675,10 +696,9 @@ struct FloatingTextInput: View {
                     // Drag handle
                     Image(systemName: "line.3.horizontal")
                         .font(.system(size: 10))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(c.text2)
                         .frame(width: 20, height: 20)
-                        .background(Color.white.opacity(0.1))
-                        .cornerRadius(4)
+                        .background(RoundedRectangle(cornerRadius: 4).fill(c.chip))
                         .highPriorityGesture(
                             DragGesture(minimumDistance: 0)
                                 .updating($localDragOffset) { value, state, _ in
@@ -691,7 +711,7 @@ struct FloatingTextInput: View {
                                 }
                         )
                     
-                    TextField("Enter text", text: $editingText)
+                    TextField("输入文字", text: $editingText)
                         .textFieldStyle(.plain)
                         .font(.system(size: fontSize))
                         .foregroundColor(textColor)
@@ -706,7 +726,8 @@ struct FloatingTextInput: View {
                         }
                 }
                 .padding(4)
-                .background(VisualEffectView(material: .hudWindow, blendingMode: .withinWindow).cornerRadius(8))
+                .background(RoundedRectangle(cornerRadius: 8).fill(c.panel))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(c.divider, lineWidth: 1))
             }
             .position(x: textPoint.x, y: textPoint.y + inputBoxOffset)
             .offset(localDragOffset)
