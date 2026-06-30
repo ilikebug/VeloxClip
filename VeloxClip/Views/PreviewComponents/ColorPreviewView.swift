@@ -20,7 +20,7 @@ struct ColorPreviewView: View {
                 // Large color swatch (the swatch fill is content — keep as-is)
                 RoundedRectangle(cornerRadius: 12)
                     .fill(color)
-                    .frame(height: 200)
+                    .frame(height: 128)
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
                             .stroke(c.divider, lineWidth: 1)
@@ -212,15 +212,15 @@ struct ColorPreviewView: View {
                 formats.append(ColorFormat(name: "HEXA", value: hexA))
             }
             
-            // RGB
-            formats.append(ColorFormat(name: "RGB", value: "rgb(\(rgb.r), \(rgb.g), \(rgb.b))"))
+            // RGB — bare space-separated numbers (kit style)
+            formats.append(ColorFormat(name: "RGB", value: "\(rgb.r) \(rgb.g) \(rgb.b)"))
             if rgb.a < 1.0 {
-                formats.append(ColorFormat(name: "RGBA", value: "rgba(\(rgb.r), \(rgb.g), \(rgb.b), \(String(format: "%.2f", rgb.a)))"))
+                formats.append(ColorFormat(name: "RGBA", value: "\(rgb.r) \(rgb.g) \(rgb.b) \(String(format: "%.2f", rgb.a))"))
             }
-            
-            // HSL
+
+            // HSL — bare space-separated numbers (kit style)
             let hsl = rgbToHSL(rgb)
-            formats.append(ColorFormat(name: "HSL", value: "hsl(\(Int(hsl.h)), \(Int(hsl.s * 100))%, \(Int(hsl.l * 100))%)"))
+            formats.append(ColorFormat(name: "HSL", value: "\(Int(hsl.h)) \(Int(hsl.s * 100)) \(Int(hsl.l * 100))"))
         }
         
         self.formats = formats

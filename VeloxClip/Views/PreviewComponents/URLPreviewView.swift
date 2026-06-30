@@ -81,11 +81,11 @@ struct URLPreviewView: View {
             }
 
             // QR code (white plate so it scans in both light and dark)
-            if let url = urlInfo?.url, urlInfo?.isValid == true, let qr = qrImage(from: url.absoluteString, size: 132) {
+            if let url = urlInfo?.url, urlInfo?.isValid == true, let qr = qrImage(from: url.absoluteString, size: 148) {
                 Image(nsImage: qr)
                     .interpolation(.none)
                     .resizable()
-                    .frame(width: 132, height: 132)
+                    .frame(width: 148, height: 148)
                     .padding(10)
                     .background(RoundedRectangle(cornerRadius: 12).fill(Color.white))
                     .frame(maxWidth: .infinity)

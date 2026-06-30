@@ -21,7 +21,7 @@ enum EmptyKind {
     var subtitle: String {
         switch self {
         case .historyEmpty:   return "复制点什么，这里就会出现"
-        case .noMatch:        return "试别的词，或切到收藏"
+        case .noMatch:        return "试试别的词，或切到收藏"
         case .favoritesEmpty: return "在详情里点 ★ 收藏常用项"
         }
     }

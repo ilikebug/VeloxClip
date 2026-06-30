@@ -183,12 +183,12 @@ struct PasteStackHUDView: View {
         }
         .frame(width: panelWidth, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(c.panel)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(c.divider, lineWidth: 1)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(c.divider, lineWidth: 0.5)
         )
         .shadow(color: DesignSystem.panelShadow(scheme), radius: 25, x: 0, y: 9)
         .padding(10)
@@ -198,9 +198,14 @@ struct PasteStackHUDView: View {
 
     @ViewBuilder
     private func progressContent(_ c: DSColors) -> some View {
+        let count = max(stack.queue.count, 1)
+        let progressFrac = min(max(Double(stack.cursor) / Double(count), 0), 1)
         VStack(alignment: .leading, spacing: 0) {
-            // Header: title + n / m
-            HStack(spacing: 8) {
+            // Header: accent icon + title + n / m
+            HStack(spacing: 7) {
+                Image(systemName: "square.stack.3d.up.fill")
+                    .font(.system(size: 13))
+                    .foregroundColor(c.accent)
                 Text("Paste Stack")
                     .font(.system(size: 12, weight: .semibold))
                     .textCase(.uppercase)
@@ -213,6 +218,24 @@ struct PasteStackHUDView: View {
             }
             .padding(.horizontal, 13)
             .padding(.top, 13)
+            .padding(.bottom, 12)
+
+            // Header bottom divider
+            Rectangle()
+                .fill(c.divider)
+                .frame(height: 0.5)
+
+            // Progress bar
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(c.key)
+                    Capsule().fill(c.accent)
+                        .frame(width: geo.size.width * progressFrac)
+                }
+            }
+            .frame(height: 3)
+            .padding(.horizontal, 13)
+            .padding(.top, 12)
             .padding(.bottom, 12)
 
             // Item list
@@ -238,47 +261,65 @@ struct PasteStackHUDView: View {
         let isDone = index < stack.cursor
 
         HStack(spacing: 8) {
-            Text("\(index + 1)")
-                .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                .foregroundColor(isCurrent ? .white : (isDone ? c.text3 : c.text2))
-                .frame(width: 16, alignment: .center)
+            // Index badge: 18×18, cornerRadius 5
+            ZStack {
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(isCurrent ? c.accent : c.chip)
+                if isDone {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(c.accent)
+                } else {
+                    Text("\(index + 1)")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundColor(isCurrent ? .white : c.text2)
+                }
+            }
+            .frame(width: 18, height: 18)
 
             Text(shortLabel(item))
                 .font(.system(size: 12))
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .foregroundColor(isCurrent ? .white : (isDone ? c.text3 : c.text))
+                .foregroundColor(c.text)
 
             Spacer(minLength: 4)
 
             if isCurrent {
-                DSKeyBadge(label: "⏎", onAccent: true)
-            } else if isDone {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(c.text3)
+                Text("↵")
+                    .font(.system(size: 10.5, weight: .semibold))
+                    .foregroundColor(c.accent)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(c.card))
             }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(isCurrent ? c.accent : Color.clear)
+                .fill(isCurrent ? c.accentSoft : Color.clear)
         )
+        .opacity(isDone ? 0.42 : 1)
     }
 
     // 暂停 — 检测到新复制
     @ViewBuilder
     private func pausedStrip(_ c: DSColors) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("已暂停 — 你复制了新内容")
-                .font(.system(size: 11.5))
-                .foregroundColor(c.text)
-                .lineSpacing(11.5 * 0.4)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 13)
-                .padding(.vertical, 10)
-                .background(Color.orange.opacity(0.15))
+            HStack(spacing: 7) {
+                Image(systemName: "pause.fill")
+                    .font(.system(size: 11))
+                    .foregroundColor(.orange)
+                Text("已暂停 — 你复制了新内容")
+                    .font(.system(size: 11.5))
+                    .foregroundColor(c.text)
+                    .lineSpacing(11.5 * 0.4)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 13)
+            .padding(.vertical, 10)
+            .background(Color.orange.opacity(0.15))
 
             HStack(spacing: 8) {
                 Button(action: { stack.resume() }) {
@@ -304,7 +345,7 @@ struct PasteStackHUDView: View {
             ZStack {
                 Circle()
                     .fill(c.accent)
-                    .frame(width: 44, height: 44)
+                    .frame(width: 40, height: 40)
                 Image(systemName: "checkmark")
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundColor(.white)

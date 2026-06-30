@@ -34,7 +34,7 @@ struct SettingsView: View {
             sidebar(c)
             content(c)
         }
-        .frame(width: 620, height: 460)
+        .frame(width: 720, height: 460)
         .background(c.window)
     }
 
@@ -48,7 +48,7 @@ struct SettingsView: View {
             Spacer()
         }
         .padding(10)
-        .frame(width: 150, alignment: .topLeading)
+        .frame(width: 184, alignment: .topLeading)
         .frame(maxHeight: .infinity)
         .background(c.panel)
         .overlay(alignment: .trailing) {
@@ -303,7 +303,7 @@ private struct AdvancedSection: View {
         VStack(alignment: .leading, spacing: 0) {
             SectionHeader(title: "高级")
 
-            VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
                 Button("清缓存") {
                     CacheManager.shared.clearAllCaches()
                 }

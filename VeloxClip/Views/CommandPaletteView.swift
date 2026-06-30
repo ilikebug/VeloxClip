@@ -34,7 +34,7 @@ struct CommandPaletteView: View {
             Divider().overlay(c.divider)
             commandList(c)
         }
-        .frame(width: 360)
+        .frame(width: 440)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(c.panel)
@@ -130,9 +130,22 @@ struct CommandPaletteView: View {
 
     // MARK: Command list
 
+    /// Command ids that form the destructive/management group; a divider is
+    /// inserted before the first of these that appears.
+    private static let groupBoundaryIDs: Set<String> = ["favorite", "stack", "delete"]
+    private static let destructiveRed = Color(.sRGB, red: 255/255, green: 59/255, blue: 48/255, opacity: 1)
+
     @ViewBuilder private func commandList(_ c: DSColors) -> some View {
         VStack(spacing: 2) {
             ForEach(Array(filteredCommands.enumerated()), id: \.element.id) { index, cmd in
+                // Divider before the first command of the destructive group
+                if Self.groupBoundaryIDs.contains(cmd.id),
+                   index > 0, !Self.groupBoundaryIDs.contains(filteredCommands[index - 1].id) {
+                    Rectangle()
+                        .fill(c.divider)
+                        .frame(height: 0.5)
+                        .padding(.vertical, 4)
+                }
                 commandRow(cmd, isSelected: index == selectedIndex, c: c)
                     .onTapGesture { onExecute(cmd) }
             }
@@ -141,6 +154,8 @@ struct CommandPaletteView: View {
     }
 
     @ViewBuilder private func commandRow(_ cmd: Command, isSelected: Bool, c: DSColors) -> some View {
+        let isDelete = cmd.id == "delete"
+        let titleColor: Color = isSelected ? .white : (isDelete ? Self.destructiveRed : c.text)
         HStack(spacing: 11) {
             if (cmd.id == "copyHex" || cmd.id == "copyRgb"), let color = itemColor {
                 RoundedRectangle(cornerRadius: 3, style: .continuous)
@@ -149,15 +164,33 @@ struct CommandPaletteView: View {
             } else {
                 Image(systemName: cmd.icon)
                     .font(.system(size: 13))
-                    .foregroundColor(isSelected ? .white : c.text)
+                    .foregroundColor(isSelected ? .white : (isDelete ? Self.destructiveRed : c.text))
                     .frame(width: 13, height: 13)
             }
             Text(cmd.title)
                 .font(.system(size: 13.5))
-                .foregroundColor(isSelected ? .white : c.text)
+                .foregroundColor(titleColor)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            if let key = cmd.keyHint {
-                DSKeyBadge(label: key, onAccent: isSelected)
+
+            // Computed color value for HEX/RGB rows; keyHint badge otherwise.
+            if let value = computedValue(for: cmd) {
+                Text(value)
+                    .font(.system(size: 11.5, design: .monospaced))
+                    .foregroundColor(isSelected ? .white : c.text3)
+            } else if let key = cmd.keyHint {
+                if isDelete && !isSelected {
+                    Text(key)
+                        .font(.system(size: 10.5, weight: .semibold))
+                        .foregroundColor(Self.destructiveRed)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                .fill(Self.destructiveRed.opacity(0.14))
+                        )
+                } else {
+                    DSKeyBadge(label: key, onAccent: isSelected)
+                }
             }
         }
         .padding(.horizontal, 11)
@@ -167,5 +200,15 @@ struct CommandPaletteView: View {
                 .fill(isSelected ? c.accent : Color.clear)
         )
         .contentShape(Rectangle())
+    }
+
+    /// Trailing computed value for the color copy rows (e.g. `#0A84FF`, `10 132 255`).
+    private func computedValue(for cmd: Command) -> String? {
+        guard let content = item?.content else { return nil }
+        switch cmd.id {
+        case "copyHex": return ColorFormatting.hex(from: content)
+        case "copyRgb": return ColorFormatting.rgb(from: content)
+        default:        return nil
+        }
     }
 }
