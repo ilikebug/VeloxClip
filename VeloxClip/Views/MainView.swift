@@ -182,14 +182,18 @@ struct MainView: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .background(DesignSystem.backgroundBlur)
-            .onKeyPress { press in
+            // NOTE: use FILTERED key handlers (keyed `onKeyPress(keys:)`), never an
+            // unfiltered `onKeyPress { }` catch-all here — an unfiltered handler
+            // alongside the keyed ones below stops the keyed handlers (arrows /
+            // return / tab / space / escape) from firing.
+            .onKeyPress(keys: ["k"]) { press in
                 // ⌘K opens the command palette.
-                if press.modifiers.contains(.command), press.characters.lowercased() == "k" {
-                    showCommandPalette = true
-                    return .handled
-                }
-                // ⌘1–9 pastes the corresponding visible row. Returns .ignored for
-                // anything else so the other handlers below still run.
+                guard press.modifiers.contains(.command) else { return .ignored }
+                showCommandPalette = true
+                return .handled
+            }
+            .onKeyPress(keys: ["1", "2", "3", "4", "5", "6", "7", "8", "9"]) { press in
+                // ⌘1–9 pastes the corresponding visible row.
                 guard press.modifiers.contains(.command),
                       let n = Int(press.characters), n >= 1, n <= 9,
                       displayItems.indices.contains(n - 1) else { return .ignored }

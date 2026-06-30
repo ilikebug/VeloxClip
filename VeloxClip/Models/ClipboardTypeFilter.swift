@@ -12,10 +12,10 @@ enum ClipboardTypeFilter: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .all: return "All"
-        case .text: return "Text"
-        case .image: return "Image"
-        case .file: return "File"
+        case .all: return "全部"
+        case .text: return "文本"
+        case .image: return "图片"
+        case .file: return "文件"
         }
     }
 
