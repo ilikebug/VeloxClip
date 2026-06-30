@@ -126,79 +126,24 @@ struct ColorPreviewView: View {
     }
     
     private func parseColor() {
-        let trimmed = colorString.trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        // 1. Try to parse as RGB/RGBA first
-        if let rgbColor = parseRGB(trimmed) {
-            color = rgbColor
-            generateFormats(from: rgbColor)
+        // All color parsing flows through the shared ColorFormatting helper so the
+        // preview can never disagree with the ⌘K palette / list-row swatch. It
+        // accepts every form ClipboardMonitor.isColor stores (3/6/8-digit hex and
+        // rgb()/rgba()), so 3-digit hex like "#f00" now renders instead of showing
+        // "无效的颜色格式".
+        if let comp = ColorFormatting.components(from: colorString) {
+            let parsed = Color(.sRGB,
+                               red: Double(comp.r) / 255.0,
+                               green: Double(comp.g) / 255.0,
+                               blue: Double(comp.b) / 255.0,
+                               opacity: comp.a)
+            color = parsed
+            generateFormats(from: parsed)
             return
         }
-        
-        // 2. Try to parse as hex
-        let hexSanitized = trimmed.replacingOccurrences(of: "#", with: "")
-        var rgb: UInt64 = 0
-        if Scanner(string: hexSanitized).scanHexInt64(&rgb) {
-            let length = hexSanitized.count
-            var r: Double = 0.0
-            var g: Double = 0.0
-            var b: Double = 0.0
-            var a: Double = 1.0
-            
-            if length == 6 {
-                r = Double((rgb & 0xFF0000) >> 16) / 255.0
-                g = Double((rgb & 0x00FF00) >> 8) / 255.0
-                b = Double(rgb & 0x0000FF) / 255.0
-            } else if length == 8 {
-                r = Double((rgb & 0xFF000000) >> 24) / 255.0
-                g = Double((rgb & 0x00FF0000) >> 16) / 255.0
-                b = Double((rgb & 0x0000FF00) >> 8) / 255.0
-                a = Double(rgb & 0x000000FF) / 255.0
-            } else {
-                color = nil
-                return
-            }
-            
-            let parsedColor = Color(.sRGB, red: r, green: g, blue: b, opacity: a)
-            color = parsedColor
-            generateFormats(from: parsedColor)
-            return
-        }
-        
         color = nil
     }
-    
-    private func parseRGB(_ string: String) -> Color? {
-        let patterns = [
-            #"rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)"#,
-            #"^(\d+),\s*(\d+),\s*(\d+)$"#
-        ]
-        
-        for pattern in patterns {
-            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
-               let match = regex.firstMatch(in: string, range: NSRange(string.startIndex..., in: string)) {
-                
-                guard let rRange = Range(match.range(at: 1), in: string),
-                      let gRange = Range(match.range(at: 2), in: string),
-                      let bRange = Range(match.range(at: 3), in: string) else { continue }
 
-                if let r = Int(string[rRange]),
-                   let g = Int(string[gRange]),
-                   let b = Int(string[bRange]) {
-
-                    var alpha: Double = 1.0
-                    if match.numberOfRanges > 4, match.range(at: 4).location != NSNotFound,
-                       let aRange = Range(match.range(at: 4), in: string) {
-                        alpha = Double(string[aRange]) ?? 1.0
-                    }
-                    
-                    return Color(red: Double(r) / 255.0, green: Double(g) / 255.0, blue: Double(b) / 255.0, opacity: alpha)
-                }
-            }
-        }
-        return nil
-    }
-    
     private func generateFormats(from color: Color) {
         var formats: [ColorFormat] = []
         

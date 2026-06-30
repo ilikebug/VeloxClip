@@ -297,9 +297,18 @@ struct MainView: View {
         let isCmd = mods.contains(.command)
         let key = event.keyCode
 
+        // True when the caret is inside an editable text field or a
+        // .textSelection(.enabled) preview (the field editor is an NSTextView). In
+        // that case text-editing keys (⌘C copy-selection, ← / → cursor movement)
+        // must fall through to the responder chain rather than being hijacked for
+        // copy-item / open-detail.
+        let editingText = event.window?.firstResponder is NSTextView
+
         // ⌘C copies the detail/selected item with its full payload (works in both
-        // list and detail mode) — makes the palette's `⌘C` hint truthful.
+        // list and detail mode) — makes the palette's `⌘C` hint truthful. But when
+        // a text field / selectable preview holds focus, let native copy-selection win.
         if isCmd, event.charactersIgnoringModifiers?.lowercased() == "c" {
+            if editingText { return false }
             if let i = detailItem ?? selectedItem { copyItem(i) }
             return true
         }
@@ -332,6 +341,9 @@ struct MainView: View {
         case 126: moveSelection(direction: -1); return true   // ↑
         case 125: moveSelection(direction: 1); return true    // ↓
         case 124:                                              // → open detail
+            // Don't hijack → while the caret is in the search field — let it move
+            // the text cursor. (← keyCode 123 already falls through in list mode.)
+            if editingText { return false }
             if let item = selectedItem { withAnimation(.easeInOut(duration: 0.18)) { detailItem = item } }
             return selectedItem != nil
         case 36, 76: executeSelection(); return true           // ⏎ paste
