@@ -41,7 +41,23 @@ final class PasteStackHUDController {
             hide()
         } else if AppSettings.shared.showPasteStackHUD {
             show()
+            // The three states differ in height; re-fit the panel to the current
+            // content (preserving the configured corner position) on every change.
+            refit()
         }
+    }
+
+    // Resize the panel to fit the current phase's content, then re-anchor it so
+    // it stays pinned to the configured corner (a taller panel must not drift
+    // off the bottom edge). Runs synchronously so our own move isn't mistaken
+    // for a user drag.
+    private func refit() {
+        guard let panel, let hosting else { return }
+        let fitted = hosting.sizeThatFits(in: NSSize(width: 800, height: 600))
+        isRepositioningProgrammatically = true
+        panel.setContentSize(fitted)
+        panel.setFrameOrigin(targetOrigin(for: panel.frame.size))
+        isRepositioningProgrammatically = false
     }
 
     private func show() {
@@ -148,100 +164,181 @@ final class PasteStackHUDController {
 
 struct PasteStackHUDView: View {
     @ObservedObject var stack = PasteStackService.shared
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorScheme) private var scheme
+
+    // Kit panel width
+    private let panelWidth: CGFloat = 240
 
     var body: some View {
-        HStack(spacing: 10) {
+        let c = DSColors(scheme: scheme)
+        VStack(alignment: .leading, spacing: 0) {
             switch stack.phase {
-            case .active:
-                Image(systemName: "list.number")
-                    .foregroundStyle(Color(nsColor: .controlAccentColor))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Next: \(currentPreview)")
-                        .font(.system(size: 12, weight: .medium))
-                        .lineLimit(1)
-                    Text("Press ⌘V to paste")
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary)
-                }
-                Spacer(minLength: 8)
-                progressLabel
-                closeButton
-            case .paused:
-                Image(systemName: "pause.circle.fill")
-                    .foregroundColor(.orange)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Paused")
-                        .font(.system(size: 12, weight: .medium))
-                    Text("You copied something new")
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary)
-                }
-                Spacer(minLength: 8)
-                progressLabel
-                Button(action: { stack.resume() }) {
-                    Image(systemName: "play.circle.fill")
-                        .font(.system(size: 18))
-                }
-                .buttonStyle(.plain)
-                .help("Resume the paste queue")
-                closeButton
+            case .active, .paused:
+                progressContent(c)
             case .completed:
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(.green)
-                Text("Done")
-                    .font(.system(size: 12, weight: .medium))
-                Spacer(minLength: 8)
-                progressLabel
+                completedContent(c)
             case .idle:
                 EmptyView()
             }
         }
-        .padding(.horizontal, 14)
-        // Fixed size across all phases — the panel must never resize while visible
-        .frame(width: 320, height: 56)
-        .background {
-            let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
-            // "Reduce Transparency" turns materials opaque anyway; pin an explicit
-            // appearance-adaptive fill so the fallback matches light/dark mode.
-            if reduceTransparency {
-                shape.fill(Color(nsColor: .windowBackgroundColor))
-            } else {
-                shape.fill(.ultraThinMaterial)
-            }
-        }
+        .frame(width: panelWidth, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(c.panel)
+        )
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                .stroke(c.divider, lineWidth: 1)
         )
-        .padding(6)
+        .shadow(color: DesignSystem.panelShadow(scheme), radius: 25, x: 0, y: 9)
+        .padding(10)
     }
 
-    private var progressLabel: some View {
-        Text("\(min(stack.cursor + 1, stack.queue.count))/\(stack.queue.count)")
-            .font(.system(size: 11, weight: .semibold, design: .monospaced))
-            .foregroundColor(.secondary)
-    }
+    // MARK: - 进行中 / 暂停
 
-    private var closeButton: some View {
-        Button(action: { stack.cancel() }) {
-            Image(systemName: "xmark.circle.fill")
-                .font(.system(size: 14))
-                .foregroundColor(.secondary)
+    @ViewBuilder
+    private func progressContent(_ c: DSColors) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header: title + n / m
+            HStack(spacing: 8) {
+                Text("Paste Stack")
+                    .font(.system(size: 12, weight: .semibold))
+                    .textCase(.uppercase)
+                    .kerning(0.04 * 12)
+                    .foregroundColor(c.text2)
+                Spacer(minLength: 8)
+                Text("\(min(stack.cursor + 1, stack.queue.count)) / \(stack.queue.count)")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(c.text2)
+            }
+            .padding(.horizontal, 13)
+            .padding(.top, 13)
+            .padding(.bottom, 12)
+
+            // Item list
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(Array(stack.queue.enumerated()), id: \.element.id) { index, item in
+                    itemRow(index: index, item: item, c: c)
+                }
+            }
+            .padding(.horizontal, 9)
+
+            if stack.phase == .paused {
+                pausedStrip(c)
+                    .padding(.top, 12)
+            } else {
+                Color.clear.frame(height: 13)
+            }
         }
-        .buttonStyle(.plain)
-        .help("Exit the paste queue")
     }
 
-    private var currentPreview: String {
-        guard stack.cursor < stack.queue.count else { return "" }
-        let item = stack.queue[stack.cursor]
+    @ViewBuilder
+    private func itemRow(index: Int, item: ClipboardItem, c: DSColors) -> some View {
+        let isCurrent = index == stack.cursor
+        let isDone = index < stack.cursor
+
+        HStack(spacing: 8) {
+            Text("\(index + 1)")
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .foregroundColor(isCurrent ? .white : (isDone ? c.text3 : c.text2))
+                .frame(width: 16, alignment: .center)
+
+            Text(shortLabel(item))
+                .font(.system(size: 12))
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .foregroundColor(isCurrent ? .white : (isDone ? c.text3 : c.text))
+
+            Spacer(minLength: 4)
+
+            if isCurrent {
+                DSKeyBadge(label: "⏎", onAccent: true)
+            } else if isDone {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(c.text3)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(isCurrent ? c.accent : Color.clear)
+        )
+    }
+
+    // 暂停 — 检测到新复制
+    @ViewBuilder
+    private func pausedStrip(_ c: DSColors) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("已暂停 — 你复制了新内容")
+                .font(.system(size: 11.5))
+                .foregroundColor(c.text)
+                .lineSpacing(11.5 * 0.4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 13)
+                .padding(.vertical, 10)
+                .background(Color.orange.opacity(0.15))
+
+            HStack(spacing: 8) {
+                Button(action: { stack.resume() }) {
+                    Text("继续").frame(maxWidth: .infinity)
+                }
+                .dsButton(.prominent)
+
+                Button(action: { stack.cancel() }) {
+                    Text("放弃").frame(maxWidth: .infinity)
+                }
+                .dsButton(.secondary)
+            }
+            .padding(.horizontal, 13)
+            .padding(.vertical, 10)
+        }
+    }
+
+    // MARK: - 完成
+
+    @ViewBuilder
+    private func completedContent(_ c: DSColors) -> some View {
+        VStack(spacing: 0) {
+            ZStack {
+                Circle()
+                    .fill(c.accent)
+                    .frame(width: 44, height: 44)
+                Image(systemName: "checkmark")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+            .padding(.top, 18)
+
+            Text("已粘贴 \(stack.queue.count) 项")
+                .font(.system(size: 13.5, weight: .semibold))
+                .foregroundColor(c.text)
+                .padding(.top, 12)
+
+            Text("序列完成")
+                .font(.system(size: 12))
+                .foregroundColor(c.text2)
+                .padding(.top, 2)
+
+            Text("位置可在设置中改 · 默认右下角")
+                .font(.system(size: 11.5))
+                .foregroundColor(c.text2)
+                .padding(.top, 12)
+                .padding(.bottom, 16)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Helpers
+
+    private func shortLabel(_ item: ClipboardItem) -> String {
         if let content = item.content, !content.isEmpty {
             return String(content.trimmingCharacters(in: .whitespacesAndNewlines).prefix(30))
         }
         switch item.type {
-        case "image": return "Image"
-        case "rtf": return "Rich Text"
+        case "image": return "图片"
+        case "rtf": return "富文本"
         default: return item.type
         }
     }
