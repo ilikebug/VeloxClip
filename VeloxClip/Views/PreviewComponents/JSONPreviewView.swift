@@ -3,6 +3,7 @@ import AppKit
 
 // JSON preview with formatting and validation
 struct JSONPreviewView: View {
+    @Environment(\.colorScheme) private var scheme
     let jsonString: String
     @State private var formattedJSON: String = ""
     @State private var minifiedJSONText: String = ""
@@ -66,28 +67,30 @@ struct JSONPreviewView: View {
     
     @ViewBuilder
     private var validationStatus: some View {
+        let c = DSColors(scheme: scheme)
         if isLoading {
             ProgressView().scaleEffect(0.7)
-            Text("Validating...").font(.dsCaption).foregroundColor(.secondary)
+            Text("Validating...").font(.system(size: 11)).foregroundColor(c.text2)
         } else if isValidJSON {
-            Label("Valid JSON", systemImage: "checkmark.circle.fill").font(.dsCaption).foregroundColor(.green)
+            Label("Valid JSON", systemImage: "checkmark.circle.fill").font(.system(size: 11)).foregroundColor(.green)
         } else if let error = validationError {
-            Label("Invalid JSON", systemImage: "xmark.circle.fill").font(.dsCaption).foregroundColor(.red).help(error)
+            Label("Invalid JSON", systemImage: "xmark.circle.fill").font(.system(size: 11)).foregroundColor(.red).help(error)
         }
     }
-    
+
     private func contentArea(availableWidth: CGFloat) -> some View {
-        ScrollView([.horizontal, .vertical], showsIndicators: true) {
+        let c = DSColors(scheme: scheme)
+        return ScrollView([.horizontal, .vertical], showsIndicators: true) {
             Group {
                 if isLoading {
                     loadingSpinner
                 } else if isValidJSON {
                     switch viewMode {
-                    case .formatted: 
+                    case .formatted:
                         formattedView(availableWidth: availableWidth)
-                    case .minified: 
+                    case .minified:
                         minifiedView(availableWidth: availableWidth)
-                    case .tree: 
+                    case .tree:
                         treeView(availableWidth: availableWidth)
                     }
                 } else {
@@ -98,25 +101,30 @@ struct JSONPreviewView: View {
             .padding(.vertical, 12)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.clear)
+        .background(RoundedRectangle(cornerRadius: 12).fill(c.card))
+        .padding(.horizontal, 16)
+        .padding(.bottom, 16)
         .scrollIndicators(.visible)
     }
 
     private var loadingSpinner: some View {
-        VStack(spacing: 8) {
+        let c = DSColors(scheme: scheme)
+        return VStack(spacing: 8) {
             ProgressView()
-            Text("Loading JSON...").font(.dsCaption).foregroundColor(.secondary)
+            Text("Loading JSON...").font(.system(size: 11)).foregroundColor(c.text2)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 80)
     }
-    
+
     private func formattedView(availableWidth: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
+        let c = DSColors(scheme: scheme)
+        return VStack(alignment: .leading, spacing: 0) {
             let lines = formattedJSON.components(separatedBy: .newlines)
             ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
                 Text(line)
                     .font(.dsMonoBody)
+                    .foregroundColor(c.text)
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
                     .padding(.trailing, 40)
@@ -127,10 +135,12 @@ struct JSONPreviewView: View {
         .fixedSize(horizontal: true, vertical: false)
         .frame(minWidth: availableWidth, alignment: .topLeading)
     }
-    
+
     private func minifiedView(availableWidth: CGFloat) -> some View {
-        Text(minifiedJSONText)
+        let c = DSColors(scheme: scheme)
+        return Text(minifiedJSONText)
             .font(.dsMonoBody)
+            .foregroundColor(c.text)
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)
             .textSelection(.enabled)
@@ -138,7 +148,7 @@ struct JSONPreviewView: View {
             .padding(.trailing, 40)
             .frame(minWidth: availableWidth, alignment: .topLeading)
     }
-    
+
     private func treeView(availableWidth: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             if let jsonObject = parseJSON() {
@@ -149,16 +159,17 @@ struct JSONPreviewView: View {
         .padding(.trailing, 40)
         .frame(minWidth: availableWidth, alignment: .topLeading)
     }
-    
+
     private var errorView: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("JSON Validation Error:").font(.dsHeadline).foregroundColor(.red)
+        let c = DSColors(scheme: scheme)
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("JSON Validation Error:").font(.system(size: 13, weight: .semibold)).foregroundColor(.red)
             if let error = validationError {
-                Text(error).font(.dsMonoBody).foregroundColor(.secondary)
+                Text(error).font(.dsMonoBody).foregroundColor(c.text2)
             }
             Divider()
-            Text("Raw Content:").font(.dsCaption).foregroundColor(.secondary)
-            Text(jsonString).font(.dsMonoBody).textSelection(.enabled)
+            Text("Raw Content:").font(.system(size: 11)).foregroundColor(c.text2)
+            Text(jsonString).font(.dsMonoBody).foregroundColor(c.text).textSelection(.enabled)
         }
         .padding(12)
     }
@@ -230,27 +241,30 @@ struct JSONPreviewView: View {
 
 // Tree view for JSON - Postman Style
 struct JSONTreeView: View {
+    @Environment(\.colorScheme) private var scheme
     let jsonObject: Any
     let level: Int
     let key: String?
     @State private var isExpanded = true
-    
+
     private let indent: CGFloat = 20
-    
-    // Postman-like colors
+
+    // Postman-like colors (content-semantic — preserved)
     private let keyColor = Color(hex: "#A626A4")!     // Purple
     private let stringColor = Color(hex: "#50A14F")!  // Green
     private let numberColor = Color(hex: "#986801")!  // Orange/Brown
     private let keywordColor = Color(hex: "#0184BC")! // Blue
-    private let bracketColor = Color.secondary.opacity(0.8)
-    
+
     init(jsonObject: Any, level: Int = 0, key: String? = nil) {
         self.jsonObject = jsonObject
         self.level = level
         self.key = key
     }
 
+    private var bracketColor: Color { DSColors(scheme: scheme).text2 }
+
     var body: some View {
+        let c = DSColors(scheme: scheme)
         VStack(alignment: .leading, spacing: 2) {
             if let dict = jsonObject as? [String: Any] {
                 collectionHeader(label: "{", count: dict.count, type: "keys")
@@ -275,7 +289,7 @@ struct JSONTreeView: View {
             Group {
                 if level > 0 && isExpanded {
                     Rectangle()
-                        .fill(Color.secondary.opacity(0.1))
+                        .fill(c.divider)
                         .frame(width: 1)
                         .padding(.leading, 4)
                         .padding(.vertical, 4)
@@ -297,24 +311,27 @@ struct JSONTreeView: View {
     }
 
     private func collectionHeader(label: String, count: Int, type: String) -> some View {
-        HStack(spacing: 4) {
+        let c = DSColors(scheme: scheme)
+        return HStack(spacing: 4) {
             Button(action: { isExpanded.toggle() }) {
                 Image(systemName: "chevron.down")
                     .font(.system(size: 8, weight: .bold))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(c.text2)
                     .rotationEffect(isExpanded ? .zero : .degrees(-90))
             }
             .buttonStyle(.plain)
             .frame(width: 12)
-            
+
             if let key = key {
                 Text("\"\(key)\":").foregroundColor(keyColor).fontWeight(.medium)
             }
-            
+
             Text(label).foregroundColor(bracketColor)
-            
+
             if !isExpanded {
-                Text("... \(count) \(type) ...").font(.dsCaption).padding(.horizontal, 4).background(Color.secondary.opacity(0.1)).cornerRadius(4)
+                Text("... \(count) \(type) ...").font(.system(size: 11)).foregroundColor(c.text2)
+                    .padding(.horizontal, 4)
+                    .background(RoundedRectangle(cornerRadius: 4).fill(c.chip))
                 Text(label == "{" ? "}" : "]").foregroundColor(bracketColor)
             }
         }
@@ -349,7 +366,7 @@ struct JSONTreeView: View {
         } else if let num = value as? NSNumber {
             return Text(num.stringValue).foregroundColor(numberColor)
         } else {
-            return Text(String(describing: value)).foregroundColor(.primary)
+            return Text(String(describing: value)).foregroundColor(DSColors(scheme: scheme).text)
         }
     }
 }

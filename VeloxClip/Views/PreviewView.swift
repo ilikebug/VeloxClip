@@ -2,6 +2,7 @@ import SwiftUI
 import Foundation
 
 struct PreviewView: View {
+    @Environment(\.colorScheme) private var scheme
     let item: ClipboardItem?
     @ObservedObject var store = ClipboardStore.shared
     @StateObject private var viewModel = PreviewViewModel()
@@ -85,38 +86,43 @@ struct PreviewView: View {
     
     @ViewBuilder
     private func headerView(for displayItem: ClipboardItem) -> some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(displayItem.type.capitalized)
-                    .font(.dsCaption.bold())
-                    .foregroundColor(.secondary)
-                    .kerning(1.2)
+        let c = DSColors(scheme: scheme)
+        HStack(spacing: 10) {
+            Text(displayItem.type.capitalized)
+                .font(.system(size: 13.5, weight: .semibold))
+                .foregroundColor(c.text)
+                .lineLimit(1)
 
-                Text(displayItem.sourceApp ?? "System")
-                    .font(.dsTitle3.bold())
-            }
-            
-            Spacer()
+            Spacer(minLength: 8)
 
-            favoriteButton(for: displayItem)
-
-            VStack(alignment: .trailing, spacing: 4) {
+            VStack(alignment: .trailing, spacing: 2) {
                 Text(displayItem.createdAt, style: .date)
                 Text(displayItem.createdAt, style: .time)
             }
-            .font(.dsCaption)
-            .foregroundColor(.secondary)
+            .font(.system(size: 11))
+            .foregroundColor(c.text2)
+
+            if let app = displayItem.sourceApp, !app.isEmpty {
+                Text(app)
+                    .font(.system(size: 11))
+                    .foregroundColor(c.text2)
+                    .lineLimit(1)
+            }
+
+            favoriteButton(for: displayItem)
         }
-        .padding()
-        .background(Color(nsColor: .controlAccentColor).opacity(0.1))
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(c.window)
     }
-    
+
     @ViewBuilder
     private func favoriteButton(for displayItem: ClipboardItem) -> some View {
+        let c = DSColors(scheme: scheme)
         Button(action: { store.toggleFavorite(for: displayItem) }) {
             Image(systemName: displayItem.isFavorite ? "star.fill" : "star")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(displayItem.isFavorite ? AnyShapeStyle(Color(nsColor: .controlAccentColor)) : AnyShapeStyle(.secondary))
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(displayItem.isFavorite ? c.accent : c.text2)
         }
         .buttonStyle(.plain)
     }
@@ -135,9 +141,10 @@ struct PreviewView: View {
     }
     
     private var loadingIndicator: some View {
-        VStack(spacing: 12) {
+        let c = DSColors(scheme: scheme)
+        return VStack(spacing: 12) {
             ProgressView().scaleEffect(0.8)
-            Text("Detecting content...").font(.dsCaption).foregroundColor(.secondary)
+            Text("Detecting content...").font(.system(size: 11.5)).foregroundColor(c.text2)
         }
         .frame(maxWidth: .infinity).padding(.vertical, 40)
     }
@@ -212,31 +219,36 @@ struct PreviewView: View {
     
     @ViewBuilder
     private func ocrSection(for item: ClipboardItem) -> some View {
+        let c = DSColors(scheme: scheme)
         if let ocrText = item.content, !ocrText.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
-                    Image(systemName: "text.viewfinder").foregroundColor(.blue)
-                    Text("OCR Text").font(.dsHeadline)
+                    Image(systemName: "text.viewfinder").foregroundColor(c.accent)
+                    Text("图中文字").font(.system(size: 11.5)).foregroundColor(c.text2)
                     Button("Copy") { viewModel.copyTransformedText(ocrText) }
+                        .dsButton(.secondary, small: true)
                     Spacer()
                 }
-                Text(ocrText).font(.dsMonoBody)
+                Text(ocrText).font(.dsMonoBody).foregroundColor(c.text)
                     .textSelection(.enabled)
-                    .padding(8).background(Color.secondary.opacity(0.1)).cornerRadius(8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(10)
+                    .background(RoundedRectangle(cornerRadius: 10).fill(c.card))
             }
         }
     }
-    
+
     @ViewBuilder
     private func plainTextPreview(content: String) -> some View {
+        let c = DSColors(scheme: scheme)
         let maxChars = 5000
         let displayContent = content.count > maxChars ? String(content.prefix(maxChars)) : content
         VStack(alignment: .leading, spacing: 8) {
-            Text(displayContent).font(.dsBody).lineLimit(nil)
+            Text(displayContent).font(.dsBody).foregroundColor(c.text).lineLimit(nil)
                 .textSelection(.enabled)
             if content.count > maxChars {
                 Text("... (\(content.count - maxChars) more characters)")
-                    .font(.dsCaption).foregroundColor(.secondary).italic()
+                    .font(.system(size: 11)).foregroundColor(c.text2).italic()
             }
         }
     }
@@ -264,11 +276,13 @@ struct PreviewView: View {
             textToolsMenu(for: item)
             Spacer()
         }
-        .padding().background(Color.black.opacity(0.02))
+        .padding(.horizontal, 16).padding(.vertical, 12)
+        .background(DSColors(scheme: scheme).window)
     }
 
     @ViewBuilder
     private func textToolsMenu(for item: ClipboardItem) -> some View {
+        let c = DSColors(scheme: scheme)
         if let content = item.content {
             Menu {
                 standardTextTools(content: content)
@@ -278,7 +292,7 @@ struct PreviewView: View {
                     Text("Tools")
                     Image(systemName: "chevron.down")
                         .font(.system(size: 9, weight: .semibold))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(c.text2)
                 }
                 .compactMenuLabel()
             }
@@ -299,17 +313,19 @@ struct PreviewView: View {
     
     @ViewBuilder
     private func tagsSection(for item: ClipboardItem) -> some View {
+        let c = DSColors(scheme: scheme)
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Tags").font(.dsCaption.bold()).foregroundColor(.secondary)
+                Text("标签").font(.system(size: 11)).foregroundColor(c.text2)
                 Spacer()
                 Button(action: { isEditingTags.toggle(); isTagInputFocused = isEditingTags }) {
                     Image(systemName: isEditingTags ? "checkmark.circle.fill" : "plus.circle")
+                        .foregroundColor(isEditingTags ? c.accent : c.text2)
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.horizontal)
-            
+            .padding(.horizontal, 16)
+
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(item.tags, id: \.self) { tag in
@@ -319,16 +335,17 @@ struct PreviewView: View {
                         tagInputField(for: item)
                     }
                     if !isEditingTags && item.tags.isEmpty {
-                        Text("No tags").font(.dsCaption).foregroundColor(.secondary).italic()
+                        Text("No tags").font(.system(size: 11)).foregroundColor(c.text2).italic()
                     }
                 }
-                .padding(.horizontal).padding(.bottom, 8)
+                .padding(.horizontal, 16).padding(.bottom, 8)
             }
         }
     }
-    
+
     @ViewBuilder
     private func tagView(tag: String, item: ClipboardItem) -> some View {
+        let c = DSColors(scheme: scheme)
         HStack(spacing: 4) {
             Text(tag)
             if isEditingTags {
@@ -338,19 +355,22 @@ struct PreviewView: View {
                 .buttonStyle(.plain)
             }
         }
-        .font(.dsCaption.bold())
-        .padding(.horizontal, 8).padding(.vertical, 4)
-        .background(tagColor(for: tag)).foregroundColor(.white).cornerRadius(6)
+        .font(.system(size: 11, weight: .semibold))
+        .padding(.horizontal, 8).padding(.vertical, 2)
+        .background(RoundedRectangle(cornerRadius: 10).fill(c.accentSoft))
+        .foregroundColor(c.accent)
     }
-    
+
     @ViewBuilder
     private func tagInputField(for item: ClipboardItem) -> some View {
+        let c = DSColors(scheme: scheme)
         TextField("New tag...", text: $newTagText)
             .textFieldStyle(.plain)
-            .font(.dsCaption)
+            .font(.system(size: 11))
+            .foregroundColor(c.text)
             .frame(width: 80)
-            .padding(.horizontal, 4).padding(.vertical, 2)
-            .background(Color.secondary.opacity(0.1)).cornerRadius(4)
+            .padding(.horizontal, 6).padding(.vertical, 2)
+            .background(RoundedRectangle(cornerRadius: 10).fill(c.field))
             .focused($isTagInputFocused)
             .onSubmit {
                 if !newTagText.isEmpty {
@@ -358,12 +378,6 @@ struct PreviewView: View {
                     newTagText = ""
                 }
             }
-    }
-    
-    private func tagColor(for tag: String) -> Color {
-        let colors: [Color] = [.blue, .purple, .green, .orange, .pink, .cyan]
-        // stableHash keeps a tag's color identical across restarts
-        return colors[tag.stableHash % colors.count]
     }
 }
 

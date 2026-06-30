@@ -3,92 +3,84 @@ import AppKit
 
 // Enhanced color preview
 struct ColorPreviewView: View {
+    @Environment(\.colorScheme) private var scheme
     let colorString: String
     @State private var color: Color?
     @State private var formats: [ColorFormat] = []
-    
+
     struct ColorFormat {
         let name: String
         let value: String
     }
-    
+
     var body: some View {
+        let c = DSColors(scheme: scheme)
         VStack(alignment: .leading, spacing: 12) {
             if let color = color {
-                // Large color swatch
+                // Large color swatch (the swatch fill is content — keep as-is)
                 RoundedRectangle(cornerRadius: 12)
                     .fill(color)
                     .frame(height: 200)
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                            .stroke(c.divider, lineWidth: 1)
                     )
-                
-                // Color formats
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Color Formats")
-                        .font(.dsHeadline)
-                        .padding(.bottom, 4)
-                    
-                    VStack(spacing: 8) {
-                        ForEach(Array(formats.enumerated()), id: \.offset) { index, format in
-                            HStack {
-                                Text(format.name)
-                                    .font(.dsCaption.bold())
-                                    .foregroundColor(.secondary)
-                                    .frame(width: 60, alignment: .leading)
 
-                                Text(format.value)
-                                    .font(.dsMonoBody)
-                                    .textSelection(.enabled)
-                                
-                                Spacer()
-                                
-                                Button(action: { copyFormat(format.value) }) {
-                                    Image(systemName: "doc.on.doc")
-                                        .font(.dsCaption)
-                                        .foregroundColor(.blue)
-                                }
-                                .buttonStyle(.plain)
+                // Color value rows
+                VStack(spacing: 8) {
+                    ForEach(Array(formats.enumerated()), id: \.offset) { _, format in
+                        HStack {
+                            Text(format.name)
+                                .font(.system(size: 11))
+                                .foregroundColor(c.text2)
+
+                            Spacer(minLength: 12)
+
+                            Text(format.value)
+                                .font(.system(size: 13.5, weight: .semibold, design: .monospaced))
+                                .foregroundColor(c.text)
+                                .textSelection(.enabled)
+
+                            Button(action: { copyFormat(format.value) }) {
+                                Image(systemName: "doc.on.doc")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(c.text2)
                             }
-                            .padding(.vertical, 4)
-                            if index < formats.count - 1 {
-                                Divider().opacity(0.5)
-                            }
+                            .buttonStyle(.plain)
+                            .padding(.leading, 8)
                         }
+                        .padding(.horizontal, 11).padding(.vertical, 9)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(c.field))
                     }
                 }
-                .padding(16)
-                .background(Color.secondary.opacity(0.05))
-                .cornerRadius(12)
-                
+
                 // Color info
                 if let rgb = extractRGB(from: color) {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Color Information")
-                            .font(.dsHeadline)
-                        
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(c.text)
+
                         Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 12) {
                             GridRow {
                                 infoLabel("Red")
-                                Text("\(rgb.r)").font(.dsMonoBody)
+                                Text("\(rgb.r)").font(.dsMonoBody).foregroundColor(c.text)
                                 infoLabel("Green")
-                                Text("\(rgb.g)").font(.dsMonoBody)
+                                Text("\(rgb.g)").font(.dsMonoBody).foregroundColor(c.text)
                             }
-                            
+
                             GridRow {
                                 infoLabel("Blue")
-                                Text("\(rgb.b)").font(.dsMonoBody)
+                                Text("\(rgb.b)").font(.dsMonoBody).foregroundColor(c.text)
                                 infoLabel("Alpha")
-                                Text(String(format: "%.2f", rgb.a)).font(.dsMonoBody)
+                                Text(String(format: "%.2f", rgb.a)).font(.dsMonoBody).foregroundColor(c.text)
                             }
                         }
                     }
                     .padding(16)
-                    .background(Color.secondary.opacity(0.05))
-                    .cornerRadius(12)
+                    .background(RoundedRectangle(cornerRadius: 12).fill(c.card))
                 }
-                
+
                 // Quick actions
                 HStack {
                     Button(action: { copyFormat(formats.first(where: { $0.name == "HEX" })?.value ?? "") }) {
@@ -104,27 +96,27 @@ struct ColorPreviewView: View {
                     Button(action: { copyAllFormats() }) {
                         Label("Copy All", systemImage: "doc.on.doc.fill")
                     }
-                    .dsButton()
-                    
+                    .dsButton(.prominent)
+
                     Spacer()
                 }
             } else {
                 Text("Invalid color format")
+                    .font(.system(size: 12))
                     .foregroundColor(.orange)
                     .padding(12)
-                    .background(Color.orange.opacity(0.1))
-                    .cornerRadius(8)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(Color.orange.opacity(0.1)))
             }
         }
         .onAppear {
             parseColor()
         }
     }
-    
+
     private func infoLabel(_ text: String) -> some View {
         Text(text)
-            .font(.dsCaption.bold())
-            .foregroundColor(.secondary)
+            .font(.system(size: 11))
+            .foregroundColor(DSColors(scheme: scheme).text2)
     }
     
     private func parseColor() {

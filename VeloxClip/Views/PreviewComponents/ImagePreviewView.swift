@@ -3,6 +3,7 @@ import AppKit
 
 // Enhanced image preview with info and controls
 struct ImagePreviewView: View {
+    @Environment(\.colorScheme) private var scheme
     let imageData: Data
     @State private var zoomLevel: CGFloat = 1.0
     @State private var imageInfo: ImageInfo?
@@ -19,6 +20,7 @@ struct ImagePreviewView: View {
     @State private var isLoading = true
     
     var body: some View {
+        let c = DSColors(scheme: scheme)
         VStack(alignment: .leading, spacing: 12) {
             if isLoading {
                 loadingPlaceholder
@@ -27,7 +29,7 @@ struct ImagePreviewView: View {
                 zoomControls
                 infoSection
             } else {
-                Text("Unable to load image").foregroundColor(.secondary)
+                Text("Unable to load image").font(.system(size: 12)).foregroundColor(c.text2)
             }
         }
         .task(id: imageData) {
@@ -36,33 +38,36 @@ struct ImagePreviewView: View {
     }
     
     private var loadingPlaceholder: some View {
-        VStack(spacing: 12) {
+        let c = DSColors(scheme: scheme)
+        return VStack(spacing: 12) {
             ProgressView()
-            Text("Loading image...").font(.dsCaption).foregroundColor(.secondary)
+            Text("Loading image...").font(.system(size: 11)).foregroundColor(c.text2)
         }
         .frame(maxWidth: .infinity).padding(.vertical, 40)
     }
-    
+
     @ViewBuilder
     private func imageDisplay(_ nsImage: NSImage) -> some View {
+        let c = DSColors(scheme: scheme)
         Image(nsImage: nsImage)
             .resizable()
             .scaledToFit()
             .scaleEffect(zoomLevel)
             .frame(maxWidth: .infinity, alignment: .center)
             .padding()
-            .background(Color.secondary.opacity(0.05))
+            .background(c.card)
     }
-    
+
     private var zoomControls: some View {
-        HStack {
+        let c = DSColors(scheme: scheme)
+        return HStack {
             Button(action: { zoomLevel = max(0.25, zoomLevel - 0.25) }) {
                 Image(systemName: "minus.magnifyingglass")
             }
             .dsButton(small: true)
 
             Text("\(Int(zoomLevel * 100))%")
-                .font(.dsCaption).foregroundColor(.secondary).frame(width: 60)
+                .font(.system(size: 11)).foregroundColor(c.text2).frame(width: 60)
 
             Button(action: { zoomLevel = min(3.0, zoomLevel + 0.25) }) {
                 Image(systemName: "plus.magnifyingglass")
@@ -70,17 +75,18 @@ struct ImagePreviewView: View {
             .dsButton(small: true)
 
             Button("Fit") { zoomLevel = 1.0 }.dsButton(small: true)
-            
+
             Spacer()
         }
         .padding(.horizontal, 16)
     }
-    
+
     @ViewBuilder
     private var infoSection: some View {
+        let c = DSColors(scheme: scheme)
         if let info = imageInfo {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Information").font(.dsHeadline)
+                Text("Information").font(.system(size: 13, weight: .semibold)).foregroundColor(c.text)
                 Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 8) {
                     imageInfoRow(label: "Dimensions", value: "\(Int(info.size.width)) × \(Int(info.size.height)) px")
                     imageInfoRow(label: "File Size", value: formatFileSize(info.fileSize))
@@ -88,19 +94,20 @@ struct ImagePreviewView: View {
                 }
             }
             .padding(16)
-            .background(Color.secondary.opacity(0.05))
-            .cornerRadius(12)
+            .background(RoundedRectangle(cornerRadius: 12).fill(c.card))
             .padding(.horizontal, 16)
         }
     }
-    
+
     private func imageInfoRow(label: String, value: String) -> some View {
-        GridRow {
+        let c = DSColors(scheme: scheme)
+        return GridRow {
             Text(label)
-                .font(.dsCaption.bold())
-                .foregroundColor(.secondary)
+                .font(.system(size: 11))
+                .foregroundColor(c.text2)
             Text(value)
-                .font(.dsCaption)
+                .font(.system(size: 11))
+                .foregroundColor(c.text)
         }
     }
     

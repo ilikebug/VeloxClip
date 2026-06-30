@@ -3,6 +3,7 @@ import AppKit
 
 // Code preview with syntax highlighting
 struct CodePreviewView: View {
+    @Environment(\.colorScheme) private var scheme
     let code: String
     @State private var detectedLanguage: String = "Plain Text"
     @State private var showLineNumbers = true
@@ -70,7 +71,8 @@ struct CodePreviewView: View {
     }
     
     private var toolbar: some View {
-        HStack {
+        let c = DSColors(scheme: scheme)
+        return HStack {
             Menu {
                 ForEach(availableLanguages, id: \.self) { lang in
                     Button(lang) { detectedLanguage = lang }
@@ -81,25 +83,25 @@ struct CodePreviewView: View {
                     Spacer(minLength: 4)
                     Image(systemName: "chevron.down")
                         .font(.system(size: 9, weight: .semibold))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(c.text2)
                 }
                 .compactMenuLabel(width: 150)
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
-            
+
             Toggle("Line Numbers", isOn: $showLineNumbers).toggleStyle(.dsSwitch)
-            
+
             HStack(spacing: 8) {
                 Button(action: { fontSize = max(10, fontSize - 1) }) { Image(systemName: "minus") }
                 .buttonStyle(.plain)
-                Text("\(Int(fontSize))pt").font(.dsCaption).foregroundColor(.secondary).frame(width: 40)
+                Text("\(Int(fontSize))pt").font(.system(size: 11)).foregroundColor(c.text2).frame(width: 40)
                 Button(action: { fontSize = min(20, fontSize + 1) }) { Image(systemName: "plus") }
                 .buttonStyle(.plain)
             }
-            
+
             Spacer()
-            
+
             Button("Format", action: formatCode).dsButton(small: true)
         }
         .padding(.bottom, 4)
@@ -114,22 +116,23 @@ struct CodePreviewView: View {
     }
 
     private func codeScrollView(availableWidth: CGFloat) -> some View {
+        let c = DSColors(scheme: scheme)
         let lines = codeLines(for: code)
         // Calculate a fixed width for the line number column based on total lines
         let maxLineNumberWidth: CGFloat = CGFloat(String(lines.count).count) * 9 + 16
-        
+
         return ScrollView([.horizontal, .vertical], showsIndicators: true) {
             LazyVStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
                     HStack(alignment: .top, spacing: 0) {
                         if showLineNumbers {
                             lineNumberCell(index: index, width: maxLineNumberWidth)
-                            
+
                             Rectangle()
-                                .fill(Color.secondary.opacity(0.1))
+                                .fill(c.divider)
                                 .frame(width: 1)
                         }
-                        
+
                         codeCell(line: line)
                     }
                 }
@@ -139,18 +142,20 @@ struct CodePreviewView: View {
             .frame(minWidth: availableWidth, alignment: .leading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.clear)
+        .background(RoundedRectangle(cornerRadius: 12).fill(c.card))
+        .padding(.horizontal, 16)
+        .padding(.bottom, 16)
     }
-    
+
     @ViewBuilder
     private func lineNumberCell(index: Int, width: CGFloat) -> some View {
+        let c = DSColors(scheme: scheme)
         Text("\(index + 1)")
             .font(.system(size: fontSize, design: .monospaced))
-            .foregroundColor(.secondary.opacity(0.4))
+            .foregroundColor(c.text3)
             .padding(.horizontal, 4)
             .padding(.vertical, 2)
             .frame(width: width, alignment: .trailing)
-            .background(Color.secondary.opacity(0.05))
     }
     
     @ViewBuilder
@@ -197,7 +202,7 @@ struct CodePreviewView: View {
     @ViewBuilder
     private func highlightCode(line: String, language: String) -> some View {
         if language == "Plain Text" || line.count > 500 { // Skip highlighting for very long lines
-            Text(line).foregroundColor(.primary)
+            Text(line).foregroundColor(DSColors(scheme: scheme).text)
         } else {
             getCachedOrHighlightedText(line: line, language: language)
         }
