@@ -102,20 +102,8 @@ struct ClipboardItemRow: View {
 
     var body: some View {
         let c = DSColors(scheme: scheme)
-        HStack(spacing: 16) {
-            if item.type == "image" {
-                ImageRowThumbnail(itemID: item.id, fallbackColor: typeColor(for: item.type))
-            } else {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(typeColor(for: item.type).opacity(0.15))
-                        .frame(width: 36, height: 36)
-
-                    typeIcon(for: item.type)
-                        .foregroundColor(isSelected ? .white : typeColor(for: item.type))
-                        .font(.system(size: 16, weight: .semibold))
-                }
-            }
+        HStack(spacing: 12) {
+            rowIcon(c: c)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(displayContent(for: item))
@@ -123,17 +111,17 @@ struct ClipboardItemRow: View {
                     .font(.system(size: 13))
                     .foregroundColor(isSelected ? .white : c.text)
 
-                HStack {
-                    Text(item.sourceApp ?? "未知")
-                        .fontWeight(.medium)
-                    Text("•")
-                    Text(item.createdAt, style: .time)
-                }
-                .font(.dsCaption2)
-                .foregroundColor(isSelected ? Color.white.opacity(0.78) : c.text2)
+                Text(RowPresentation.subtitle(type: item.type, content: item.content, tags: item.tags))
+                    .lineLimit(1)
+                    .font(.system(size: 11.5))
+                    .foregroundColor(isSelected ? Color.white.opacity(0.8) : c.text2)
             }
 
             Spacer()
+
+            Text(RowPresentation.relativeTime(item.lastUsedAt ?? item.createdAt, now: Date()))
+                .font(.system(size: 11))
+                .foregroundColor(isSelected ? Color.white.opacity(0.75) : c.text3)
 
             if let stagedIndex {
                 ZStack {
@@ -186,29 +174,50 @@ struct ClipboardItemRow: View {
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
     
-    private func typeColor(for type: String) -> Color {
-        switch type {
-        case "text": return .blue
-        case "image": return .purple
-        case "file": return .orange
-        case "color": return .green
-        case "rtf": return .cyan
-        default: return .gray
+    // 26×26 content-aware leading icon (kit spec): color swatch, image thumbnail,
+    // or a `c.chip` square with a monochrome SF Symbol glyph.
+    @ViewBuilder
+    private func rowIcon(c: DSColors) -> some View {
+        let kind = RowPresentation.iconKind(type: item.type, tags: item.tags)
+        switch kind {
+        case .image:
+            ImageRowThumbnail(itemID: item.id, fallbackColor: c.text2)
+        case .color:
+            RoundedRectangle(cornerRadius: 6)
+                .fill(Color(hex: ColorFormatting.hex(from: item.content ?? "") ?? "") ?? c.chip)
+                .frame(width: 26, height: 26)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(c.divider, lineWidth: 0.5)
+                )
+        default:
+            ZStack {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(c.chip)
+                    .frame(width: 26, height: 26)
+                Image(systemName: glyph(for: kind))
+                    .font(.system(size: 13))
+                    .foregroundColor(c.text2)
+            }
         }
     }
-    
-    private func typeIcon(for type: String) -> some View {
-        switch type {
-        case "text": return Image(systemName: "doc.text")
-        case "image": return Image(systemName: "photo")
-        case "file": return Image(systemName: "folder")
-        case "color": return Image(systemName: "paintpalette")
-        case "rtf": return Image(systemName: "doc.richtext")
-        default: return Image(systemName: "paperclip")
+
+    private func glyph(for kind: RowIconKind) -> String {
+        switch kind {
+        case .url:   return "link"
+        case .code:  return "chevron.left.forwardslash.chevron.right"
+        case .json:  return "curlybraces"
+        case .file:  return "folder"
+        case .rtf:   return "doc.richtext"
+        case .text:  return "textformat"
+        case .color, .image: return "textformat" // handled above; unreachable
         }
     }
-    
+
     private func displayContent(for item: ClipboardItem) -> String {
+        if item.type == "color" {
+            return ColorFormatting.hex(from: item.content ?? "") ?? (item.content ?? "颜色")
+        }
         if item.type == "file", let content = item.content {
             let paths = content.components(separatedBy: .newlines).filter { !$0.isEmpty }
             let firstName = URL(fileURLWithPath: paths.first ?? content).lastPathComponent
@@ -244,21 +253,21 @@ struct ImageRowThumbnail: View {
                 Image(nsImage: thumbnail)
                     .resizable()
                     .scaledToFill()
-                    .frame(width: 36, height: 36)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .frame(width: 26, height: 26)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 8)
+                        RoundedRectangle(cornerRadius: 6)
                             .stroke(Color.primary.opacity(0.1), lineWidth: 1)
                     )
             } else {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 8)
+                    RoundedRectangle(cornerRadius: 6)
                         .fill(fallbackColor.opacity(0.15))
-                        .frame(width: 36, height: 36)
+                        .frame(width: 26, height: 26)
 
                     Image(systemName: "photo")
                         .foregroundColor(fallbackColor)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: 13))
                 }
             }
         }
