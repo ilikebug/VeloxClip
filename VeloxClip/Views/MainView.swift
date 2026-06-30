@@ -12,7 +12,11 @@ struct MainView: View {
     @Environment(\.colorScheme) private var scheme
     @State private var selectedItem: ClipboardItem?
     @State private var searchText = ""
-    @FocusState private var isSearchFocused: Bool
+    // A single always-valid focus target. `.search` = the search field (list mode);
+    // `.overlay` = the root VStack (detail mode), so `.onKeyPress` keeps firing even
+    // when the search field is removed from the tree.
+    private enum FocusZone: Hashable { case search, overlay }
+    @FocusState private var focusZone: FocusZone?
     @State private var viewMode: ViewMode = .history
     @State private var typeFilter: ClipboardTypeFilter = .all
     @State private var searchResults: [ClipboardItem] = []
@@ -166,6 +170,136 @@ struct MainView: View {
         let c = DSColors(scheme: scheme)
         // Key handlers live on this always-present outer VStack so Esc / ← / ⏎
         // still reach them in detail mode (where the search field is hidden).
+        let base = rootContent(c)
+            // The root must be a valid focus target in detail mode (where the search
+            // field is gone) so `.onKeyPress` keeps receiving keys. `.focusEffectDisabled`
+            // suppresses the focus ring; neither modifier affects layout.
+            .focusable()
+            .focused($focusZone, equals: .overlay)
+            .focusEffectDisabled()
+            .frame(width: 560, height: 600)
+            .background(DesignSystem.backgroundBlur)
+            .cornerRadius(16)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(Color.white.opacity(0.1), lineWidth: 1)
+            )
+        return applyChrome(base)
+    }
+
+    // Command palette overlay + lifecycle hooks, extracted from `body` so the
+    // type-checker can handle the expression. `self` is captured at body-eval
+    // time, so the closures see live @State exactly as if inlined.
+    @ViewBuilder
+    private func applyChrome<V: View>(_ content: V) -> some View {
+        content
+        .overlay {
+            if showCommandPalette {
+                ZStack {
+                    Color.black.opacity(0.12).ignoresSafeArea()
+                        .onTapGesture { showCommandPalette = false }
+                    CommandPaletteView(item: selectedItem,
+                                       onExecute: { executeCommand($0) },
+                                       onClose: { showCommandPalette = false })
+                }
+            }
+        }
+        .onAppear {
+            focusZone = .search
+            // First open: the focus set above is dropped if the window isn't key yet,
+            // and the didBecomeKey notification fired before this view subscribed —
+            // re-assert once the window has had time to become key
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 250_000_000)
+                if focusZone != .search {
+                    focusZone = .search
+                }
+            }
+            // Always select first item on appear
+            if !displayItems.isEmpty {
+                selectedItem = displayItems.first
+            }
+            // Load favorites on appear
+            store.loadFavorites()
+        }
+        .onChange(of: viewMode) { _, _ in
+            // Update selected item or trigger search if query exists
+            if !searchText.isEmpty {
+                updateSearchResults()
+            } else if !displayItems.isEmpty {
+                selectedItem = displayItems.first
+            } else {
+                selectedItem = nil
+            }
+        }
+        .onChange(of: typeFilter) { _, _ in
+            // Keep the selection inside the filtered list
+            if !displayItems.contains(where: { $0.id == selectedItem?.id }) {
+                selectedItem = displayItems.first
+                scrollTarget = displayItems.first?.id
+            }
+        }
+        .onChange(of: searchText) { _, _ in
+            updateSearchResults()
+        }
+        .onChange(of: store.items) { _, newItems in
+            // Deleting an item must not leave a ghost row in active search results
+            guard !searchResults.isEmpty else { return }
+            let validIDs = Set(newItems.map(\.id))
+            searchResults.removeAll { !validIDs.contains($0.id) }
+        }
+        .onChange(of: selectedItem) { _, _ in
+            // Clicking a row moves focus into the list; bring it back so
+            // arrow keys / Enter / Esc keep working (list mode only — in detail
+            // the root holds focus).
+            if detailItem == nil, focusZone != .search {
+                focusZone = .search
+            }
+        }
+        .onChange(of: detailItem) { _, newValue in
+            // Entering detail focuses the root (so ←/Esc/⏎ fire); leaving focuses
+            // the search field. Re-assert shortly after in case the destination
+            // view only just mounted.
+            focusOverlay(newValue == nil ? .search : .overlay)
+        }
+        .onChange(of: showCommandPalette) { _, isOpen in
+            // When the palette closes, focus never returns to the overlay on its
+            // own — restore it to whichever zone is valid for the current mode.
+            // When it opens, leave the palette to focus its own field.
+            if !isOpen {
+                focusOverlay(detailItem == nil ? .search : .overlay)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { notification in
+            // Only react to the overlay window itself — other windows (Settings,
+            // popovers) becoming key must not steal the search focus
+            guard notification.object is OverlayWindow else { return }
+            focusZone = detailItem == nil ? .search : .overlay
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .veloxOverlayWillShow)) { _ in
+            // Reset state only when the overlay is (re)opened, not every time it
+            // regains key status (e.g. after closing a popover)
+            focusZone = .search
+            detailItem = nil
+            viewMode = .history
+            typeFilter = .all
+            searchText = ""
+            searchTask?.cancel()
+            cachedSemanticResults.removeAll()
+            if !store.items.isEmpty {
+                selectedItem = store.items.first
+                scrollTarget = store.items.first?.id
+            }
+        }
+        .errorAlert() // Add unified error handling
+    }
+    
+    // The list/detail VStack plus its keyed key handlers. Extracted from `body`
+    // so the type-checker can handle the expression. Key handlers must use
+    // FILTERED `onKeyPress(keys:)` — never an unfiltered catch-all, which would
+    // suppress the keyed handlers (arrows / return / tab / space / escape).
+    @ViewBuilder
+    private func rootContent(_ c: DSColors) -> some View {
         VStack(spacing: 0) {
             if detailItem == nil {
                 listContent(c)
@@ -175,10 +309,6 @@ struct MainView: View {
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
-        // NOTE: use FILTERED key handlers (keyed `onKeyPress(keys:)`), never an
-        // unfiltered `onKeyPress { }` catch-all here — an unfiltered handler
-        // alongside the keyed ones below stops the keyed handlers (arrows /
-        // return / tab / space / escape) from firing.
         .onKeyPress(keys: ["k"]) { press in
             // ⌘K opens the command palette in both modes. It acts on `selectedItem`,
             // which equals `detailItem` while detail is open (→ opens detail from the
@@ -226,7 +356,7 @@ struct MainView: View {
         }
         .onKeyPress(.tab) {
             guard detailItem == nil else { return .ignored }
-            if isSearchFocused {
+            if focusZone == .search {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     viewMode = viewMode == .history ? .favorites : .history
                 }
@@ -254,99 +384,8 @@ struct MainView: View {
             WindowManager.shared.toggleWindow()
             return .handled
         }
-        .frame(width: 560, height: 600)
-        .background(DesignSystem.backgroundBlur)
-        .cornerRadius(16)
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.white.opacity(0.1), lineWidth: 1)
-        )
-        .overlay {
-            if showCommandPalette {
-                ZStack {
-                    Color.black.opacity(0.12).ignoresSafeArea()
-                        .onTapGesture { showCommandPalette = false }
-                    CommandPaletteView(item: selectedItem,
-                                       onExecute: { executeCommand($0) },
-                                       onClose: { showCommandPalette = false })
-                }
-            }
-        }
-        .onAppear {
-            isSearchFocused = true
-            // First open: the focus set above is dropped if the window isn't key yet,
-            // and the didBecomeKey notification fired before this view subscribed —
-            // re-assert once the window has had time to become key
-            Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 250_000_000)
-                if !isSearchFocused {
-                    isSearchFocused = true
-                }
-            }
-            // Always select first item on appear
-            if !displayItems.isEmpty {
-                selectedItem = displayItems.first
-            }
-            // Load favorites on appear
-            store.loadFavorites()
-        }
-        .onChange(of: viewMode) { _, _ in
-            // Update selected item or trigger search if query exists
-            if !searchText.isEmpty {
-                updateSearchResults()
-            } else if !displayItems.isEmpty {
-                selectedItem = displayItems.first
-            } else {
-                selectedItem = nil
-            }
-        }
-        .onChange(of: typeFilter) { _, _ in
-            // Keep the selection inside the filtered list
-            if !displayItems.contains(where: { $0.id == selectedItem?.id }) {
-                selectedItem = displayItems.first
-                scrollTarget = displayItems.first?.id
-            }
-        }
-        .onChange(of: searchText) { _, _ in
-            updateSearchResults()
-        }
-        .onChange(of: store.items) { _, newItems in
-            // Deleting an item must not leave a ghost row in active search results
-            guard !searchResults.isEmpty else { return }
-            let validIDs = Set(newItems.map(\.id))
-            searchResults.removeAll { !validIDs.contains($0.id) }
-        }
-        .onChange(of: selectedItem) { _, _ in
-            // Clicking a row moves focus into the list; bring it back so
-            // arrow keys / Enter / Esc keep working
-            if !isSearchFocused {
-                isSearchFocused = true
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { notification in
-            // Only react to the overlay window itself — other windows (Settings,
-            // popovers) becoming key must not steal the search focus
-            guard notification.object is OverlayWindow else { return }
-            isSearchFocused = true
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .veloxOverlayWillShow)) { _ in
-            // Reset state only when the overlay is (re)opened, not every time it
-            // regains key status (e.g. after closing a popover)
-            isSearchFocused = true
-            detailItem = nil
-            viewMode = .history
-            typeFilter = .all
-            searchText = ""
-            searchTask?.cancel()
-            cachedSemanticResults.removeAll()
-            if !store.items.isEmpty {
-                selectedItem = store.items.first
-                scrollTarget = store.items.first?.id
-            }
-        }
-        .errorAlert() // Add unified error handling
     }
-    
+
     // List mode: search bar + tabs/chips + single-column list + action bar.
     @ViewBuilder
     private func listContent(_ c: DSColors) -> some View {
@@ -360,7 +399,7 @@ struct MainView: View {
                 TextField("搜索剪贴…", text: $searchText)
                     .textFieldStyle(.plain)
                     .font(.system(size: 13))
-                    .focused($isSearchFocused)
+                    .focused($focusZone, equals: .search)
                     .onSubmit {
                         executeSelection()
                     }
@@ -413,6 +452,19 @@ struct MainView: View {
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.primary.opacity(0.04))
+    }
+
+    // Set focus now, then re-assert once shortly after: SwiftUI can drop focus
+    // that's assigned to a view in the same frame it appears (entering detail,
+    // closing the palette), so a single deferred re-assert makes it stick.
+    private func focusOverlay(_ zone: FocusZone) {
+        focusZone = zone
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 120_000_000)
+            if focusZone != zone {
+                focusZone = zone
+            }
+        }
     }
 
     private func executeSelection() {
