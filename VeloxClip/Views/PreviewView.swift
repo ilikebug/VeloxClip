@@ -42,7 +42,7 @@ struct PreviewView: View {
                     actionsToolbar(for: item)
                 }
             } else {
-                ContentUnavailableView("Select an Item", systemImage: "paperclip", description: Text("Choose a clip from the history to preview its content."))
+                ContentUnavailableView("请选择一个项目", systemImage: "paperclip", description: Text("从历史记录中选择一条剪贴内容以预览。"))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
@@ -144,7 +144,7 @@ struct PreviewView: View {
         let c = DSColors(scheme: scheme)
         return VStack(spacing: 12) {
             ProgressView().scaleEffect(0.8)
-            Text("Detecting content...").font(.system(size: 11.5)).foregroundColor(c.text2)
+            Text("识别内容中…").font(.system(size: 11.5)).foregroundColor(c.text2)
         }
         .frame(maxWidth: .infinity).padding(.vertical, 40)
     }
@@ -225,7 +225,7 @@ struct PreviewView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "text.viewfinder").foregroundColor(c.accent)
                     Text("图中文字").font(.system(size: 11.5)).foregroundColor(c.text2)
-                    Button("Copy") { viewModel.copyTransformedText(ocrText) }
+                    Button("复制") { viewModel.copyTransformedText(ocrText) }
                         .dsButton(.secondary, small: true)
                     Spacer()
                 }
@@ -247,7 +247,7 @@ struct PreviewView: View {
             Text(displayContent).font(.dsBody).foregroundColor(c.text).lineLimit(nil)
                 .textSelection(.enabled)
             if content.count > maxChars {
-                Text("... (\(content.count - maxChars) more characters)")
+                Text("… (还有 \(content.count - maxChars) 个字符)")
                     .font(.system(size: 11)).foregroundColor(c.text2).italic()
             }
         }
@@ -257,10 +257,10 @@ struct PreviewView: View {
     private func actionsToolbar(for item: ClipboardItem) -> some View {
         HStack {
             Button(action: { viewModel.copyToClipboard(item) }) {
-                Label("Copy", systemImage: "doc.on.doc")
+                Label("复制", systemImage: "doc.on.doc")
             }
             .dsButton(.prominent)
-            
+
             if item.type == "image", let imageData = item.data {
                 // Decode the NSImage on click, not on every toolbar render
                 Button(action: {
@@ -268,7 +268,7 @@ struct PreviewView: View {
                         ScreenshotEditorService.shared.showEditor(with: nsImage)
                     }
                 }) {
-                    Label("Edit", systemImage: "pencil")
+                    Label("编辑", systemImage: "pencil")
                 }
                 .dsButton()
             }
@@ -289,7 +289,7 @@ struct PreviewView: View {
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "wrench.and.screwdriver")
-                    Text("Tools")
+                    Text("工具")
                     Image(systemName: "chevron.down")
                         .font(.system(size: 9, weight: .semibold))
                         .foregroundColor(c.text2)
@@ -307,7 +307,7 @@ struct PreviewView: View {
         Group {
             Button("UPPERCASE") { viewModel.copyTransformedText(AIService.shared.convertCase(content, to: .uppercase)) }
             Button("lowercase") { viewModel.copyTransformedText(AIService.shared.convertCase(content, to: .lowercase)) }
-            Button("Cleanup") { viewModel.copyTransformedText(AIService.shared.cleanupText(content)) }
+            Button("清理空白") { viewModel.copyTransformedText(AIService.shared.cleanupText(content)) }
         }
     }
     
@@ -335,7 +335,7 @@ struct PreviewView: View {
                         tagInputField(for: item)
                     }
                     if !isEditingTags && item.tags.isEmpty {
-                        Text("No tags").font(.system(size: 11)).foregroundColor(c.text2).italic()
+                        Text("暂无标签").font(.system(size: 11)).foregroundColor(c.text2).italic()
                     }
                 }
                 .padding(.horizontal, 16).padding(.bottom, 8)
@@ -364,7 +364,7 @@ struct PreviewView: View {
     @ViewBuilder
     private func tagInputField(for item: ClipboardItem) -> some View {
         let c = DSColors(scheme: scheme)
-        TextField("New tag...", text: $newTagText)
+        TextField("新标签…", text: $newTagText)
             .textFieldStyle(.plain)
             .font(.system(size: 11))
             .foregroundColor(c.text)

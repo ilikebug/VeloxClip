@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import CoreImage.CIFilterBuiltins
 
 // URL preview with link preview
 struct URLPreviewView: View {
@@ -61,7 +62,7 @@ struct URLPreviewView: View {
                     HStack {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundColor(.orange)
-                        Text("Invalid URL")
+                        Text("无效链接")
                             .font(.system(size: 12))
                             .foregroundColor(.orange)
                     }
@@ -72,11 +73,22 @@ struct URLPreviewView: View {
                 HStack {
                     ProgressView()
                         .scaleEffect(0.7)
-                    Text("Loading URL info...")
+                    Text("加载链接信息…")
                         .font(.system(size: 11))
                         .foregroundColor(c.text2)
                 }
                 .padding(12)
+            }
+
+            // QR code (white plate so it scans in both light and dark)
+            if let url = urlInfo?.url, urlInfo?.isValid == true, let qr = qrImage(from: url.absoluteString, size: 132) {
+                Image(nsImage: qr)
+                    .interpolation(.none)
+                    .resizable()
+                    .frame(width: 132, height: 132)
+                    .padding(10)
+                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.white))
+                    .frame(maxWidth: .infinity)
             }
 
             // Actions
@@ -103,6 +115,17 @@ struct URLPreviewView: View {
     private func copyURL() {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(urlString, forType: .string)
+    }
+
+    private func qrImage(from string: String, size: CGFloat) -> NSImage? {
+        let filter = CIFilter.qrCodeGenerator()
+        filter.message = Data(string.utf8)
+        filter.correctionLevel = "M"
+        guard let ci = filter.outputImage else { return nil }
+        let scale = size / ci.extent.width
+        let scaled = ci.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        let rep = NSCIImageRep(ciImage: scaled)
+        let img = NSImage(size: rep.size); img.addRepresentation(rep); return img
     }
     
     private func validateURL() {

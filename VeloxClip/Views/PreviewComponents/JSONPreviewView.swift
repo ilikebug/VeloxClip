@@ -17,9 +17,9 @@ struct JSONPreviewView: View {
 
         var segmentLabel: String {
             switch self {
-            case .formatted: return "Formatted"
-            case .minified: return "Minified"
-            case .tree: return "Tree"
+            case .formatted: return "格式化"
+            case .minified: return "压缩"
+            case .tree: return "树状"
             }
         }
     }
@@ -57,7 +57,7 @@ struct JSONPreviewView: View {
                 .padding(.trailing, 30) // Move it a little bit to the left relative to the Copy button
 
                 Button(action: copyJSON) {
-                    Label("Copy", systemImage: "doc.on.doc")
+                    Label("复制", systemImage: "doc.on.doc")
                 }
                 .dsButton(small: true)
             }
@@ -70,11 +70,11 @@ struct JSONPreviewView: View {
         let c = DSColors(scheme: scheme)
         if isLoading {
             ProgressView().scaleEffect(0.7)
-            Text("Validating...").font(.system(size: 11)).foregroundColor(c.text2)
+            Text("校验中…").font(.system(size: 11)).foregroundColor(c.text2)
         } else if isValidJSON {
-            Label("Valid JSON", systemImage: "checkmark.circle.fill").font(.system(size: 11)).foregroundColor(.green)
+            Label("JSON 有效", systemImage: "checkmark.circle.fill").font(.system(size: 11)).foregroundColor(.green)
         } else if let error = validationError {
-            Label("Invalid JSON", systemImage: "xmark.circle.fill").font(.system(size: 11)).foregroundColor(.red).help(error)
+            Label("JSON 无效", systemImage: "xmark.circle.fill").font(.system(size: 11)).foregroundColor(.red).help(error)
         }
     }
 
@@ -111,7 +111,7 @@ struct JSONPreviewView: View {
         let c = DSColors(scheme: scheme)
         return VStack(spacing: 8) {
             ProgressView()
-            Text("Loading JSON...").font(.system(size: 11)).foregroundColor(c.text2)
+            Text("加载 JSON 中…").font(.system(size: 11)).foregroundColor(c.text2)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 80)
@@ -163,12 +163,12 @@ struct JSONPreviewView: View {
     private var errorView: some View {
         let c = DSColors(scheme: scheme)
         return VStack(alignment: .leading, spacing: 8) {
-            Text("JSON Validation Error:").font(.system(size: 13, weight: .semibold)).foregroundColor(.red)
+            Text("JSON 校验错误：").font(.system(size: 13, weight: .semibold)).foregroundColor(.red)
             if let error = validationError {
                 Text(error).font(.dsMonoBody).foregroundColor(c.text2)
             }
             Divider()
-            Text("Raw Content:").font(.system(size: 11)).foregroundColor(c.text2)
+            Text("原始内容：").font(.system(size: 11)).foregroundColor(c.text2)
             Text(jsonString).font(.dsMonoBody).foregroundColor(c.text).textSelection(.enabled)
         }
         .padding(12)
@@ -267,13 +267,13 @@ struct JSONTreeView: View {
         let c = DSColors(scheme: scheme)
         VStack(alignment: .leading, spacing: 2) {
             if let dict = jsonObject as? [String: Any] {
-                collectionHeader(label: "{", count: dict.count, type: "keys")
+                collectionHeader(label: "{", count: dict.count, type: "个键")
                 if isExpanded {
                     dictionaryContent(dict)
                     Text("}").foregroundColor(bracketColor).font(.dsMonoBody)
                 }
             } else if let array = jsonObject as? [Any] {
-                collectionHeader(label: "[", count: array.count, type: "items")
+                collectionHeader(label: "[", count: array.count, type: "项")
                 if isExpanded {
                     arrayContent(array)
                     Text("]").foregroundColor(bracketColor).font(.dsMonoBody)
@@ -329,7 +329,7 @@ struct JSONTreeView: View {
             Text(label).foregroundColor(bracketColor)
 
             if !isExpanded {
-                Text("... \(count) \(type) ...").font(.system(size: 11)).foregroundColor(c.text2)
+                Text("… \(count) \(type) …").font(.system(size: 11)).foregroundColor(c.text2)
                     .padding(.horizontal, 4)
                     .background(RoundedRectangle(cornerRadius: 4).fill(c.chip))
                 Text(label == "{" ? "}" : "]").foregroundColor(bracketColor)

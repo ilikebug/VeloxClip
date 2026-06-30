@@ -29,7 +29,7 @@ struct ImagePreviewView: View {
                 zoomControls
                 infoSection
             } else {
-                Text("Unable to load image").font(.system(size: 12)).foregroundColor(c.text2)
+                Text("无法加载图片").font(.system(size: 12)).foregroundColor(c.text2)
             }
         }
         .task(id: imageData) {
@@ -41,7 +41,7 @@ struct ImagePreviewView: View {
         let c = DSColors(scheme: scheme)
         return VStack(spacing: 12) {
             ProgressView()
-            Text("Loading image...").font(.system(size: 11)).foregroundColor(c.text2)
+            Text("加载图片中…").font(.system(size: 11)).foregroundColor(c.text2)
         }
         .frame(maxWidth: .infinity).padding(.vertical, 40)
     }
@@ -74,7 +74,7 @@ struct ImagePreviewView: View {
             }
             .dsButton(small: true)
 
-            Button("Fit") { zoomLevel = 1.0 }.dsButton(small: true)
+            Button("适应") { zoomLevel = 1.0 }.dsButton(small: true)
 
             Spacer()
         }
@@ -86,11 +86,11 @@ struct ImagePreviewView: View {
         let c = DSColors(scheme: scheme)
         if let info = imageInfo {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Information").font(.system(size: 13, weight: .semibold)).foregroundColor(c.text)
+                Text("信息").font(.system(size: 13, weight: .semibold)).foregroundColor(c.text)
                 Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 8) {
-                    imageInfoRow(label: "Dimensions", value: "\(Int(info.size.width)) × \(Int(info.size.height)) px")
-                    imageInfoRow(label: "File Size", value: formatFileSize(info.fileSize))
-                    imageInfoRow(label: "Format", value: info.format)
+                    imageInfoRow(label: "尺寸", value: "\(Int(info.size.width)) × \(Int(info.size.height)) px")
+                    imageInfoRow(label: "文件大小", value: formatFileSize(info.fileSize))
+                    imageInfoRow(label: "格式", value: info.format)
                 }
             }
             .padding(16)

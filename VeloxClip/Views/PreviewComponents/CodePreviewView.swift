@@ -75,11 +75,11 @@ struct CodePreviewView: View {
         return HStack {
             Menu {
                 ForEach(availableLanguages, id: \.self) { lang in
-                    Button(lang) { detectedLanguage = lang }
+                    Button(displayLanguage(lang)) { detectedLanguage = lang }
                 }
             } label: {
                 HStack(spacing: 4) {
-                    Text(detectedLanguage).lineLimit(1)
+                    Text(displayLanguage(detectedLanguage)).lineLimit(1)
                     Spacer(minLength: 4)
                     Image(systemName: "chevron.down")
                         .font(.system(size: 9, weight: .semibold))
@@ -90,7 +90,7 @@ struct CodePreviewView: View {
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
 
-            Toggle("Line Numbers", isOn: $showLineNumbers).toggleStyle(.dsSwitch)
+            Toggle("行号", isOn: $showLineNumbers).toggleStyle(.dsSwitch)
 
             HStack(spacing: 8) {
                 Button(action: { fontSize = max(10, fontSize - 1) }) { Image(systemName: "minus") }
@@ -102,17 +102,22 @@ struct CodePreviewView: View {
 
             Spacer()
 
-            Button("Format", action: formatCode).dsButton(small: true)
+            Button("格式化", action: formatCode).dsButton(small: true)
         }
         .padding(.bottom, 4)
     }
-    
+
     private func codeLines(for codeString: String) -> [String] {
         codeString.components(separatedBy: .newlines)
     }
-    
+
     private var availableLanguages: [String] {
         ["Plain Text"] + Self.languageKeywords.keys.sorted()
+    }
+
+    // Display-only label; the internal "Plain Text" value is kept for detection logic.
+    private func displayLanguage(_ lang: String) -> String {
+        lang == "Plain Text" ? "纯文本" : lang
     }
 
     private func codeScrollView(availableWidth: CGFloat) -> some View {

@@ -57,22 +57,22 @@ struct ColorPreviewView: View {
                 // Color info
                 if let rgb = extractRGB(from: color) {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Color Information")
+                        Text("颜色信息")
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundColor(c.text)
 
                         Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 12) {
                             GridRow {
-                                infoLabel("Red")
+                                infoLabel("红")
                                 Text("\(rgb.r)").font(.dsMonoBody).foregroundColor(c.text)
-                                infoLabel("Green")
+                                infoLabel("绿")
                                 Text("\(rgb.g)").font(.dsMonoBody).foregroundColor(c.text)
                             }
 
                             GridRow {
-                                infoLabel("Blue")
+                                infoLabel("蓝")
                                 Text("\(rgb.b)").font(.dsMonoBody).foregroundColor(c.text)
-                                infoLabel("Alpha")
+                                infoLabel("透明度")
                                 Text(String(format: "%.2f", rgb.a)).font(.dsMonoBody).foregroundColor(c.text)
                             }
                         }
@@ -84,24 +84,24 @@ struct ColorPreviewView: View {
                 // Quick actions
                 HStack {
                     Button(action: { copyFormat(formats.first(where: { $0.name == "HEX" })?.value ?? "") }) {
-                        Label("Copy HEX", systemImage: "doc.on.doc")
+                        Label("复制 HEX", systemImage: "doc.on.doc")
                     }
                     .dsButton()
 
                     Button(action: { copyFormat(formats.first(where: { $0.name == "RGB" })?.value ?? "") }) {
-                        Label("Copy RGB", systemImage: "doc.on.doc")
+                        Label("复制 RGB", systemImage: "doc.on.doc")
                     }
                     .dsButton()
 
                     Button(action: { copyAllFormats() }) {
-                        Label("Copy All", systemImage: "doc.on.doc.fill")
+                        Label("全部复制", systemImage: "doc.on.doc.fill")
                     }
                     .dsButton(.prominent)
 
                     Spacer()
                 }
             } else {
-                Text("Invalid color format")
+                Text("无效的颜色格式")
                     .font(.system(size: 12))
                     .foregroundColor(.orange)
                     .padding(12)
