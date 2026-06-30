@@ -12,11 +12,10 @@ struct MainView: View {
     @Environment(\.colorScheme) private var scheme
     @State private var selectedItem: ClipboardItem?
     @State private var searchText = ""
-    // A single always-valid focus target. `.search` = the search field (list mode);
-    // `.overlay` = the root VStack (detail mode), so `.onKeyPress` keeps firing even
-    // when the search field is removed from the tree.
-    private enum FocusZone: Hashable { case search, overlay }
-    @FocusState private var focusZone: FocusZone?
+    // Focus target for the SEARCH FIELD ONLY (so the user can type immediately on
+    // open). Key navigation/commands are handled by a focus-independent window-level
+    // NSEvent monitor (see KeyMonitor / handleKeyDown), not by SwiftUI focus.
+    @FocusState private var isSearchFocused: Bool
     @State private var viewMode: ViewMode = .history
     @State private var typeFilter: ClipboardTypeFilter = .all
     @State private var searchResults: [ClipboardItem] = []
@@ -168,15 +167,11 @@ struct MainView: View {
     
     var body: some View {
         let c = DSColors(scheme: scheme)
-        // Key handlers live on this always-present outer VStack so Esc / ← / ⏎
-        // still reach them in detail mode (where the search field is hidden).
+        // Navigation/command keys are handled by a window-level NSEvent monitor
+        // (focus-independent) so they keep working in detail mode and after the
+        // ⌘K palette closes — neither of which holds SwiftUI keyboard focus.
         let base = rootContent(c)
-            // The root must be a valid focus target in detail mode (where the search
-            // field is gone) so `.onKeyPress` keeps receiving keys. `.focusEffectDisabled`
-            // suppresses the focus ring; neither modifier affects layout.
-            .focusable()
-            .focused($focusZone, equals: .overlay)
-            .focusEffectDisabled()
+            .background(KeyMonitor(onKeyDown: handleKeyDown))
             .frame(width: 560, height: 600)
             .background(DesignSystem.backgroundBlur)
             .cornerRadius(16)
@@ -205,14 +200,14 @@ struct MainView: View {
             }
         }
         .onAppear {
-            focusZone = .search
+            isSearchFocused = true
             // First open: the focus set above is dropped if the window isn't key yet,
             // and the didBecomeKey notification fired before this view subscribed —
             // re-assert once the window has had time to become key
             Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 250_000_000)
-                if focusZone != .search {
-                    focusZone = .search
+                if !isSearchFocused {
+                    isSearchFocused = true
                 }
             }
             // Always select first item on appear
@@ -248,38 +243,16 @@ struct MainView: View {
             let validIDs = Set(newItems.map(\.id))
             searchResults.removeAll { !validIDs.contains($0.id) }
         }
-        .onChange(of: selectedItem) { _, _ in
-            // Clicking a row moves focus into the list; bring it back so
-            // arrow keys / Enter / Esc keep working (list mode only — in detail
-            // the root holds focus).
-            if detailItem == nil, focusZone != .search {
-                focusZone = .search
-            }
-        }
-        .onChange(of: detailItem) { _, newValue in
-            // Entering detail focuses the root (so ←/Esc/⏎ fire); leaving focuses
-            // the search field. Re-assert shortly after in case the destination
-            // view only just mounted.
-            focusOverlay(newValue == nil ? .search : .overlay)
-        }
-        .onChange(of: showCommandPalette) { _, isOpen in
-            // When the palette closes, focus never returns to the overlay on its
-            // own — restore it to whichever zone is valid for the current mode.
-            // When it opens, leave the palette to focus its own field.
-            if !isOpen {
-                focusOverlay(detailItem == nil ? .search : .overlay)
-            }
-        }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { notification in
             // Only react to the overlay window itself — other windows (Settings,
             // popovers) becoming key must not steal the search focus
             guard notification.object is OverlayWindow else { return }
-            focusZone = detailItem == nil ? .search : .overlay
+            isSearchFocused = true
         }
         .onReceive(NotificationCenter.default.publisher(for: .veloxOverlayWillShow)) { _ in
             // Reset state only when the overlay is (re)opened, not every time it
             // regains key status (e.g. after closing a popover)
-            focusZone = .search
+            isSearchFocused = true
             detailItem = nil
             viewMode = .history
             typeFilter = .all
@@ -294,10 +267,10 @@ struct MainView: View {
         .errorAlert() // Add unified error handling
     }
     
-    // The list/detail VStack plus its keyed key handlers. Extracted from `body`
-    // so the type-checker can handle the expression. Key handlers must use
-    // FILTERED `onKeyPress(keys:)` — never an unfiltered catch-all, which would
-    // suppress the keyed handlers (arrows / return / tab / space / escape).
+    // The list/detail VStack. Navigation/command keys are routed through the
+    // window-level NSEvent monitor in `handleKeyDown` (focus-independent), so there
+    // are no `.onKeyPress` handlers here — they only fire while the view tree holds
+    // keyboard focus, which is lost in detail mode and after the ⌘K palette closes.
     @ViewBuilder
     private func rootContent(_ c: DSColors) -> some View {
         VStack(spacing: 0) {
@@ -309,80 +282,63 @@ struct MainView: View {
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
-        .onKeyPress(keys: ["k"]) { press in
-            // ⌘K opens the command palette in both modes. It acts on `selectedItem`,
-            // which equals `detailItem` while detail is open (→ opens detail from the
-            // selection and the list can't change selection in detail mode), so the
-            // palette always targets the item the user is looking at.
-            guard press.modifiers.contains(.command) else { return .ignored }
-            showCommandPalette = true
-            return .handled
-        }
-        .onKeyPress(keys: ["1", "2", "3", "4", "5", "6", "7", "8", "9"]) { press in
-            // ⌘1–9 pastes the corresponding visible row — list mode only.
-            guard detailItem == nil else { return .ignored }
-            guard press.modifiers.contains(.command),
-                  let n = Int(press.characters), n >= 1, n <= 9,
-                  displayItems.indices.contains(n - 1) else { return .ignored }
-            WindowManager.shared.selectAndPaste(displayItems[n - 1])
-            return .handled
-        }
-        .onKeyPress(.rightArrow) {
-            // → opens the push-in detail for the current selection (list mode only).
-            guard detailItem == nil, let item = selectedItem else { return .ignored }
-            withAnimation(.easeInOut(duration: 0.18)) { detailItem = item }
-            return .handled
-        }
-        .onKeyPress(.leftArrow) {
-            // ← returns to the list from detail mode.
-            guard detailItem != nil else { return .ignored }
-            withAnimation(.easeInOut(duration: 0.18)) { detailItem = nil }
-            return .handled
-        }
-        .onKeyPress(.upArrow) {
-            guard detailItem == nil else { return .ignored }
-            moveSelection(direction: -1)
-            return .handled
-        }
-        .onKeyPress(.downArrow) {
-            guard detailItem == nil else { return .ignored }
-            moveSelection(direction: 1)
-            return .handled
-        }
-        .onKeyPress(.return) {
-            // ⏎ pastes in both modes.
-            executeSelection()
-            return .handled
-        }
-        .onKeyPress(.tab) {
-            guard detailItem == nil else { return .ignored }
-            if focusZone == .search {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    viewMode = viewMode == .history ? .favorites : .history
-                }
-                return .handled
-            }
-            return .ignored
-        }
-        .onKeyPress(.space) {
-            // Space stages only in list mode while the query is empty — otherwise it
-            // must keep typing spaces into the search field.
-            guard detailItem == nil else { return .ignored }
-            guard searchText.isEmpty, let item = selectedItem else { return .ignored }
-            PasteStackService.shared.toggleStaged(item)
-            return .handled
-        }
-        .onKeyPress(.escape) {
-            // In detail mode Esc returns to the list (does NOT close the overlay).
-            if detailItem != nil {
+    }
+
+    // Focus-independent key routing for the overlay. Installed via `KeyMonitor` as a
+    // local NSEvent monitor; return true to consume the event, false to let it fall
+    // through to the focused field (so plain typing reaches search / tag / palette).
+    private func handleKeyDown(_ event: NSEvent) -> Bool {
+        // Only handle when OUR overlay is the key window (don't hijack Settings/other windows).
+        guard event.window is OverlayWindow else { return false }
+        // While the command palette is open, let it handle its own keys (typing + ↑↓/⏎/Esc).
+        if showCommandPalette { return false }
+
+        let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        let isCmd = mods.contains(.command)
+        let key = event.keyCode
+
+        // Key codes: left=123 right=124 down=125 up=126 return=36 keypadEnter=76 esc=53 tab=48 space=49
+        if detailItem != nil {
+            switch key {
+            case 123, 53: // ← or Esc → back to list
                 withAnimation(.easeInOut(duration: 0.18)) { detailItem = nil }
-                return .handled
+                return true
+            case 36, 76: // ⏎ → paste
+                executeSelection()
+                return true
+            default:
+                return false // let ScrollView etc. handle (↑↓ scroll detail)
             }
-            // The palette's own handler closes it first; only toggle the
-            // overlay when the palette isn't open.
-            guard !showCommandPalette else { return .ignored }
-            WindowManager.shared.toggleWindow()
-            return .handled
+        }
+
+        // LIST mode
+        // ⌘K opens palette
+        if isCmd, event.charactersIgnoringModifiers?.lowercased() == "k" {
+            showCommandPalette = true; return true
+        }
+        // ⌘1–9 pastes the Nth row
+        if isCmd, let ch = event.charactersIgnoringModifiers, let n = Int(ch), n >= 1, n <= 9,
+           displayItems.indices.contains(n - 1) {
+            WindowManager.shared.selectAndPaste(displayItems[n - 1]); return true
+        }
+        switch key {
+        case 126: moveSelection(direction: -1); return true   // ↑
+        case 125: moveSelection(direction: 1); return true    // ↓
+        case 124:                                              // → open detail
+            if let item = selectedItem { withAnimation(.easeInOut(duration: 0.18)) { detailItem = item } }
+            return selectedItem != nil
+        case 36, 76: executeSelection(); return true           // ⏎ paste
+        case 53: WindowManager.shared.toggleWindow(); return true // Esc close overlay
+        case 48:                                               // Tab switch tabs
+            withAnimation(.easeInOut(duration: 0.2)) { viewMode = (viewMode == .history ? .favorites : .history) }
+            return true
+        case 49:                                               // Space: stage only when search empty
+            if searchText.isEmpty, let item = selectedItem {
+                PasteStackService.shared.toggleStaged(item); return true
+            }
+            return false   // otherwise let the space type into the search field
+        default:
+            return false   // all other keys (typing) fall through to the focused field
         }
     }
 
@@ -399,7 +355,7 @@ struct MainView: View {
                 TextField("搜索剪贴…", text: $searchText)
                     .textFieldStyle(.plain)
                     .font(.system(size: 13))
-                    .focused($focusZone, equals: .search)
+                    .focused($isSearchFocused)
                     .onSubmit {
                         executeSelection()
                     }
@@ -452,19 +408,6 @@ struct MainView: View {
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.primary.opacity(0.04))
-    }
-
-    // Set focus now, then re-assert once shortly after: SwiftUI can drop focus
-    // that's assigned to a view in the same frame it appears (entering detail,
-    // closing the palette), so a single deferred re-assert makes it stick.
-    private func focusOverlay(_ zone: FocusZone) {
-        focusZone = zone
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 120_000_000)
-            if focusZone != zone {
-                focusZone = zone
-            }
-        }
     }
 
     private func executeSelection() {
