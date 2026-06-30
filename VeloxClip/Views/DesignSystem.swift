@@ -300,7 +300,7 @@ struct DSKeyBadge: View {
 // 取值随当前 colorScheme 切换；强调色跟随系统（回退 #0A84FF）。
 extension Color {
     static func ds(_ light: String, _ dark: String, _ scheme: ColorScheme) -> Color {
-        Color(hex: scheme == .dark ? dark : light)!
+        Color(hex: scheme == .dark ? dark : light) ?? .clear
     }
 }
 
@@ -308,6 +308,7 @@ struct DSColors {
     let scheme: ColorScheme
     // 强调色跟随系统：用 AppKit controlAccentColor，回退 #0A84FF
     var accent: Color { Color(nsColor: .controlAccentColor) }
+    // accentSoft 固定蓝色淡底（不跟随系统强调色），对应设计图 --accent-soft
     var accentSoft: Color { Color(.sRGB, red: 10/255, green: 132/255, blue: 1, opacity: scheme == .dark ? 0.22 : 0.14) }
     var text: Color   { .ds("#1d1d1f", "#f5f5f7", scheme) }
     var text2: Color  { .ds("#86868b", "#98989d", scheme) }
