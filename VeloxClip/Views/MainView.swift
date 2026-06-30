@@ -328,7 +328,9 @@ struct MainView: View {
             if let item = selectedItem { withAnimation(.easeInOut(duration: 0.18)) { detailItem = item } }
             return selectedItem != nil
         case 36, 76: executeSelection(); return true           // ⏎ paste
-        case 53: WindowManager.shared.toggleWindow(); return true // Esc close overlay
+        case 53:                                               // Esc: clear query first, else close overlay
+            if !searchText.isEmpty { searchText = ""; return true }
+            WindowManager.shared.toggleWindow(); return true
         case 48:                                               // Tab switch tabs
             withAnimation(.easeInOut(duration: 0.2)) { viewMode = (viewMode == .history ? .favorites : .history) }
             return true
