@@ -396,7 +396,6 @@ struct ScreenshotEditorView: View {
                     .font(.system(size: 15))
                     .foregroundColor(enabled ? c.text2 : c.text3)
                     .frame(width: 30, height: 30)
-                    .background(RoundedRectangle(cornerRadius: 7).fill(Color.clear))
                     .contentShape(RoundedRectangle(cornerRadius: 7))
             }
             .buttonStyle(.plain)
@@ -409,17 +408,9 @@ struct ScreenshotEditorView: View {
         @ObservedObject var editorState: EditorState
         let c: DSColors
 
-        // Kit palette: red / blue / yellow / black (exact RGB).
-        private static let swatches: [Color] = [
-            Color(.sRGB, red: 255/255, green: 59/255, blue: 48/255),
-            Color(.sRGB, red: 10/255, green: 132/255, blue: 255/255),
-            Color(.sRGB, red: 254/255, green: 188/255, blue: 46/255),
-            Color(.sRGB, red: 29/255, green: 29/255, blue: 31/255)
-        ]
-
         var body: some View {
             HStack(spacing: 10) {
-                ForEach(Self.swatches, id: \.self) { color in
+                ForEach(Array(Color.editorColors.prefix(8)), id: \.self) { color in
                     let selected = editorState.currentColor == color
                     Circle()
                         .fill(color)
@@ -427,6 +418,7 @@ struct ScreenshotEditorView: View {
                         .overlay(
                             Group {
                                 if selected {
+                                    // inner c.window gap ring + outer c.accent ring expanded 1.5pt outward
                                     Circle().stroke(c.window, lineWidth: 1.5)
                                         .overlay(Circle().stroke(c.accent, lineWidth: 1.5).padding(-1.5))
                                 }

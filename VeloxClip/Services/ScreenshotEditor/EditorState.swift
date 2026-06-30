@@ -4,9 +4,7 @@ import SwiftUI
 @MainActor
 class EditorState: ObservableObject {
     @Published var currentTool: EditorTool = .pen
-    // Matches the editor toolbar's kit palette red (exact sRGB) so the first
-    // swatch reads as selected on launch.
-    @Published var currentColor: Color = Color(.sRGB, red: 255/255, green: 59/255, blue: 48/255)
+    @Published var currentColor: Color = .red
     @Published var lineWidth: CGFloat = 3.0
     @Published var opacity: Double = 1.0
     
