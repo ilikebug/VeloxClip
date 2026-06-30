@@ -219,7 +219,7 @@ struct ClipboardItemRow: View {
             return ColorFormatting.hex(from: item.content ?? "") ?? (item.content ?? "颜色")
         }
         if item.type == "file", let content = item.content {
-            let paths = content.components(separatedBy: .newlines).filter { !$0.isEmpty }
+            let paths = RowPresentation.filePaths(from: content)
             let firstName = URL(fileURLWithPath: paths.first ?? content).lastPathComponent
             if paths.count > 1 {
                 return "\(paths.count) 个文件 — \(firstName)…"

@@ -35,6 +35,14 @@ enum RowPresentation {
         return type == "rtf" ? .rtf : .text
     }
 
+    // MARK: - File paths
+
+    /// Non-empty path lines from a `file` item's content. Shared by the subtitle
+    /// (parent dir) and the row title (file name) so they parse identically.
+    static func filePaths(from content: String) -> [String] {
+        content.components(separatedBy: .newlines).filter { !$0.isEmpty }
+    }
+
     // MARK: - Subtitle (content metadata)
 
     /// The second row line: content-specific metadata, never the source app.
@@ -55,7 +63,7 @@ enum RowPresentation {
 
         case .file:
             guard let content else { return "文件" }
-            let paths = content.components(separatedBy: .newlines).filter { !$0.isEmpty }
+            let paths = filePaths(from: content)
             guard let first = paths.first else { return "文件" }
             let parent = URL(fileURLWithPath: first).deletingLastPathComponent().lastPathComponent
             let dir = parent.isEmpty ? "/" : parent
@@ -109,9 +117,11 @@ enum RowPresentation {
         if seconds < 60 { return "刚刚" }
         if seconds < 3600 { return "\(Int(seconds / 60)) 分钟" }
         if seconds < 86_400 { return "\(Int(seconds / 3600)) 小时" }
-        if seconds < 172_800 { return "昨天" }
 
         let cal = Calendar.current
+        if let yesterday = cal.date(byAdding: .day, value: -1, to: now),
+           cal.isDate(date, inSameDayAs: yesterday) { return "昨天" }
+
         let comps = cal.dateComponents([.month, .day], from: date)
         let month = comps.month ?? 1
         let day = comps.day ?? 1

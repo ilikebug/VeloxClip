@@ -111,7 +111,23 @@ final class RowPresentationTests: XCTestCase {
     }
 
     func testRelativeTimeYesterday() {
-        let now = Date()
-        XCTAssertEqual(RowPresentation.relativeTime(now.addingTimeInterval(-30 * 3600), now: now), "昨天")
+        // Anchor `now` at midday so "calendar yesterday" is unambiguous regardless
+        // of when the test runs.
+        let cal = Calendar.current
+        let now = cal.date(bySettingHour: 12, minute: 0, second: 0, of: Date())!
+        let yesterdayMorning = cal.date(byAdding: .day, value: -1, to: now)!
+            .addingTimeInterval(-2 * 3600) // 10:00 the previous calendar day
+        XCTAssertEqual(RowPresentation.relativeTime(yesterdayMorning, now: now), "昨天")
+    }
+
+    func testRelativeTime25HoursAgoTwoCalendarDaysBackIsNotYesterday() {
+        // now = 00:30; 25h earlier = 23:30 *two* calendar days ago. Old fixed-seconds
+        // logic (<172800s) called this "昨天"; the calendar check correctly does NOT,
+        // falling through to the M月D日 branch.
+        let cal = Calendar.current
+        let now = cal.date(bySettingHour: 0, minute: 30, second: 0, of: Date())!
+        let result = RowPresentation.relativeTime(now.addingTimeInterval(-25 * 3600), now: now)
+        XCTAssertNotEqual(result, "昨天")
+        XCTAssertTrue(result.contains("月") && result.contains("日"))
     }
 }
