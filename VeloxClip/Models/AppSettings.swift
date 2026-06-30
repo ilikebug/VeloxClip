@@ -104,9 +104,9 @@ class AppSettings: ObservableObject {
         }
     }
 
-    // "light" | "dark" — applied app-wide via NSApp.appearance. Defaults to light
-    // and is fixed (does NOT follow the system), so the UI looks identical on every
-    // machine unless the user picks dark here.
+    // "light" | "dark" | "system" — applied app-wide via NSApp.appearance.
+    // Defaults to light (fixed, does NOT follow the system) so the UI looks identical
+    // on every machine; "dark" pins dark; "system" clears the override and follows macOS.
     @Published var appearance: String {
         didSet {
             guard !isInitializing else { return }
@@ -260,9 +260,11 @@ class AppSettings: ObservableObject {
     // Force the whole app to the chosen appearance (overrides the system setting),
     // which propagates to every NSWindow/NSPanel and to SwiftUI's colorScheme.
     func applyAppearance() {
-        NSApplication.shared.appearance = (appearance == "dark")
-            ? NSAppearance(named: .darkAqua)
-            : NSAppearance(named: .aqua)
+        switch appearance {
+        case "dark":  NSApplication.shared.appearance = NSAppearance(named: .darkAqua)
+        case "light": NSApplication.shared.appearance = NSAppearance(named: .aqua)
+        default:      NSApplication.shared.appearance = nil // "system" — follow macOS
+        }
     }
 
     private func updateLaunchAtLogin() {
