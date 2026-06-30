@@ -283,14 +283,20 @@ extension View {
 struct DSKeyBadge: View {
     @Environment(\.colorScheme) private var scheme
     let label: String
+    /// When true, renders white-on-translucent so the badge reads on a blue
+    /// (selected) row. Default renders the standard `c.key` chip.
+    var onAccent: Bool = false
     var body: some View {
         let c = DSColors(scheme: scheme)
         Text(label)
             .font(.system(size: 10.5, weight: .semibold))
-            .foregroundColor(c.text2)
+            .foregroundColor(onAccent ? .white : c.text2)
             .padding(.horizontal, 5)
             .padding(.vertical, 2)
-            .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(c.key))
+            .background(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(onAccent ? Color.white.opacity(0.22) : c.key)
+            )
     }
 }
 

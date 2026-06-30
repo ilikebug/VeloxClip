@@ -8,6 +8,7 @@ enum ViewMode {
 
 struct MainView: View {
     @ObservedObject var store = ClipboardStore.shared
+    @Environment(\.colorScheme) private var scheme
     @State private var selectedItem: ClipboardItem?
     @State private var searchText = ""
     @FocusState private var isSearchFocused: Bool
@@ -153,29 +154,37 @@ struct MainView: View {
 
     
     var body: some View {
+        let c = DSColors(scheme: scheme)
         VStack(spacing: 0) {
-            // Top: Full-width Search Bar (Spotlight Style)
-            HStack(spacing: 16) {
+            // Top: Compact Search Bar
+            HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(Color(nsColor: .controlAccentColor))
-                
-                TextField("Search anything in your clipboard history...", text: $searchText)
+                    .font(.system(size: 14))
+                    .foregroundColor(c.text2)
+
+                TextField("搜索剪贴…", text: $searchText)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 18, weight: .medium, design: .rounded))
+                    .font(.system(size: 13))
                     .focused($isSearchFocused)
                     .onSubmit {
                         executeSelection()
                     }
-                
-                Spacer()
-                
-                // Favorite toggle button
-                favoriteToggleButton
+
+                DSKeyBadge(label: "⌘V")
             }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 20)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
             .background(DesignSystem.backgroundBlur)
+            .onKeyPress { press in
+                // ⌘1–9 pastes the corresponding visible row. Returns .ignored for
+                // anything else (incl. ⌘K, reserved for Task 8) so the other
+                // handlers below still run.
+                guard press.modifiers.contains(.command),
+                      let n = Int(press.characters), n >= 1, n <= 9,
+                      displayItems.indices.contains(n - 1) else { return .ignored }
+                WindowManager.shared.selectAndPaste(displayItems[n - 1])
+                return .handled
+            }
             .onKeyPress(.upArrow) {
                 moveSelection(direction: -1)
                 return .handled
@@ -216,7 +225,15 @@ struct MainView: View {
             HStack(spacing: 0) {
                 // Left: Clipboard List (History)
                 VStack(spacing: 0) {
-                    typeFilterBar
+                    HStack {
+                        viewModeTabs
+                        Spacer()
+                        typeFilterBar
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.top, 9)
+                    .padding(.bottom, 8)
+                    Divider().overlay(c.divider)
                     ClipboardListView(selectedItem: $selectedItem, items: displayItems, scrollTarget: $scrollTarget)
                 }
                 .frame(width: 320)
@@ -230,6 +247,21 @@ struct MainView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color.primary.opacity(0.08))
             }
+
+            // Bottom action bar
+            Divider().overlay(c.divider)
+            HStack(spacing: 14) {
+                actionHint("粘贴", "⏎")
+                actionHint("详情", nil)
+                actionHint("入栈", "space")
+                actionHint("动作", "⌘K")
+                Spacer()
+                Text("\(displayItems.count) 条")
+                    .font(.system(size: 11))
+                    .foregroundColor(c.text3)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
         }
         .frame(width: 850, height: 600)
         .background(DesignSystem.backgroundBlur)
@@ -334,52 +366,69 @@ struct MainView: View {
         }
     }
     
-    private var typeFilterBar: some View {
+    private var dsc: DSColors { DSColors(scheme: scheme) }
+
+    // 历史 / 收藏 segmented tabs
+    private var viewModeTabs: some View {
         HStack(spacing: 4) {
+            tabSegment("历史", mode: .history)
+            tabSegment("收藏", mode: .favorites)
+        }
+    }
+
+    private func tabSegment(_ label: String, mode: ViewMode) -> some View {
+        let c = dsc
+        let selected = viewMode == mode
+        return Button(action: {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                viewMode = mode
+            }
+        }) {
+            Text(label)
+                .font(.system(size: 12, weight: selected ? .semibold : .regular))
+                .foregroundColor(selected ? c.accent : c.text2)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(selected ? c.accentSoft : Color.clear)
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    // Type chips: content-width pills beside the tabs
+    private var typeFilterBar: some View {
+        let c = dsc
+        return HStack(spacing: 6) {
             ForEach(ClipboardTypeFilter.allCases) { filter in
+                let selected = typeFilter == filter
                 Button(action: {
                     withAnimation(.easeInOut(duration: 0.15)) {
                         typeFilter = filter
                     }
                 }) {
                     Text(filter.label)
-                        .font(.system(size: 11, weight: typeFilter == filter ? .semibold : .regular, design: .rounded))
-                        .foregroundColor(typeFilter == filter ? .white : .secondary)
+                        .font(.system(size: 11, weight: selected ? .semibold : .regular))
+                        .foregroundColor(selected ? .white : c.text2)
+                        .padding(.horizontal, 8)
                         .padding(.vertical, 3)
-                        // Equal-width buttons spread evenly across the list column
-                        .frame(maxWidth: .infinity)
                         .background(
                             Capsule()
-                                .fill(typeFilter == filter ? Color.accentColor : Color.primary.opacity(0.06))
+                                .fill(selected ? c.accent : c.chip)
                         )
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 8)
-        .padding(.bottom, 4)
     }
 
-    private var favoriteToggleButton: some View {
-        Button(action: {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                viewMode = viewMode == .history ? .favorites : .history
-            }
-        }) {
-            Group {
-                if viewMode == .favorites {
-                    Image(systemName: "star.fill")
-                        .font(.system(size: 22, weight: .bold))
-                        .foregroundStyle(Color(nsColor: .controlAccentColor))
-                } else {
-                    Image(systemName: "star")
-                        .font(.system(size: 22, weight: .bold))
-                        .foregroundStyle(Color.secondary)
-                }
-            }
+    @ViewBuilder private func actionHint(_ label: String, _ key: String?) -> some View {
+        HStack(spacing: 4) {
+            Text(label)
+                .font(.system(size: 11))
+                .foregroundColor(dsc.text2)
+            if let key { DSKeyBadge(label: key) }
         }
-        .buttonStyle(.plain)
-        .help(viewMode == .favorites ? "Show History" : "Show Favorites")
     }
 }

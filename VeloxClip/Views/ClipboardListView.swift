@@ -13,9 +13,10 @@ struct ClipboardListView: View {
     var body: some View {
         ScrollViewReader { proxy in
             List(selection: $selectedItem) {
-                ForEach(items) { item in
+                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                     ClipboardItemRow(
                         item: item,
+                        index: index,
                         isSelected: selectedItem?.id == item.id,
                         stagedIndex: pasteStack.stagedIndex(of: item.id),
                         onSelect: {
@@ -58,15 +59,18 @@ struct ClipboardListView: View {
 
 struct ClipboardItemRow: View {
     let item: ClipboardItem
+    let index: Int
     let isSelected: Bool
     let stagedIndex: Int?
     let onSelect: () -> Void
     let onDoubleClick: () -> Void
     let onToggleStage: () -> Void
 
+    @Environment(\.colorScheme) private var scheme
     @State private var isHovering = false
 
     var body: some View {
+        let c = DSColors(scheme: scheme)
         HStack(spacing: 16) {
             if item.type == "image" {
                 ImageRowThumbnail(itemID: item.id, fallbackColor: typeColor(for: item.type))
@@ -77,15 +81,16 @@ struct ClipboardItemRow: View {
                         .frame(width: 36, height: 36)
 
                     typeIcon(for: item.type)
-                        .foregroundColor(typeColor(for: item.type))
+                        .foregroundColor(isSelected ? .white : typeColor(for: item.type))
                         .font(.system(size: 16, weight: .semibold))
                 }
             }
-            
+
             VStack(alignment: .leading, spacing: 4) {
                 Text(displayContent(for: item))
                     .lineLimit(1)
-                    .font(.system(size: 13, design: .rounded))
+                    .font(.system(size: 13))
+                    .foregroundColor(isSelected ? .white : c.text)
 
                 HStack {
                     Text(item.sourceApp ?? "Unknown")
@@ -94,7 +99,7 @@ struct ClipboardItemRow: View {
                     Text(item.createdAt, style: .time)
                 }
                 .font(.dsCaption2)
-                .foregroundColor(.secondary)
+                .foregroundColor(isSelected ? Color.white.opacity(0.78) : c.text2)
             }
 
             Spacer()
@@ -114,10 +119,14 @@ struct ClipboardItemRow: View {
                 Button(action: onToggleStage) {
                     Image(systemName: "plus.circle")
                         .font(.system(size: 16))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(isSelected ? .white : c.text2)
                 }
                 .buttonStyle(.plain)
                 .help("Add to paste queue (Space)")
+            } else if isSelected {
+                DSKeyBadge(label: "⏎", onAccent: true)
+            } else if index < 9 {
+                DSKeyBadge(label: "⌘\(index + 1)")
             }
         }
         .padding(.vertical, 8)
@@ -125,7 +134,7 @@ struct ClipboardItemRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(isSelected ? Color.accentColor.opacity(0.25) : Color.clear)
+                .fill(isSelected ? c.accent : (isHovering ? c.hover : Color.clear))
         )
         .contentShape(Rectangle())
         .onHover { isHovering = $0 }
