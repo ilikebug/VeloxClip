@@ -252,6 +252,42 @@ struct DSSlider<V: BinaryFloatingPoint>: View {
     }
 }
 
+// MARK: - Segmented control (self-drawn: recessed track + elevated thumb)
+//
+// Native `Picker(.segmented)` chrome shifts across macOS releases. This draws its
+// own recessed `c.chip` track with an elevated `c.card` thumb on the selected
+// segment. Generic over any `Hashable` value.
+struct DSSegmented<Value: Hashable>: View {
+    @Environment(\.colorScheme) private var scheme
+    @Binding var selection: Value
+    let options: [(value: Value, label: String)]
+
+    var body: some View {
+        let c = DSColors(scheme: scheme)
+        HStack(spacing: 2) {
+            ForEach(options, id: \.value) { option in
+                let selected = option.value == selection
+                Text(option.label)
+                    .font(.system(size: 12, weight: selected ? .semibold : .medium))
+                    .foregroundColor(selected ? c.text : c.text2)
+                    .padding(.horizontal, 13)
+                    .padding(.vertical, 4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(selected ? c.card : .clear)
+                            .shadow(color: selected ? .black.opacity(0.12) : .clear, radius: 1, y: 0.5)
+                    )
+                    .contentShape(Rectangle())
+                    .onTapGesture { selection = option.value }
+            }
+        }
+        .padding(2)
+        .background(
+            RoundedRectangle(cornerRadius: 7, style: .continuous).fill(c.chip)
+        )
+    }
+}
+
 // MARK: - Glass background (respects "Reduce Transparency")
 //
 // SwiftUI materials adapt to the accessibility setting automatically, but pinning
