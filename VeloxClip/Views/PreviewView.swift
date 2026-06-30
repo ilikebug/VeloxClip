@@ -108,7 +108,7 @@ struct PreviewView: View {
             .foregroundColor(.secondary)
         }
         .padding()
-        .background(DesignSystem.primaryGradient.opacity(0.1))
+        .background(Color(nsColor: .controlAccentColor).opacity(0.1))
     }
     
     @ViewBuilder
@@ -116,7 +116,7 @@ struct PreviewView: View {
         Button(action: { store.toggleFavorite(for: displayItem) }) {
             Image(systemName: displayItem.isFavorite ? "star.fill" : "star")
                 .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(displayItem.isFavorite ? AnyShapeStyle(DesignSystem.primaryGradient) : AnyShapeStyle(.secondary))
+                .foregroundStyle(displayItem.isFavorite ? AnyShapeStyle(Color(nsColor: .controlAccentColor)) : AnyShapeStyle(.secondary))
         }
         .buttonStyle(.plain)
     }

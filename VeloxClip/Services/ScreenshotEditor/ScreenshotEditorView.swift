@@ -328,7 +328,7 @@ struct ScreenshotEditorView: View {
                             Image(systemName: "slider.horizontal.3")
                                 .font(.system(size: 16))
                                 .frame(width: 40, height: 40)
-                                .background(showPropertyToolbar ? AnyShapeStyle(DesignSystem.primaryGradient) : AnyShapeStyle(Color.clear))
+                                .background(showPropertyToolbar ? AnyShapeStyle(Color(nsColor: .controlAccentColor)) : AnyShapeStyle(Color.clear))
                                 .cornerRadius(8)
                         }
                         .buttonStyle(.plain)
@@ -373,7 +373,7 @@ struct ScreenshotEditorView: View {
                 Image(systemName: tool.icon)
                     .font(.system(size: 16))
                     .frame(width: 36, height: 36)
-                    .background(currentTool == tool ? AnyShapeStyle(DesignSystem.primaryGradient) : AnyShapeStyle(Color.clear))
+                    .background(currentTool == tool ? AnyShapeStyle(Color(nsColor: .controlAccentColor)) : AnyShapeStyle(Color.clear))
                     .foregroundColor(currentTool == tool ? .white : .secondary)
                     .cornerRadius(8)
             }

@@ -158,7 +158,7 @@ struct MainView: View {
             HStack(spacing: 16) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(DesignSystem.primaryGradient)
+                    .foregroundStyle(Color(nsColor: .controlAccentColor))
                 
                 TextField("Search anything in your clipboard history...", text: $searchText)
                     .textFieldStyle(.plain)
@@ -371,7 +371,7 @@ struct MainView: View {
                 if viewMode == .favorites {
                     Image(systemName: "star.fill")
                         .font(.system(size: 22, weight: .bold))
-                        .foregroundStyle(DesignSystem.primaryGradient)
+                        .foregroundStyle(Color(nsColor: .controlAccentColor))
                 } else {
                     Image(systemName: "star")
                         .font(.system(size: 22, weight: .bold))

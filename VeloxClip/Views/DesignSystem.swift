@@ -2,14 +2,13 @@ import SwiftUI
 import AppKit
 
 struct DesignSystem {
-    static let primaryGradient = LinearGradient(
-        colors: [Color(hex: "#6366f1")!, Color(hex: "#a855f7")!],
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
-    )
-    
+    /// 面板投影：0 18px 50px rgba(0,0,0,.2)（深色 .5）
+    static func panelShadow(_ scheme: ColorScheme) -> Color {
+        .black.opacity(scheme == .dark ? 0.5 : 0.2)
+    }
+
     static let backgroundBlur = VisualEffectView(material: .underWindowBackground, blendingMode: .behindWindow)
-    
+
     struct Card: ViewModifier {
         func body(content: Content) -> some View {
             content
@@ -148,7 +147,7 @@ struct DSButtonStyle: ButtonStyle {
 
     private func fill(pressed: Bool) -> AnyShapeStyle {
         switch kind {
-        case .prominent: return AnyShapeStyle(DesignSystem.primaryGradient)
+        case .prominent: return AnyShapeStyle(Color(nsColor: .controlAccentColor))
         case .secondary: return AnyShapeStyle(Color.primary.opacity(pressed ? 0.16 : 0.08))
         case .destructive: return AnyShapeStyle(Color.red.opacity(pressed ? 0.22 : 0.1))
         }
@@ -186,7 +185,7 @@ struct DSSwitchToggleStyle: ToggleStyle {
             Spacer(minLength: 8)
             ZStack(alignment: configuration.isOn ? .trailing : .leading) {
                 Capsule()
-                    .fill(configuration.isOn ? AnyShapeStyle(DesignSystem.primaryGradient) : AnyShapeStyle(Color.primary.opacity(0.22)))
+                    .fill(configuration.isOn ? AnyShapeStyle(Color(nsColor: .controlAccentColor)) : AnyShapeStyle(Color.primary.opacity(0.22)))
                     .frame(width: 36, height: 20)
                 Circle()
                     .fill(.white)
@@ -232,7 +231,7 @@ struct DSSlider<V: BinaryFloatingPoint>: View {
             let frac = min(max(raw, 0), 1)
             ZStack(alignment: .leading) {
                 Capsule().fill(Color.primary.opacity(0.15)).frame(height: 4)
-                Capsule().fill(DesignSystem.primaryGradient)
+                Capsule().fill(Color(nsColor: .controlAccentColor))
                     .frame(width: thumb / 2 + frac * usable, height: 4)
                 Circle()
                     .fill(.white)
@@ -278,6 +277,53 @@ extension View {
     func dsGlassBackground(cornerRadius: CGFloat) -> some View {
         modifier(GlassBackground(cornerRadius: cornerRadius))
     }
+}
+
+// MARK: - Keyboard badge (⌘1 / ⏎ / space)
+struct DSKeyBadge: View {
+    @Environment(\.colorScheme) private var scheme
+    let label: String
+    var body: some View {
+        let c = DSColors(scheme: scheme)
+        Text(label)
+            .font(.system(size: 10.5, weight: .semibold))
+            .foregroundColor(c.text2)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(c.key))
+    }
+}
+
+// MARK: - Design tokens (light = 设计图; dark = 推导)
+//
+// 设计图《VeloxClip 界面套件》全程无渐变，统一系统蓝 #0A84FF。
+// 取值随当前 colorScheme 切换；强调色跟随系统（回退 #0A84FF）。
+extension Color {
+    static func ds(_ light: String, _ dark: String, _ scheme: ColorScheme) -> Color {
+        Color(hex: scheme == .dark ? dark : light)!
+    }
+}
+
+struct DSColors {
+    let scheme: ColorScheme
+    // 强调色跟随系统：用 AppKit controlAccentColor，回退 #0A84FF
+    var accent: Color { Color(nsColor: .controlAccentColor) }
+    var accentSoft: Color { Color(.sRGB, red: 10/255, green: 132/255, blue: 1, opacity: scheme == .dark ? 0.22 : 0.14) }
+    var text: Color   { .ds("#1d1d1f", "#f5f5f7", scheme) }
+    var text2: Color  { .ds("#86868b", "#98989d", scheme) }
+    var text3: Color  { .ds("#aeaeb2", "#636366", scheme) }
+    var window: Color { .ds("#f4f3f1", "#1e1e1e", scheme) }
+    var card: Color   { .ds("#ffffff", "#2c2c2e", scheme) }
+    var panel: Color  { scheme == .dark ? Color(.sRGB, red: 40/255, green: 40/255, blue: 42/255, opacity: 0.80)
+                                        : Color(.sRGB, red: 250/255, green: 250/255, blue: 249/255, opacity: 0.78) }
+    func blackAlpha(_ a: Double, _ darkWhiteA: Double) -> Color {
+        scheme == .dark ? Color.white.opacity(darkWhiteA) : Color.black.opacity(a)
+    }
+    var field: Color   { blackAlpha(0.055, 0.08) }
+    var chip: Color    { blackAlpha(0.05, 0.07) }
+    var key: Color     { blackAlpha(0.06, 0.10) }
+    var divider: Color { blackAlpha(0.09, 0.12) }
+    var hover: Color   { blackAlpha(0.045, 0.06) }
 }
 
 extension Color {

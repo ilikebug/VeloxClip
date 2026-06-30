@@ -155,7 +155,7 @@ struct PasteStackHUDView: View {
             switch stack.phase {
             case .active:
                 Image(systemName: "list.number")
-                    .foregroundStyle(DesignSystem.primaryGradient)
+                    .foregroundStyle(Color(nsColor: .controlAccentColor))
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Next: \(currentPreview)")
                         .font(.system(size: 12, weight: .medium))
