@@ -180,7 +180,10 @@ struct MainView: View {
         // alongside the keyed ones below stops the keyed handlers (arrows /
         // return / tab / space / escape) from firing.
         .onKeyPress(keys: ["k"]) { press in
-            // ⌘K opens the command palette (list mode only — see guard below it's fine in detail too but commands act on selection).
+            // ⌘K opens the command palette in both modes. It acts on `selectedItem`,
+            // which equals `detailItem` while detail is open (→ opens detail from the
+            // selection and the list can't change selection in detail mode), so the
+            // palette always targets the item the user is looking at.
             guard press.modifiers.contains(.command) else { return .ignored }
             showCommandPalette = true
             return .handled
