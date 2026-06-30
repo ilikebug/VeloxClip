@@ -315,24 +315,47 @@ extension View {
     }
 }
 
-// MARK: - Keyboard badge (⌘1 / ⏎ / space)
+// MARK: - Keyboard badge (⌘1 / ↵ / space)
 struct DSKeyBadge: View {
     @Environment(\.colorScheme) private var scheme
     let label: String
-    /// When true, renders white-on-translucent so the badge reads on a blue
-    /// (selected) row. Default renders the standard `c.key` chip.
-    var onAccent: Bool = false
+    /// Visual role of the badge. Same metrics across all roles; only fill/text differ.
+    /// - `.standard`: default `c.key` chip on a normal row.
+    /// - `.onAccent`: white-on-translucent so it reads on a blue (selected) row.
+    /// - `.accent`: `c.card` fill with `c.accent` glyph (e.g. HUD current-row ↵).
+    /// - `.destructive`: red-tinted fill + red glyph (e.g. palette delete badge).
+    enum Role { case standard, onAccent, accent, destructive }
+    var role: Role = .standard
+
     var body: some View {
         let c = DSColors(scheme: scheme)
         Text(label)
             .font(.system(size: 10.5, weight: .semibold))
-            .foregroundColor(onAccent ? .white : c.text2)
+            .foregroundColor(textColor(c))
             .padding(.horizontal, 5)
             .padding(.vertical, 2)
             .background(
                 RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .fill(onAccent ? Color.white.opacity(0.22) : c.key)
+                    .fill(fillColor(c))
             )
+    }
+
+    private func textColor(_ c: DSColors) -> Color {
+        switch role {
+        case .standard:    return c.text2
+        case .onAccent:    return .white
+        case .accent:      return c.accent
+        case .destructive: return c.destructive
+        }
+    }
+
+    private func fillColor(_ c: DSColors) -> Color {
+        switch role {
+        case .standard:    return c.key
+        case .onAccent:    return Color.white.opacity(0.22)
+        case .accent:      return c.card
+        case .destructive: return c.destructive.opacity(0.14)
+        }
     }
 }
 
@@ -367,6 +390,11 @@ struct DSColors {
     var key: Color     { blackAlpha(0.06, 0.10) }
     var divider: Color { blackAlpha(0.09, 0.12) }
     var hover: Color   { blackAlpha(0.045, 0.06) }
+    // 危险/删除：系统红 #FF3B30（深色用略亮的 #FF453A）
+    var destructive: Color {
+        scheme == .dark ? Color(.sRGB, red: 1, green: 69/255, blue: 58/255)
+                        : Color(.sRGB, red: 1, green: 59/255, blue: 48/255)
+    }
 }
 
 extension Color {

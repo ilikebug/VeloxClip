@@ -143,7 +143,7 @@ struct ClipboardItemRow: View {
                 .buttonStyle(.plain)
                 .help("加入粘贴队列（Space）")
             } else if isSelected {
-                DSKeyBadge(label: "⏎", onAccent: true)
+                DSKeyBadge(label: "⏎", role: .onAccent)
             } else if index < 9 {
                 DSKeyBadge(label: "⌘\(index + 1)")
             }

@@ -203,17 +203,23 @@ struct ColorPreviewView: View {
         var formats: [ColorFormat] = []
         
         if let rgb = extractRGB(from: color) {
-            // HEX
-            let hex = String(format: "#%02X%02X%02X", rgb.r, rgb.g, rgb.b)
+            // HEX / RGB routed through the shared ColorFormatting helper so the
+            // preview and command palette can never disagree on canonical output.
+            // (Feed it an rgb() string; fall back to local formatting if unparseable.)
+            let rgbSource = "rgb(\(rgb.r), \(rgb.g), \(rgb.b))"
+
+            // HEX (#0A84FF)
+            let hex = ColorFormatting.hex(from: rgbSource) ?? String(format: "#%02X%02X%02X", rgb.r, rgb.g, rgb.b)
             formats.append(ColorFormat(name: "HEX", value: hex))
-            
+
             if rgb.a < 1.0 {
                 let hexA = String(format: "#%02X%02X%02X%02X", rgb.r, rgb.g, rgb.b, Int(rgb.a * 255))
                 formats.append(ColorFormat(name: "HEXA", value: hexA))
             }
-            
-            // RGB — bare space-separated numbers (kit style)
-            formats.append(ColorFormat(name: "RGB", value: "\(rgb.r) \(rgb.g) \(rgb.b)"))
+
+            // RGB — bare space-separated numbers (kit style: "10 132 255")
+            let rgbValue = ColorFormatting.rgb(from: rgbSource) ?? "\(rgb.r) \(rgb.g) \(rgb.b)"
+            formats.append(ColorFormat(name: "RGB", value: rgbValue))
             if rgb.a < 1.0 {
                 formats.append(ColorFormat(name: "RGBA", value: "\(rgb.r) \(rgb.g) \(rgb.b) \(String(format: "%.2f", rgb.a))"))
             }

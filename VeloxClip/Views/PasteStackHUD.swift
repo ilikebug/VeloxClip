@@ -286,12 +286,7 @@ struct PasteStackHUDView: View {
             Spacer(minLength: 4)
 
             if isCurrent {
-                Text("↵")
-                    .font(.system(size: 10.5, weight: .semibold))
-                    .foregroundColor(c.accent)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 2)
-                    .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(c.card))
+                DSKeyBadge(label: "↵", role: .accent)
             }
         }
         .padding(.horizontal, 8)

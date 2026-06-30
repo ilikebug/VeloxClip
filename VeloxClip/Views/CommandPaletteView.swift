@@ -133,7 +133,6 @@ struct CommandPaletteView: View {
     /// Command ids that form the destructive/management group; a divider is
     /// inserted before the first of these that appears.
     private static let groupBoundaryIDs: Set<String> = ["favorite", "stack", "delete"]
-    private static let destructiveRed = Color(.sRGB, red: 255/255, green: 59/255, blue: 48/255, opacity: 1)
 
     @ViewBuilder private func commandList(_ c: DSColors) -> some View {
         VStack(spacing: 2) {
@@ -155,7 +154,7 @@ struct CommandPaletteView: View {
 
     @ViewBuilder private func commandRow(_ cmd: Command, isSelected: Bool, c: DSColors) -> some View {
         let isDelete = cmd.id == "delete"
-        let titleColor: Color = isSelected ? .white : (isDelete ? Self.destructiveRed : c.text)
+        let titleColor: Color = isSelected ? .white : (isDelete ? c.destructive : c.text)
         HStack(spacing: 11) {
             if (cmd.id == "copyHex" || cmd.id == "copyRgb"), let color = itemColor {
                 RoundedRectangle(cornerRadius: 3, style: .continuous)
@@ -164,7 +163,7 @@ struct CommandPaletteView: View {
             } else {
                 Image(systemName: cmd.icon)
                     .font(.system(size: 13))
-                    .foregroundColor(isSelected ? .white : (isDelete ? Self.destructiveRed : c.text))
+                    .foregroundColor(isSelected ? .white : (isDelete ? c.destructive : c.text))
                     .frame(width: 13, height: 13)
             }
             Text(cmd.title)
@@ -178,19 +177,8 @@ struct CommandPaletteView: View {
                     .font(.system(size: 11.5, design: .monospaced))
                     .foregroundColor(isSelected ? .white : c.text3)
             } else if let key = cmd.keyHint {
-                if isDelete && !isSelected {
-                    Text(key)
-                        .font(.system(size: 10.5, weight: .semibold))
-                        .foregroundColor(Self.destructiveRed)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(
-                            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                                .fill(Self.destructiveRed.opacity(0.14))
-                        )
-                } else {
-                    DSKeyBadge(label: key, onAccent: isSelected)
-                }
+                let role: DSKeyBadge.Role = isSelected ? .onAccent : (isDelete ? .destructive : .standard)
+                DSKeyBadge(label: key, role: role)
             }
         }
         .padding(.horizontal, 11)
