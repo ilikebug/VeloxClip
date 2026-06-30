@@ -243,6 +243,14 @@ struct MainView: View {
             let validIDs = Set(newItems.map(\.id))
             searchResults.removeAll { !validIDs.contains($0.id) }
         }
+        .onChange(of: selectedItem) { _, _ in
+            // Clicking a row makes the List the first responder, dropping search
+            // focus; bring it back so subsequent typing enters the search field.
+            // Guarded so we don't steal focus from the detail tag field or palette.
+            if detailItem == nil, !showCommandPalette, !isSearchFocused {
+                isSearchFocused = true
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { notification in
             // Only react to the overlay window itself — other windows (Settings,
             // popovers) becoming key must not steal the search focus
@@ -308,7 +316,12 @@ struct MainView: View {
         // list and detail mode) — makes the palette's `⌘C` hint truthful. But when
         // a text field / selectable preview holds focus, let native copy-selection win.
         if isCmd, event.charactersIgnoringModifiers?.lowercased() == "c" {
-            if editingText { return false }
+            // In list mode the search field is the permanent first responder, so
+            // `editingText` is always true; honoring it blindly would route ⌘C to
+            // the (usually empty) search field instead of copying the item. Only let
+            // native copy-selection win when the focused text view actually has a
+            // non-empty selection (e.g. the user selected search text or tag text).
+            if editingText, hasTextSelection(in: event.window) { return false }
             if let i = detailItem ?? selectedItem { copyItem(i) }
             return true
         }
@@ -346,9 +359,12 @@ struct MainView: View {
         case 126: moveSelection(direction: -1); return true   // ↑
         case 125: moveSelection(direction: 1); return true    // ↓
         case 124:                                              // → open detail
-            // Don't hijack → while the caret is in the search field — let it move
-            // the text cursor. (← keyCode 123 already falls through in list mode.)
-            if editingText { return false }
+            // The search field is always the first responder in list mode, so
+            // `editingText` is true throughout normal browsing. Only fall through
+            // to native caret movement when there's actually text to move through;
+            // with an empty search field (the default) let → open detail.
+            // (← keyCode 123 already falls through in list mode.)
+            if editingText, !searchText.isEmpty { return false }
             if let item = selectedItem { withAnimation(.easeInOut(duration: 0.18)) { detailItem = item } }
             return selectedItem != nil
         case 36, 76: executeSelection(); return true           // ⏎ paste
@@ -366,6 +382,14 @@ struct MainView: View {
         default:
             return false   // all other keys (typing) fall through to the focused field
         }
+    }
+
+    // True when the window's focused text view has a non-empty selection (so a
+    // native ⌘C copy-selection would actually copy something). Used to decide
+    // whether ⌘C should fall through to the field or copy the selected item.
+    private func hasTextSelection(in window: NSWindow?) -> Bool {
+        guard let tv = window?.firstResponder as? NSTextView else { return false }
+        return tv.selectedRange().length > 0
     }
 
     // List mode: search bar + tabs/chips + single-column list + action bar.
