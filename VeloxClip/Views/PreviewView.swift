@@ -179,7 +179,7 @@ struct PreviewView: View {
         switch viewModel.detectedType {
         case .image:
             if let data = item.data {
-                ScrollView([.horizontal, .vertical]) {
+                ScrollView(ImagePreviewLayoutPolicy.detailImage.scrollAxes) {
                     VStack(alignment: .leading, spacing: 0) {
                         ImagePreviewView(imageData: data)
                         ocrSection(for: item)
@@ -405,4 +405,3 @@ struct PreviewView: View {
             }
     }
 }
-

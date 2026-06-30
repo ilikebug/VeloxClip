@@ -5,7 +5,9 @@ import AppKit
 struct ImagePreviewView: View {
     @Environment(\.colorScheme) private var scheme
     let imageData: Data
-    @State private var zoomLevel: CGFloat = 1.0
+    private let layoutPolicy = ImagePreviewLayoutPolicy.detailImage
+    @State private var zoomLevel: CGFloat = ImagePreviewLayoutPolicy.detailImage.defaultZoomLevel
+    @State private var imageContainerWidth: CGFloat = 0
     @State private var imageInfo: ImageInfo?
     @State private var displayImage: NSImage?
     
@@ -49,13 +51,49 @@ struct ImagePreviewView: View {
     @ViewBuilder
     private func imageDisplay(_ nsImage: NSImage) -> some View {
         let c = DSColors(scheme: scheme)
-        Image(nsImage: nsImage)
-            .resizable()
-            .scaledToFit()
-            .scaleEffect(zoomLevel)
-            .frame(maxWidth: .infinity, alignment: .center)
-            .padding()
-            .background(c.card)
+        let sidePadding: CGFloat = 32
+        let availableWidth = max(1, imageContainerWidth - sidePadding)
+        let displaySize = imageContainerWidth > 0
+            ? fittedImageSize(imageSize: nsImage.size, availableWidth: availableWidth, zoomLevel: zoomLevel)
+            : nil
+
+        Group {
+            if let displaySize {
+                imageView(nsImage)
+                    .frame(width: displaySize.width, height: displaySize.height)
+            } else {
+                imageView(nsImage)
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
+        .padding(16)
+        .background(c.card)
+        .background(
+            GeometryReader { proxy in
+                Color.clear.preference(key: ImagePreviewWidthPreferenceKey.self, value: proxy.size.width)
+            }
+        )
+        .onPreferenceChange(ImagePreviewWidthPreferenceKey.self) { width in
+            imageContainerWidth = width
+        }
+    }
+
+    @ViewBuilder
+    private func imageView(_ nsImage: NSImage) -> some View {
+        if layoutPolicy.fitsImageToAvailablePanel {
+            Image(nsImage: nsImage)
+                .resizable()
+                .interpolation(.high)
+                .antialiased(true)
+                .aspectRatio(nsImage.size, contentMode: .fit)
+        } else {
+            Image(nsImage: nsImage)
+                .resizable()
+                .interpolation(.high)
+                .antialiased(true)
+        }
     }
 
     private var zoomControls: some View {
@@ -69,12 +107,13 @@ struct ImagePreviewView: View {
             Text("\(Int(zoomLevel * 100))%")
                 .font(.system(size: 11)).foregroundColor(c.text2).frame(width: 60)
 
-            Button(action: { zoomLevel = min(3.0, zoomLevel + 0.25) }) {
+            Button(action: { zoomLevel = min(layoutPolicy.maximumZoomLevel, zoomLevel + 0.25) }) {
                 Image(systemName: "plus.magnifyingglass")
             }
             .dsButton(small: true)
+            .disabled(zoomLevel >= layoutPolicy.maximumZoomLevel)
 
-            Button("适应") { zoomLevel = 1.0 }.dsButton(small: true)
+            Button("适应") { zoomLevel = layoutPolicy.defaultZoomLevel }.dsButton(small: true)
 
             Spacer()
         }
@@ -155,6 +194,18 @@ struct ImagePreviewView: View {
         formatter.countStyle = .file
         return formatter.string(fromByteCount: Int64(bytes))
     }
+
+    private func fittedImageSize(imageSize: NSSize, availableWidth: CGFloat, zoomLevel: CGFloat) -> CGSize {
+        let width = min(availableWidth, imageSize.width * zoomLevel)
+        let aspect = imageSize.height / max(imageSize.width, 1)
+        return CGSize(width: width, height: width * aspect)
+    }
 }
 
+private struct ImagePreviewWidthPreferenceKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
 
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
