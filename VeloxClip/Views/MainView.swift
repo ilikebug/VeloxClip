@@ -255,7 +255,9 @@ struct MainView: View {
             // Only react to the overlay window itself — other windows (Settings,
             // popovers) becoming key must not steal the search focus
             guard notification.object is OverlayWindow else { return }
-            isSearchFocused = true
+            // Only re-arm search focus in list mode; in detail mode the search field
+            // isn't in the tree (this would be a no-op anyway — kept for symmetry).
+            if detailItem == nil { isSearchFocused = true }
         }
         .onReceive(NotificationCenter.default.publisher(for: .veloxOverlayWillShow)) { _ in
             // Reset state only when the overlay is (re)opened, not every time it
@@ -435,7 +437,9 @@ struct MainView: View {
             Divider().overlay(c.divider)
             HStack(spacing: 14) {
                 actionHint("粘贴", "⏎")
-                actionHint("详情", "→")
+                // → only opens detail when the search field is empty; hide the key
+                // hint otherwise so the bar never advertises an inactive shortcut.
+                actionHint("详情", searchText.isEmpty ? "→" : nil)
                 actionHint("入栈", "space")
                 actionHint("动作", "⌘K")
                 Spacer()
