@@ -107,10 +107,10 @@ struct ClipboardItemRow: View {
             if let stagedIndex {
                 ZStack {
                     Circle()
-                        .fill(Color.accentColor)
+                        .fill(c.accent)
                         .frame(width: 20, height: 20)
                     Text("\(stagedIndex + 1)")
-                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .font(.system(size: 11, weight: .bold))
                         .foregroundColor(.white)
                 }
                 .onTapGesture { onToggleStage() }

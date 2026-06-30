@@ -218,9 +218,8 @@ struct MainView: View {
                 return .handled
             }
             
-            Divider()
-                .background(Color.white.opacity(0.1))
-            
+            Divider().overlay(c.divider)
+
             // Bottom Content: List and Preview
             HStack(spacing: 0) {
                 // Left: Clipboard List (History)
@@ -239,9 +238,8 @@ struct MainView: View {
                 .frame(width: 320)
                 .background(Color.primary.opacity(0.03))
                 
-                Divider()
-                    .background(Color.white.opacity(0.1))
-                
+                Divider().overlay(c.divider)
+
                 // Right: Detail View (Preview)
                 PreviewView(item: selectedItem)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -368,15 +366,20 @@ struct MainView: View {
     
     private var dsc: DSColors { DSColors(scheme: scheme) }
 
-    // 历史 / 收藏 segmented tabs
+    // 历史 / 收藏 underline tabs
     private var viewModeTabs: some View {
-        HStack(spacing: 4) {
-            tabSegment("历史", mode: .history)
-            tabSegment("收藏", mode: .favorites)
+        HStack(spacing: 18) {
+            tabSegment(mode: .history) { Text("历史") }
+            tabSegment(mode: .favorites) {
+                HStack(spacing: 5) {
+                    Text("收藏")
+                    DSKeyBadge(label: "⇥")
+                }
+            }
         }
     }
 
-    private func tabSegment(_ label: String, mode: ViewMode) -> some View {
+    private func tabSegment<Label: View>(mode: ViewMode, @ViewBuilder label: () -> Label) -> some View {
         let c = dsc
         let selected = viewMode == mode
         return Button(action: {
@@ -384,15 +387,17 @@ struct MainView: View {
                 viewMode = mode
             }
         }) {
-            Text(label)
-                .font(.system(size: 12, weight: selected ? .semibold : .regular))
-                .foregroundColor(selected ? c.accent : c.text2)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(selected ? c.accentSoft : Color.clear)
-                )
+            label()
+                .font(.system(size: 13, weight: selected ? .semibold : .medium))
+                .foregroundColor(selected ? c.text : c.text2)
+                .padding(.bottom, 7)
+                .overlay(alignment: .bottom) {
+                    if selected {
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(c.accent)
+                            .frame(height: 2)
+                    }
+                }
         }
         .buttonStyle(.plain)
     }
@@ -409,14 +414,12 @@ struct MainView: View {
                     }
                 }) {
                     Text(filter.label)
-                        .font(.system(size: 11, weight: selected ? .semibold : .regular))
+                        .font(.system(size: 11.5, weight: .semibold))
                         .foregroundColor(selected ? .white : c.text2)
-                        .padding(.horizontal, 8)
+                        .padding(.horizontal, 9)
                         .padding(.vertical, 3)
-                        .background(
-                            Capsule()
-                                .fill(selected ? c.accent : c.chip)
-                        )
+                        .background(selected ? c.accent : c.chip)
+                        .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
                 }
                 .buttonStyle(.plain)
             }
