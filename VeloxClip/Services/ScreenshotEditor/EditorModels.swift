@@ -15,7 +15,22 @@ enum EditorTool: String, CaseIterable, Identifiable {
     case eraser = "Eraser"
     
     var id: String { rawValue }
-    
+
+    /// User-facing Chinese name for the tool (used for hover tooltips).
+    var displayName: String {
+        switch self {
+        case .pen: return "画笔"
+        case .arrow: return "箭头"
+        case .rectangle: return "矩形"
+        case .circle: return "椭圆"
+        case .line: return "直线"
+        case .highlight: return "高亮"
+        case .text: return "文字"
+        case .mosaic: return "马赛克"
+        case .eraser: return "橡皮擦"
+        }
+    }
+
     var icon: String {
         switch self {
         case .pen: return "pencil"

@@ -124,7 +124,7 @@ struct ClipboardItemRow: View {
                     .foregroundColor(isSelected ? .white : c.text)
 
                 HStack {
-                    Text(item.sourceApp ?? "Unknown")
+                    Text(item.sourceApp ?? "未知")
                         .fontWeight(.medium)
                     Text("•")
                     Text(item.createdAt, style: .time)
@@ -145,7 +145,7 @@ struct ClipboardItemRow: View {
                         .foregroundColor(.white)
                 }
                 .onTapGesture { onToggleStage() }
-                .help("In paste queue — click to remove")
+                .help("已在粘贴队列 — 点击移除")
             } else if isHovering {
                 Button(action: onToggleStage) {
                     Image(systemName: "plus.circle")
@@ -153,7 +153,7 @@ struct ClipboardItemRow: View {
                         .foregroundColor(isSelected ? .white : c.text2)
                 }
                 .buttonStyle(.plain)
-                .help("Add to paste queue (Space)")
+                .help("加入粘贴队列（Space）")
             } else if isSelected {
                 DSKeyBadge(label: "⏎", onAccent: true)
             } else if index < 9 {
@@ -213,7 +213,7 @@ struct ClipboardItemRow: View {
             let paths = content.components(separatedBy: .newlines).filter { !$0.isEmpty }
             let firstName = URL(fileURLWithPath: paths.first ?? content).lastPathComponent
             if paths.count > 1 {
-                return "\(paths.count) files — \(firstName), …"
+                return "\(paths.count) 个文件 — \(firstName)…"
             }
             return firstName
         }
@@ -221,12 +221,12 @@ struct ClipboardItemRow: View {
             return content.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         if item.type == "image" {
-            return "Image Data"
+            return "图片数据"
         }
         if item.type == "rtf" {
-            return "Rich Text"
+            return "富文本"
         }
-        return "Unknown Content"
+        return "未知内容"
     }
 }
 

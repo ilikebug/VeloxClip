@@ -378,7 +378,7 @@ struct ScreenshotEditorView: View {
                     .foregroundColor(selected ? .white : c.text2)
             }
             .buttonStyle(.plain)
-            .help(tool.rawValue)
+            .help(tool.displayName)
         }
     }
 

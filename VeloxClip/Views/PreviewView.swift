@@ -88,7 +88,7 @@ struct PreviewView: View {
     private func headerView(for displayItem: ClipboardItem) -> some View {
         let c = DSColors(scheme: scheme)
         HStack(spacing: 10) {
-            Text(displayItem.type.capitalized)
+            Text(displayItem.localizedTypeName)
                 .font(.system(size: 13.5, weight: .semibold))
                 .foregroundColor(c.text)
                 .lineLimit(1)

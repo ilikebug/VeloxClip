@@ -25,6 +25,18 @@ struct ClipboardItem: Identifiable, Codable, Hashable, Equatable {
         Self.decodeVector(embedding)
     }
 
+    /// User-facing Chinese name for the clipboard type.
+    var localizedTypeName: String {
+        switch type {
+        case "text":  return "文本"
+        case "image": return "图片"
+        case "file":  return "文件"
+        case "color": return "颜色"
+        case "rtf":   return "富文本"
+        default:      return type.capitalized
+        }
+    }
+
     init(type: String, content: String? = nil, data: Data? = nil, sourceApp: String? = nil) {
         self.id = UUID()
         self.createdAt = Date()

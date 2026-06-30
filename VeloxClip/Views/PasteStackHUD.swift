@@ -321,7 +321,7 @@ struct PasteStackHUDView: View {
                 .foregroundColor(c.text2)
                 .padding(.top, 2)
 
-            Text("位置可在设置中改 · 默认右下角")
+            Text("位置可在设置中改 · 默认底部居中")
                 .font(.system(size: 11.5))
                 .foregroundColor(c.text2)
                 .padding(.top, 12)
@@ -336,10 +336,6 @@ struct PasteStackHUDView: View {
         if let content = item.content, !content.isEmpty {
             return String(content.trimmingCharacters(in: .whitespacesAndNewlines).prefix(30))
         }
-        switch item.type {
-        case "image": return "图片"
-        case "rtf": return "富文本"
-        default: return item.type
-        }
+        return item.localizedTypeName
     }
 }

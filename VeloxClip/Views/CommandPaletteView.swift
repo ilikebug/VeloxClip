@@ -124,14 +124,8 @@ struct CommandPaletteView: View {
     }
 
     private var typeLabel: String {
-        switch item?.type {
-        case "image": return "图片"
-        case "file":  return "文件"
-        case "rtf":   return "富文本"
-        case "color": return "颜色"
-        case .none:   return "无选中项"
-        default:      return "文本"
-        }
+        guard let item else { return "无选中项" }
+        return item.localizedTypeName
     }
 
     // MARK: Command list
