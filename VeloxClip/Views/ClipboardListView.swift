@@ -1,6 +1,32 @@
 import SwiftUI
 import SwiftData
 
+enum EmptyKind {
+    case historyEmpty, noMatch, favoritesEmpty
+
+    var icon: String {
+        switch self {
+        case .historyEmpty:   return "doc.on.clipboard"
+        case .noMatch:        return "magnifyingglass"
+        case .favoritesEmpty: return "star"
+        }
+    }
+    var title: String {
+        switch self {
+        case .historyEmpty:   return "还没有剪贴记录"
+        case .noMatch:        return "无匹配"
+        case .favoritesEmpty: return "还没有收藏"
+        }
+    }
+    var subtitle: String {
+        switch self {
+        case .historyEmpty:   return "复制点什么，这里就会出现"
+        case .noMatch:        return "试别的词，或切到收藏"
+        case .favoritesEmpty: return "在详情里点 ★ 收藏常用项"
+        }
+    }
+}
+
 struct ClipboardListView: View {
     @ObservedObject var store = ClipboardStore.shared
     @ObservedObject var pasteStack = PasteStackService.shared
@@ -9,9 +35,13 @@ struct ClipboardListView: View {
     // Set by keyboard navigation only — mouse clicks must not auto-scroll the list,
     // or rows shift under the cursor and selection feels janky
     @Binding var scrollTarget: UUID?
+    var emptyKind: EmptyKind
 
     var body: some View {
-        ScrollViewReader { proxy in
+        if items.isEmpty {
+            EmptyStateView(icon: emptyKind.icon, title: emptyKind.title, subtitle: emptyKind.subtitle)
+        } else {
+            ScrollViewReader { proxy in
             List(selection: $selectedItem) {
                 ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                     ClipboardItemRow(
@@ -47,9 +77,10 @@ struct ClipboardListView: View {
                 }
                 scrollTarget = nil
             }
+            }
         }
     }
-    
+
     private func deleteItems(offsets: IndexSet) {
         Task {
             await store.deleteItems(at: offsets, in: items)

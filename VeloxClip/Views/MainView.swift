@@ -35,7 +35,12 @@ struct MainView: View {
         guard typeFilter != .all else { return base }
         return base.filter { typeFilter.matches($0) }
     }
-    
+
+    private var emptyKind: EmptyKind {
+        if !searchText.isEmpty { return .noMatch }
+        return viewMode == .favorites ? .favoritesEmpty : .historyEmpty
+    }
+
     private func updateSearchResults() {
         searchTask?.cancel()
         
@@ -233,7 +238,7 @@ struct MainView: View {
                     .padding(.top, 9)
                     .padding(.bottom, 8)
                     Divider().overlay(c.divider)
-                    ClipboardListView(selectedItem: $selectedItem, items: displayItems, scrollTarget: $scrollTarget)
+                    ClipboardListView(selectedItem: $selectedItem, items: displayItems, scrollTarget: $scrollTarget, emptyKind: emptyKind)
                 }
                 .frame(width: 320)
                 .background(Color.primary.opacity(0.03))
