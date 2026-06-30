@@ -11,11 +11,15 @@ enum ClipboardTypeFilter: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 
     var label: String {
+        label(language: .zhHans)
+    }
+
+    func label(language: AppLanguage = .zhHans) -> String {
         switch self {
-        case .all: return "全部"
-        case .text: return "文本"
-        case .image: return "图片"
-        case .file: return "文件"
+        case .all: return L10n.string("filter.all", language: language)
+        case .text: return L10n.string("filter.text", language: language)
+        case .image: return L10n.string("filter.image", language: language)
+        case .file: return L10n.string("filter.file", language: language)
         }
     }
 

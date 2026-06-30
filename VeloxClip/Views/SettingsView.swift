@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(\.colorScheme) private var scheme
+    @ObservedObject private var settings = AppSettings.shared
     @State private var section: SettingsSectionID = .appearance
 
     enum SettingsSectionID: CaseIterable {
@@ -9,11 +10,11 @@ struct SettingsView: View {
 
         var title: String {
             switch self {
-            case .appearance: return "外观"
-            case .history:    return "历史"
-            case .pasteStack: return "Paste Stack"
-            case .shortcuts:  return "快捷键"
-            case .advanced:   return "高级"
+            case .appearance: return L10n.string("settings.section.appearance")
+            case .history:    return L10n.string("settings.section.history")
+            case .pasteStack: return L10n.string("settings.section.pasteStack")
+            case .shortcuts:  return L10n.string("settings.section.shortcuts")
+            case .advanced:   return L10n.string("settings.section.advanced")
             }
         }
 
@@ -36,6 +37,7 @@ struct SettingsView: View {
         }
         .frame(width: 720, height: 460)
         .background(c.window)
+        .environment(\.locale, L10n.locale(for: settings.appLanguage))
     }
 
     // MARK: Sidebar
@@ -144,7 +146,7 @@ private struct SettingRow<Control: View>: View {
     }
 }
 
-// MARK: - 外观
+// MARK: - Appearance
 
 private struct AppearanceSection: View {
     @Environment(\.colorScheme) private var scheme
@@ -153,19 +155,32 @@ private struct AppearanceSection: View {
     var body: some View {
         let c = DSColors(scheme: scheme)
         VStack(alignment: .leading, spacing: 0) {
-            SectionHeader(title: "外观")
+            SectionHeader(title: L10n.string("settings.section.appearance"))
 
-            SettingRow(label: "主题") {
+            SettingRow(label: L10n.string("settings.language")) {
                 DSSegmented(
-                    selection: $settings.appearance,
-                    options: [("light", "浅色"), ("dark", "深色"), ("system", "跟随系统")]
+                    selection: $settings.appLanguage,
+                    options: AppLanguage.allCases.map { language in
+                        (language, language.displayName(language: settings.appLanguage))
+                    }
                 )
             }
 
-            SettingRow(label: "强调色", bottom: 0) {
+            SettingRow(label: L10n.string("settings.theme")) {
+                DSSegmented(
+                    selection: $settings.appearance,
+                    options: [
+                        ("light", L10n.string("settings.theme.light")),
+                        ("dark", L10n.string("settings.theme.dark")),
+                        ("system", L10n.string("settings.theme.system"))
+                    ]
+                )
+            }
+
+            SettingRow(label: L10n.string("settings.accentColor"), bottom: 0) {
                 HStack(spacing: 8) {
                     Circle().fill(c.accent).frame(width: 13, height: 13)
-                    Text("跟随系统")
+                    Text(L10n.string("settings.theme.system"))
                         .font(.system(size: 12.5))
                         .foregroundColor(c.text2)
                 }
@@ -174,23 +189,23 @@ private struct AppearanceSection: View {
     }
 }
 
-// MARK: - 历史
+// MARK: - History
 
 private struct HistorySection: View {
     @ObservedObject var settings = AppSettings.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SectionHeader(title: "历史")
+            SectionHeader(title: L10n.string("settings.section.history"))
 
-            SettingRow(label: "历史上限") {
+            SettingRow(label: L10n.string("settings.historyLimit")) {
                 DSSegmented(
                     selection: $settings.historyLimit,
                     options: [(50, "50"), (100, "100"), (500, "500"), (1000, "1000")]
                 )
             }
 
-            SettingRow(label: "开机启动", bottom: 0) {
+            SettingRow(label: L10n.string("settings.launchAtLogin"), bottom: 0) {
                 Toggle("", isOn: $settings.launchAtLogin)
                     .toggleStyle(.dsSwitch)
                     .labelsHidden()
@@ -207,17 +222,23 @@ private struct PasteStackSection: View {
     @ObservedObject var settings = AppSettings.shared
 
     // 2 rows × 3 cols of corner positions; "custom" only surfaces if already custom
-    private let cells: [(value: String, label: String)] = [
-        ("topLeft", "左上"), ("topCenter", "顶部"), ("topRight", "右上"),
-        ("bottomLeft", "左下"), ("bottomCenter", "底部"), ("bottomRight", "右下")
-    ]
+    private var cells: [(value: String, label: String)] {
+        [
+            ("topLeft", L10n.string("settings.position.topLeft")),
+            ("topCenter", L10n.string("settings.position.topCenter")),
+            ("topRight", L10n.string("settings.position.topRight")),
+            ("bottomLeft", L10n.string("settings.position.bottomLeft")),
+            ("bottomCenter", L10n.string("settings.position.bottomCenter")),
+            ("bottomRight", L10n.string("settings.position.bottomRight"))
+        ]
+    }
 
     var body: some View {
         let c = DSColors(scheme: scheme)
         VStack(alignment: .leading, spacing: 0) {
-            SectionHeader(title: "Paste Stack")
+            SectionHeader(title: L10n.string("settings.section.pasteStack"))
 
-            SettingRow(label: "显示进度浮窗") {
+            SettingRow(label: L10n.string("settings.showPasteStackHUD")) {
                 Toggle("", isOn: $settings.showPasteStackHUD)
                     .toggleStyle(.dsSwitch)
                     .labelsHidden()
@@ -225,12 +246,12 @@ private struct PasteStackSection: View {
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("浮窗位置")
+                Text(L10n.string("settings.hudPosition"))
                     .font(.system(size: 13.5))
                     .foregroundColor(c.text)
                 positionGrid(c)
                 if settings.pasteStackHUDPosition == "custom" {
-                    Text("当前为自定义位置（拖拽设定）")
+                    Text(L10n.string("settings.hudCustomPosition"))
                         .font(.system(size: 11.5))
                         .foregroundColor(c.text2)
                 }
@@ -260,19 +281,19 @@ private struct PasteStackSection: View {
     }
 }
 
-// MARK: - 快捷键
+// MARK: - Shortcuts
 
 private struct ShortcutsSection: View {
     @ObservedObject var settings = AppSettings.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SectionHeader(title: "快捷键")
+            SectionHeader(title: L10n.string("settings.section.shortcuts"))
 
-            shortcutRow("唤起浮层", shortcut: $settings.globalShortcut)
-            shortcutRow("截图标注", shortcut: $settings.screenshotShortcut)
-            shortcutRow("屏幕取词", shortcut: $settings.textCaptureShortcut)
-            shortcutRow("粘贴图片", shortcut: $settings.pasteImageShortcut, bottom: 0)
+            shortcutRow(L10n.string("settings.shortcut.overlay"), shortcut: $settings.globalShortcut)
+            shortcutRow(L10n.string("settings.shortcut.screenshot"), shortcut: $settings.screenshotShortcut)
+            shortcutRow(L10n.string("settings.shortcut.textCapture"), shortcut: $settings.textCaptureShortcut)
+            shortcutRow(L10n.string("settings.shortcut.pasteImage"), shortcut: $settings.pasteImageShortcut, bottom: 0)
         }
         // Re-registration is driven by AppSettings' didSet on each shortcut
         // property, so binding changes here already update ShortcutManager —
@@ -287,20 +308,20 @@ private struct ShortcutsSection: View {
     }
 }
 
-// MARK: - 高级
+// MARK: - Advanced
 
 private struct AdvancedSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SectionHeader(title: "高级")
+            SectionHeader(title: L10n.string("settings.section.advanced"))
 
             HStack(spacing: 12) {
-                Button("清缓存") {
+                Button(L10n.string("settings.clearCache")) {
                     CacheManager.shared.clearAllCaches()
                 }
                 .dsButton(.secondary)
 
-                Button("清历史") {
+                Button(L10n.string("settings.clearHistory")) {
                     ClipboardStore.shared.clearAll()
                 }
                 .dsButton(.destructive)

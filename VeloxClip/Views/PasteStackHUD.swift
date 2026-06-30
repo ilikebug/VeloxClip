@@ -164,6 +164,7 @@ final class PasteStackHUDController {
 
 struct PasteStackHUDView: View {
     @ObservedObject var stack = PasteStackService.shared
+    @ObservedObject private var settings = AppSettings.shared
     @Environment(\.colorScheme) private var scheme
 
     // Kit panel width
@@ -206,7 +207,7 @@ struct PasteStackHUDView: View {
                 Image(systemName: "square.stack.3d.up.fill")
                     .font(.system(size: 13))
                     .foregroundColor(c.accent)
-                Text("Paste Stack")
+                Text(L10n.string("hud.title", language: settings.appLanguage))
                     .font(.system(size: 12, weight: .semibold))
                     .textCase(.uppercase)
                     .kerning(0.04 * 12)
@@ -319,7 +320,7 @@ struct PasteStackHUDView: View {
                 Image(systemName: "pause.fill")
                     .font(.system(size: 11))
                     .foregroundColor(.orange)
-                Text("已暂停 — 你复制了新内容")
+                Text(L10n.string("hud.paused.message", language: settings.appLanguage))
                     .font(.system(size: 11.5))
                     .foregroundColor(c.text)
                     .lineSpacing(11.5 * 0.4)
@@ -331,12 +332,12 @@ struct PasteStackHUDView: View {
 
             HStack(spacing: 8) {
                 Button(action: { stack.resume() }) {
-                    Text("继续").frame(maxWidth: .infinity)
+                    Text(L10n.string("hud.resume", language: settings.appLanguage)).frame(maxWidth: .infinity)
                 }
                 .dsButton(.prominent)
 
                 Button(action: { stack.cancel() }) {
-                    Text("放弃").frame(maxWidth: .infinity)
+                    Text(L10n.string("hud.cancel", language: settings.appLanguage)).frame(maxWidth: .infinity)
                 }
                 .dsButton(.secondary)
             }
@@ -360,17 +361,17 @@ struct PasteStackHUDView: View {
             }
             .padding(.top, 18)
 
-            Text("已粘贴 \(stack.queue.count) 项")
+            Text(L10n.format("hud.completed.count", stack.queue.count, language: settings.appLanguage))
                 .font(.system(size: 13.5, weight: .semibold))
                 .foregroundColor(c.text)
                 .padding(.top, 12)
 
-            Text("序列完成")
+            Text(L10n.string("hud.completed.title", language: settings.appLanguage))
                 .font(.system(size: 12))
                 .foregroundColor(c.text2)
                 .padding(.top, 2)
 
-            Text("位置可在设置中改 · 默认底部居中")
+            Text(L10n.string("hud.completed.hint", language: settings.appLanguage))
                 .font(.system(size: 11.5))
                 .foregroundColor(c.text2)
                 .padding(.top, 12)
@@ -385,6 +386,6 @@ struct PasteStackHUDView: View {
         if let content = item.content, !content.isEmpty {
             return String(content.trimmingCharacters(in: .whitespacesAndNewlines).prefix(30))
         }
-        return item.localizedTypeName
+        return item.localizedTypeName(language: settings.appLanguage)
     }
 }

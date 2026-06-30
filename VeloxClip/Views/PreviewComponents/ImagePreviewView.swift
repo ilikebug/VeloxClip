@@ -5,6 +5,7 @@ import AppKit
 struct ImagePreviewView: View {
     @Environment(\.colorScheme) private var scheme
     let imageData: Data
+    @ObservedObject private var settings = AppSettings.shared
     private let layoutPolicy = ImagePreviewLayoutPolicy.detailImage
     @State private var zoomLevel: CGFloat = ImagePreviewLayoutPolicy.detailImage.defaultZoomLevel
     @State private var imageContainerWidth: CGFloat = 0
@@ -31,7 +32,7 @@ struct ImagePreviewView: View {
                 zoomControls
                 infoSection
             } else {
-                Text("无法加载图片").font(.system(size: 12)).foregroundColor(c.text2)
+                Text(L10n.string("preview.image.loadFailed", language: settings.appLanguage)).font(.system(size: 12)).foregroundColor(c.text2)
             }
         }
         .task(id: imageData) {
@@ -43,7 +44,7 @@ struct ImagePreviewView: View {
         let c = DSColors(scheme: scheme)
         return VStack(spacing: 12) {
             ProgressView()
-            Text("加载图片中…").font(.system(size: 11)).foregroundColor(c.text2)
+            Text(L10n.string("preview.image.loading", language: settings.appLanguage)).font(.system(size: 11)).foregroundColor(c.text2)
         }
         .frame(maxWidth: .infinity).padding(.vertical, 40)
     }
@@ -113,7 +114,7 @@ struct ImagePreviewView: View {
             .dsButton(small: true)
             .disabled(zoomLevel >= layoutPolicy.maximumZoomLevel)
 
-            Button("适应") { zoomLevel = layoutPolicy.defaultZoomLevel }.dsButton(small: true)
+            Button(L10n.string("preview.image.fit", language: settings.appLanguage)) { zoomLevel = layoutPolicy.defaultZoomLevel }.dsButton(small: true)
 
             Spacer()
         }
@@ -125,11 +126,11 @@ struct ImagePreviewView: View {
         let c = DSColors(scheme: scheme)
         if let info = imageInfo {
             VStack(alignment: .leading, spacing: 12) {
-                Text("信息").font(.system(size: 13, weight: .semibold)).foregroundColor(c.text)
+                Text(L10n.string("preview.image.info", language: settings.appLanguage)).font(.system(size: 13, weight: .semibold)).foregroundColor(c.text)
                 Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 8) {
-                    imageInfoRow(label: "尺寸", value: "\(Int(info.size.width)) × \(Int(info.size.height)) px")
-                    imageInfoRow(label: "文件大小", value: formatFileSize(info.fileSize))
-                    imageInfoRow(label: "格式", value: info.format)
+                    imageInfoRow(label: L10n.string("preview.image.dimensions", language: settings.appLanguage), value: "\(Int(info.size.width)) × \(Int(info.size.height)) px")
+                    imageInfoRow(label: L10n.string("preview.image.fileSize", language: settings.appLanguage), value: formatFileSize(info.fileSize))
+                    imageInfoRow(label: L10n.string("preview.image.format", language: settings.appLanguage), value: info.format)
                 }
             }
             .padding(16)

@@ -16,18 +16,22 @@ enum EditorTool: String, CaseIterable, Identifiable {
     
     var id: String { rawValue }
 
-    /// User-facing Chinese name for the tool (used for hover tooltips).
+    /// User-facing name for the tool (used for hover tooltips). Defaults to Chinese for legacy callers.
     var displayName: String {
+        displayName(language: .zhHans)
+    }
+
+    func displayName(language: AppLanguage) -> String {
         switch self {
-        case .pen: return "画笔"
-        case .arrow: return "箭头"
-        case .rectangle: return "矩形"
-        case .circle: return "椭圆"
-        case .line: return "直线"
-        case .highlight: return "高亮"
-        case .text: return "文字"
-        case .mosaic: return "马赛克"
-        case .eraser: return "橡皮擦"
+        case .pen: return L10n.string("screenshot.tool.pen", language: language)
+        case .arrow: return L10n.string("screenshot.tool.arrow", language: language)
+        case .rectangle: return L10n.string("screenshot.tool.rectangle", language: language)
+        case .circle: return L10n.string("screenshot.tool.circle", language: language)
+        case .line: return L10n.string("screenshot.tool.line", language: language)
+        case .highlight: return L10n.string("screenshot.tool.highlight", language: language)
+        case .text: return L10n.string("screenshot.tool.text", language: language)
+        case .mosaic: return L10n.string("screenshot.tool.mosaic", language: language)
+        case .eraser: return L10n.string("screenshot.tool.eraser", language: language)
         }
     }
 
@@ -113,4 +117,3 @@ extension Color {
         .indigo, .mint, .teal, .secondary
     ]
 }
-

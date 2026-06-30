@@ -4,6 +4,7 @@ import SwiftUI
 struct VeloxClipApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var monitor = ClipboardMonitor()
+    @StateObject private var settings = AppSettings.shared
     
     @Environment(\.openWindow) var openWindow
     
@@ -11,6 +12,7 @@ struct VeloxClipApp: App {
         // No WindowGroup for main app, but we need one for Settings
         WindowGroup(id: "settings") {
             SettingsView()
+                .environment(\.locale, L10n.locale(for: settings.appLanguage))
         }
         .windowResizability(.contentSize)
         .defaultSize(width: 500, height: 350)
@@ -20,6 +22,7 @@ struct VeloxClipApp: App {
                 openWindow(id: "settings")
                 NSApp.activate(ignoringOtherApps: true)
             })
+            .environment(\.locale, L10n.locale(for: settings.appLanguage))
         } label: {
             MenuBarLabel()
         }
@@ -30,6 +33,7 @@ struct VeloxClipApp: App {
 struct MenuBarDashboard: View {
     @ObservedObject var store = ClipboardStore.shared
     @ObservedObject var stack = PasteStackService.shared
+    @ObservedObject var settings = AppSettings.shared
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dismiss) private var dismiss
     let openSettings: () -> Void
@@ -76,7 +80,7 @@ struct MenuBarDashboard: View {
                 Text("VeloxClip")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(c.text)
-                Text(presentation.statusText)
+                Text(presentation.statusText(language: settings.appLanguage))
                     .font(.system(size: 11.5))
                     .foregroundColor(c.text2)
             }
@@ -103,9 +107,9 @@ struct MenuBarDashboard: View {
 
     private func stats(_ c: DSColors) -> some View {
         HStack(spacing: 8) {
-            statCard("历史", presentation.historyValue, icon: "clock.arrow.circlepath", c)
-            statCard("收藏", presentation.favoriteValue, icon: "star", c)
-            statCard("队列", presentation.queueValue, icon: "square.stack.3d.up", c)
+            statCard(L10n.string("menubar.stat.history", language: settings.appLanguage), presentation.historyValue, icon: "clock.arrow.circlepath", c)
+            statCard(L10n.string("menubar.stat.favorites", language: settings.appLanguage), presentation.favoriteValue, icon: "star", c)
+            statCard(L10n.string("menubar.stat.queue", language: settings.appLanguage), presentation.queueValue, icon: "square.stack.3d.up", c)
         }
         .padding(.horizontal, 14)
         .padding(.bottom, 12)
@@ -132,22 +136,22 @@ struct MenuBarDashboard: View {
 
     private func quickActions(_ c: DSColors) -> some View {
         LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
-            dashboardAction("打开剪贴板", icon: "rectangle.stack", isPrimary: true, c: c) {
+            dashboardAction(L10n.string("menubar.action.openClipboard", language: settings.appLanguage), icon: "rectangle.stack", isPrimary: true, c: c) {
                 performDashboardAction(.openClipboard) {
                     WindowManager.shared.toggleWindow()
                 }
             }
-            dashboardAction("粘贴图片", icon: "photo.on.rectangle", c: c) {
+            dashboardAction(L10n.string("menubar.action.pasteImage", language: settings.appLanguage), icon: "photo.on.rectangle", c: c) {
                 performDashboardAction(.pasteImage) {
                     PasteImageService.shared.showPasteImage()
                 }
             }
-            dashboardAction("屏幕取词", icon: "text.viewfinder", c: c) {
+            dashboardAction(L10n.string("menubar.action.captureText", language: settings.appLanguage), icon: "text.viewfinder", c: c) {
                 performDashboardAction(.captureText) {
                     TextCaptureService.shared.captureText()
                 }
             }
-            dashboardAction("设置", icon: "gearshape", c: c) {
+            dashboardAction(L10n.string("menubar.action.settings", language: settings.appLanguage), icon: "gearshape", c: c) {
                 performDashboardAction(.settings) {
                     openSettings()
                 }
@@ -189,13 +193,13 @@ struct MenuBarDashboard: View {
                 Divider().overlay(c.divider)
                 HStack(spacing: 8) {
                     if stack.phase == .paused {
-                        dashboardAction("继续队列", icon: "play.fill", isPrimary: true, c: c) {
+                        dashboardAction(L10n.string("menubar.action.resumeQueue", language: settings.appLanguage), icon: "play.fill", isPrimary: true, c: c) {
                             performDashboardAction(.resumeQueue) {
                                 stack.resume()
                             }
                         }
                     }
-                    dashboardAction("取消队列", icon: "xmark", c: c) {
+                    dashboardAction(L10n.string("menubar.action.cancelQueue", language: settings.appLanguage), icon: "xmark", c: c) {
                         performDashboardAction(.cancelQueue) {
                             stack.cancel()
                         }
@@ -208,13 +212,13 @@ struct MenuBarDashboard: View {
             VStack(spacing: 8) {
                 Divider().overlay(c.divider)
                 HStack(spacing: 8) {
-                    dashboardAction("开始队列", icon: "play.fill", isPrimary: true, c: c) {
+                    dashboardAction(L10n.string("menubar.action.startQueue", language: settings.appLanguage), icon: "play.fill", isPrimary: true, c: c) {
                         Task { @MainActor in
                             await stack.startIfStaged()
                             finishDashboardAction(.startQueue)
                         }
                     }
-                    dashboardAction("清空队列", icon: "trash", c: c) {
+                    dashboardAction(L10n.string("menubar.action.clearQueue", language: settings.appLanguage), icon: "trash", c: c) {
                         performDashboardAction(.clearQueue) {
                             stack.clearStaged()
                         }
@@ -253,7 +257,7 @@ struct MenuBarDashboard: View {
                         .minimumScaleFactor(0.8)
                 }
                 Spacer()
-                Button("退出") {
+                Button(L10n.string("menubar.quit", language: settings.appLanguage)) {
                     NSApplication.shared.terminate(nil)
                 }
                 .buttonStyle(.plain)

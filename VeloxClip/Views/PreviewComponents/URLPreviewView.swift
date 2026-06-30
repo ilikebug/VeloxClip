@@ -6,6 +6,7 @@ import CoreImage.CIFilterBuiltins
 struct URLPreviewView: View {
     @Environment(\.colorScheme) private var scheme
     let urlString: String
+    @ObservedObject private var settings = AppSettings.shared
     @State private var urlInfo: URLInfo?
     @State private var isLoading = false
 
@@ -62,7 +63,7 @@ struct URLPreviewView: View {
                     HStack {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundColor(.orange)
-                        Text("无效链接")
+                        Text(L10n.string("preview.url.invalid", language: settings.appLanguage))
                             .font(.system(size: 12))
                             .foregroundColor(.orange)
                     }
@@ -73,7 +74,7 @@ struct URLPreviewView: View {
                 HStack {
                     ProgressView()
                         .scaleEffect(0.7)
-                    Text("加载链接信息…")
+                    Text(L10n.string("preview.url.loading", language: settings.appLanguage))
                         .font(.system(size: 11))
                         .foregroundColor(c.text2)
                 }
@@ -95,13 +96,13 @@ struct URLPreviewView: View {
             if let url = urlInfo?.url, urlInfo?.isValid == true {
                 HStack(spacing: 8) {
                     Button(action: { openURL(url) }) {
-                        Label("打开链接", systemImage: "safari")
+                        Label(L10n.string("preview.url.open", language: settings.appLanguage), systemImage: "safari")
                             .frame(maxWidth: .infinity)
                     }
                     .dsButton(.prominent)
 
                     Button(action: { copyURL() }) {
-                        Label("复制", systemImage: "doc.on.doc")
+                        Label(L10n.string("command.copy", language: settings.appLanguage), systemImage: "doc.on.doc")
                     }
                     .dsButton(.secondary)
                 }
@@ -151,4 +152,3 @@ struct URLPreviewView: View {
         NSWorkspace.shared.open(url)
     }
 }
-

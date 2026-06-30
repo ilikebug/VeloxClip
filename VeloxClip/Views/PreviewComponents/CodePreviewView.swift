@@ -5,6 +5,7 @@ import AppKit
 struct CodePreviewView: View {
     @Environment(\.colorScheme) private var scheme
     let code: String
+    @ObservedObject private var settings = AppSettings.shared
     @State private var detectedLanguage: String = "Plain Text"
     @State private var showLineNumbers = true
     @State private var fontSize: CGFloat = 13
@@ -90,7 +91,7 @@ struct CodePreviewView: View {
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
 
-            Toggle("行号", isOn: $showLineNumbers).toggleStyle(.dsSwitch)
+            Toggle(L10n.string("preview.code.lineNumbers", language: settings.appLanguage), isOn: $showLineNumbers).toggleStyle(.dsSwitch)
 
             HStack(spacing: 8) {
                 Button(action: { fontSize = max(10, fontSize - 1) }) { Image(systemName: "minus") }
@@ -102,7 +103,7 @@ struct CodePreviewView: View {
 
             Spacer()
 
-            Button("格式化", action: formatCode).dsButton(small: true)
+            Button(L10n.string("preview.code.format", language: settings.appLanguage), action: formatCode).dsButton(small: true)
         }
         .padding(.bottom, 4)
     }
@@ -117,7 +118,7 @@ struct CodePreviewView: View {
 
     // Display-only label; the internal "Plain Text" value is kept for detection logic.
     private func displayLanguage(_ lang: String) -> String {
-        lang == "Plain Text" ? "纯文本" : lang
+        lang == "Plain Text" ? L10n.string("preview.code.plainText", language: settings.appLanguage) : lang
     }
 
     private func codeScrollView(availableWidth: CGFloat) -> some View {
@@ -285,5 +286,4 @@ struct CodePreviewView: View {
         NSPasteboard.general.setString(formatted.joined(separator: "\n"), forType: .string)
     }
 }
-
 

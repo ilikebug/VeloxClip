@@ -4,6 +4,7 @@
 APP_NAME="VeloxClip"
 BUNDLE_ID="com.antigravity.veloxclip"
 EXECUTABLE_NAME="VeloxClip"
+RESOURCE_BUNDLE_NAME="VeloxClip_VeloxClip.bundle"
 BUILD_CONFIG="release"
 BUILD_PATH=".build"
 
@@ -54,6 +55,7 @@ MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
 
 echo "[Directory] Creating app bundle structure..."
+rm -rf "$APP_BUNDLE"
 mkdir -p "$MACOS_DIR"
 mkdir -p "$RESOURCES_DIR"
 
@@ -65,7 +67,20 @@ if [ ! -f "$BINARY_PATH" ]; then
 fi
 cp "$BINARY_PATH" "$MACOS_DIR/"
 
-# 3.1 Copy App Icon (if it exists)
+# 3.1 Copy localized resources from the SwiftPM resource bundle.
+# L10n first looks in Bundle.main (Contents/Resources in a macOS app), then
+# falls back to Bundle.module for `swift run` / tests.
+RESOURCE_BUNDLE_PATH="$ABS_BUILD_PATH/$BUILD_CONFIG/$RESOURCE_BUNDLE_NAME"
+if [ -d "$RESOURCE_BUNDLE_PATH" ]; then
+    echo "[Resources] Copying localized resources..."
+    find "$RESOURCE_BUNDLE_PATH" -maxdepth 1 -name "*.lproj" -type d -exec cp -R {} "$RESOURCES_DIR/" \;
+else
+    echo "[Error] Resource bundle not found at $RESOURCE_BUNDLE_PATH"
+    echo "[Error] Localized strings and other package resources would be missing from the app."
+    exit 1
+fi
+
+# 3.2 Copy App Icon (if it exists)
 if [ -f "VeloxClip/Resources/AppIcon.icns" ]; then
     echo "[Icon] Copying app icon..."
     cp "VeloxClip/Resources/AppIcon.icns" "$RESOURCES_DIR/"

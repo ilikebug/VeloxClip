@@ -67,6 +67,7 @@ enum ViewMode {
 
 struct MainView: View {
     @ObservedObject var store = ClipboardStore.shared
+    @ObservedObject var settings = AppSettings.shared
     @Environment(\.colorScheme) private var scheme
     @State private var selectedItem: ClipboardItem?
     @State private var searchText = ""
@@ -528,7 +529,7 @@ struct MainView: View {
                     .font(.system(size: 14))
                     .foregroundColor(c.text2)
 
-                TextField("搜索剪贴…", text: $searchText)
+                TextField(L10n.string("main.search.placeholder", language: settings.appLanguage), text: $searchText)
                     .textFieldStyle(.plain)
                     .font(.system(size: MainSearchBarLayout.fontSize))
                     .focused($isSearchFocused)
@@ -566,12 +567,12 @@ struct MainView: View {
             // Bottom action bar
             Divider().overlay(c.divider)
             HStack(spacing: 14) {
-                actionHint("粘贴", "⏎")
-                actionHint("详情", "⌘→")
-                actionHint("入栈", "⌘⏎")
-                actionHint("动作", "⌘K")
+                actionHint(L10n.string("main.action.paste", language: settings.appLanguage), "⏎")
+                actionHint(L10n.string("main.action.detail", language: settings.appLanguage), "⌘→")
+                actionHint(L10n.string("main.action.stack", language: settings.appLanguage), "⌘⏎")
+                actionHint(L10n.string("main.action.actions", language: settings.appLanguage), "⌘K")
                 Spacer()
-                Text("\(displayItems.count) 条")
+                Text(L10n.format("main.items.count", displayItems.count, language: settings.appLanguage))
                     .font(.system(size: 11))
                     .foregroundColor(c.text3)
             }
@@ -675,13 +676,15 @@ struct MainView: View {
     
     private var dsc: DSColors { DSColors(scheme: scheme) }
 
-    // 历史 / 收藏 underline tabs
+    // History / Favorites underline tabs
     private var viewModeTabs: some View {
         HStack(spacing: 18) {
-            tabSegment(mode: .history) { Text("历史") }
+            tabSegment(mode: .history) {
+                Text(L10n.string("main.tab.history", language: settings.appLanguage))
+            }
             tabSegment(mode: .favorites) {
                 HStack(spacing: 5) {
-                    Text("收藏")
+                    Text(L10n.string("main.tab.favorites", language: settings.appLanguage))
                     DSKeyBadge(label: "⇥")
                 }
             }
@@ -722,7 +725,7 @@ struct MainView: View {
                         typeFilter = filter
                     }
                 }) {
-                    Text(filter.label)
+                    Text(filter.label(language: settings.appLanguage))
                         .font(.system(size: 11.5, weight: .semibold))
                         .foregroundColor(selected ? .white : c.text2)
                         .padding(.horizontal, 9)

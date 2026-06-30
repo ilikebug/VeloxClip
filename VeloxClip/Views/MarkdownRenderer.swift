@@ -18,7 +18,8 @@ struct MarkdownChunk: Identifiable {
 
 struct MarkdownView: View {
     let markdown: String
-    
+    @ObservedObject private var settings = AppSettings.shared
+
     // Lazy loading state
     @State private var allChunks: [MarkdownChunk] = []
     @State private var loadedChunks: [MarkdownChunk] = []
@@ -59,7 +60,9 @@ struct MarkdownView: View {
         HStack {
             if isLoadingMore {
                 ProgressView().scaleEffect(0.7)
-                Text("Loading more...").font(.dsCaption).foregroundColor(.secondary)
+                Text(L10n.string("preview.markdown.loadingMore", language: settings.appLanguage))
+                    .font(.dsCaption)
+                    .foregroundColor(.secondary)
             }
         }
         .frame(maxWidth: .infinity).padding(.vertical, 8)
@@ -267,4 +270,3 @@ struct MarkdownChunkView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
-

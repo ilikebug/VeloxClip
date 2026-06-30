@@ -8,12 +8,13 @@ struct CommandPaletteView: View {
     let onExecute: (Command) -> Void
     let onClose: () -> Void
 
+    @ObservedObject private var settings = AppSettings.shared
     @State private var filter: String = ""
     @State private var selectedIndex: Int = 0
     @FocusState private var fieldFocused: Bool
 
     private var allCommands: [Command] {
-        CommandResolver.commands(forType: item?.type ?? "text")
+        CommandResolver.commands(forType: item?.type ?? "text", language: settings.appLanguage)
     }
 
     private var filteredCommands: [Command] {
@@ -83,7 +84,7 @@ struct CommandPaletteView: View {
         VStack(spacing: 9) {
             summaryChip(c)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            TextField("动作…", text: $filter)
+            TextField(L10n.string("command.search.placeholder", language: settings.appLanguage), text: $filter)
                 .textFieldStyle(.plain)
                 .font(.system(size: 14.5))
                 .foregroundColor(c.text)
@@ -125,8 +126,8 @@ struct CommandPaletteView: View {
     }
 
     private var typeLabel: String {
-        guard let item else { return "无选中项" }
-        return item.localizedTypeName
+        guard let item else { return L10n.string("command.noSelection", language: settings.appLanguage) }
+        return item.localizedTypeName(language: settings.appLanguage)
     }
 
     // MARK: Command list

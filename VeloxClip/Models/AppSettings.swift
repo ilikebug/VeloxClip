@@ -117,6 +117,18 @@ class AppSettings: ObservableObject {
         }
     }
 
+    @Published var appLanguage: AppLanguage {
+        willSet {
+            L10n.updateCurrentLanguage(newValue)
+        }
+        didSet {
+            guard !isInitializing else { return }
+            Task {
+                try? await dbManager.setSetting(key: "appLanguage", value: appLanguage.rawValue)
+            }
+        }
+    }
+
     private var isInitializing = true
 
     // True once loadSettings() has applied the persisted values. History
@@ -136,6 +148,7 @@ class AppSettings: ObservableObject {
         self.pasteStackHUDPosition = "bottomCenter"
         self.pasteStackHUDCustomOrigin = ""
         self.appearance = "light"
+        self.appLanguage = .system
 
 
         // Load settings from database asynchronously
@@ -249,6 +262,13 @@ class AppSettings: ObservableObject {
             try? await dbManager.setSetting(key: "appearance", value: "light")
         }
         await MainActor.run { self.applyAppearance() }
+
+        if let languageValue = await dbManager.getSetting(key: "appLanguage"),
+           let language = AppLanguage(rawValue: languageValue) {
+            await MainActor.run { self.appLanguage = language }
+        } else {
+            try? await dbManager.setSetting(key: "appLanguage", value: AppLanguage.system.rawValue)
+        }
 
         // LLM integration was removed — clean up any previously stored credentials/config
         // so an API key doesn't linger in the settings table

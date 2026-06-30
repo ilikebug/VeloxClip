@@ -4,6 +4,7 @@ import AppKit
 struct ScreenshotEditorView: View {
     let image: NSImage
     @ObservedObject var editorState: EditorState
+    @ObservedObject private var settings = AppSettings.shared
     let onSave: (NSImage) -> Void
     let onDone: (NSImage) -> Void
     let onClose: () -> Void
@@ -214,6 +215,7 @@ struct ScreenshotEditorView: View {
                             fontSize: editorState.fontSize,
                             textColor: editorState.currentColor,
                             opacity: editorState.opacity,
+                            language: settings.appLanguage,
                             isTextFieldFocused: $isTextFieldFocused,
                             onDragEnded: { deltaX, deltaY in
                                 let newX = textPos.x + deltaX
@@ -252,24 +254,24 @@ struct ScreenshotEditorView: View {
                             .background(RoundedRectangle(cornerRadius: 7).fill(c.card))
                     }
                     .buttonStyle(.plain)
-                    .help("关闭")
+                    .help(L10n.string("screenshot.close", language: settings.appLanguage))
 
                     Spacer()
 
                     HStack(spacing: 8) {
                         // Undo/Redo Group
                         HStack(spacing: 4) {
-                            IconToolButton(systemName: "arrow.uturn.backward", help: "撤销", enabled: editorState.canUndo(), c: c) {
+                            IconToolButton(systemName: "arrow.uturn.backward", help: L10n.string("screenshot.undo", language: settings.appLanguage), enabled: editorState.canUndo(), c: c) {
                                 editorState.undo()
                             }
-                            IconToolButton(systemName: "arrow.uturn.forward", help: "重做", enabled: editorState.canRedo(), c: c) {
+                            IconToolButton(systemName: "arrow.uturn.forward", help: L10n.string("screenshot.redo", language: settings.appLanguage), enabled: editorState.canRedo(), c: c) {
                                 editorState.redo()
                             }
                         }
                         .padding(4)
                         .background(RoundedRectangle(cornerRadius: 10).fill(c.card))
 
-                        IconToolButton(systemName: "trash", help: "清除", enabled: true, c: c) {
+                        IconToolButton(systemName: "trash", help: L10n.string("screenshot.clear", language: settings.appLanguage), enabled: true, c: c) {
                             editorState.clear()
                         }
                         .padding(4)
@@ -309,7 +311,7 @@ struct ScreenshotEditorView: View {
                         // Tools
                         HStack(spacing: 4) {
                             ForEach(EditorTool.allCases) { tool in
-                                ToolButton(tool: tool, currentTool: $editorState.currentTool, c: c)
+                                ToolButton(tool: tool, currentTool: $editorState.currentTool, language: settings.appLanguage, c: c)
                             }
                         }
 
@@ -327,19 +329,19 @@ struct ScreenshotEditorView: View {
                                 )
                         }
                         .buttonStyle(.plain)
-                        .help("属性")
+                        .help(L10n.string("screenshot.properties", language: settings.appLanguage))
 
                         Divider().frame(height: 24).overlay(c.divider)
 
                         // Action Buttons
-                        Button("保存") {
+                        Button(L10n.string("screenshot.save", language: settings.appLanguage)) {
                             let editedImage = renderEditedImage()
                             onSave(editedImage)
                             // We don't call onCancel() here to let the user finish the save dialog
                         }
                         .dsButton(.secondary)
 
-                        Button("完成") {
+                        Button(L10n.string("screenshot.done", language: settings.appLanguage)) {
                             let editedImage = renderEditedImage()
                             onDone(editedImage)
                         }
@@ -363,6 +365,7 @@ struct ScreenshotEditorView: View {
     struct ToolButton: View {
         let tool: EditorTool
         @Binding var currentTool: EditorTool
+        let language: AppLanguage
         let c: DSColors
 
         var body: some View {
@@ -378,7 +381,7 @@ struct ScreenshotEditorView: View {
                     .foregroundColor(selected ? .white : c.text2)
             }
             .buttonStyle(.plain)
-            .help(tool.displayName)
+            .help(tool.displayName(language: language))
         }
     }
 
@@ -656,6 +659,7 @@ struct FloatingTextInput: View {
     let fontSize: CGFloat
     let textColor: Color
     let opacity: Double
+    let language: AppLanguage
     @Environment(\.colorScheme) private var scheme
     @GestureState private var localDragOffset: CGSize = .zero
     @FocusState.Binding var isTextFieldFocused: Bool
@@ -703,7 +707,7 @@ struct FloatingTextInput: View {
                                 }
                         )
                     
-                    TextField("输入文字", text: $editingText)
+                    TextField(L10n.string("screenshot.text.placeholder", language: language), text: $editingText)
                         .textFieldStyle(.plain)
                         .font(.system(size: fontSize))
                         .foregroundColor(textColor)
@@ -726,5 +730,3 @@ struct FloatingTextInput: View {
         }
     }
 }
-
-

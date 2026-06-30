@@ -12,17 +12,25 @@ enum EmptyKind {
         }
     }
     var title: String {
-        switch self {
-        case .historyEmpty:   return "还没有剪贴记录"
-        case .noMatch:        return "无匹配"
-        case .favoritesEmpty: return "还没有收藏"
-        }
+        title(language: L10n.currentLanguage)
     }
     var subtitle: String {
+        subtitle(language: L10n.currentLanguage)
+    }
+
+    func title(language: AppLanguage) -> String {
         switch self {
-        case .historyEmpty:   return "复制点什么，这里就会出现"
-        case .noMatch:        return "试试别的词，或切到收藏"
-        case .favoritesEmpty: return "在详情里点 ★ 收藏常用项"
+        case .historyEmpty: return L10n.string("list.empty.history.title", language: language)
+        case .noMatch: return L10n.string("list.empty.noMatch.title", language: language)
+        case .favoritesEmpty: return L10n.string("list.empty.favorites.title", language: language)
+        }
+    }
+
+    func subtitle(language: AppLanguage) -> String {
+        switch self {
+        case .historyEmpty: return L10n.string("list.empty.history.subtitle", language: language)
+        case .noMatch: return L10n.string("list.empty.noMatch.subtitle", language: language)
+        case .favoritesEmpty: return L10n.string("list.empty.favorites.subtitle", language: language)
         }
     }
 }
@@ -30,6 +38,7 @@ enum EmptyKind {
 struct ClipboardListView: View {
     @ObservedObject var store = ClipboardStore.shared
     @ObservedObject var pasteStack = PasteStackService.shared
+    @ObservedObject var settings = AppSettings.shared
     @Binding var selectedItem: ClipboardItem?
     var items: [ClipboardItem] // Use items passed from parent instead of computing here
     // Set by keyboard navigation only — mouse clicks must not auto-scroll the list,
@@ -40,7 +49,11 @@ struct ClipboardListView: View {
 
     var body: some View {
         if items.isEmpty {
-            EmptyStateView(icon: emptyKind.icon, title: emptyKind.title, subtitle: emptyKind.subtitle)
+            EmptyStateView(
+                icon: emptyKind.icon,
+                title: emptyKind.title(language: settings.appLanguage),
+                subtitle: emptyKind.subtitle(language: settings.appLanguage)
+            )
         } else {
             ScrollViewReader { proxy in
             List(selection: $selectedItem) {
@@ -101,6 +114,7 @@ struct ClipboardItemRow: View {
     let onToggleStage: () -> Void
 
     @Environment(\.colorScheme) private var scheme
+    @ObservedObject private var settings = AppSettings.shared
     @State private var isHovering = false
 
     var body: some View {
@@ -114,7 +128,12 @@ struct ClipboardItemRow: View {
                     .font(.system(size: 13))
                     .foregroundColor(isSelected ? .white : c.text)
 
-                Text(RowPresentation.subtitle(type: item.type, content: item.content, tags: item.tags))
+                Text(RowPresentation.subtitle(
+                    type: item.type,
+                    content: item.content,
+                    tags: item.tags,
+                    language: settings.appLanguage
+                ))
                     .lineLimit(1)
                     .font(.system(size: 11.5))
                     .foregroundColor(isSelected ? Color.white.opacity(0.8) : c.text2)
@@ -122,7 +141,11 @@ struct ClipboardItemRow: View {
 
             Spacer()
 
-            Text(RowPresentation.relativeTime(item.lastUsedAt ?? item.createdAt, now: Date()))
+            Text(RowPresentation.relativeTime(
+                item.lastUsedAt ?? item.createdAt,
+                now: Date(),
+                language: settings.appLanguage
+            ))
                 .font(.system(size: 11))
                 .foregroundColor(isSelected ? Color.white.opacity(0.75) : c.text3)
 
@@ -136,7 +159,7 @@ struct ClipboardItemRow: View {
                         .foregroundColor(.white)
                 }
                 .onTapGesture { onToggleStage() }
-                .help("已在粘贴队列 — 点击移除")
+                .help(L10n.string("list.stage.removeHelp", language: settings.appLanguage))
             } else if isHovering {
                 Button(action: onToggleStage) {
                     Image(systemName: "plus.circle")
@@ -144,7 +167,7 @@ struct ClipboardItemRow: View {
                         .foregroundColor(isSelected ? .white : c.text2)
                 }
                 .buttonStyle(.plain)
-                .help("加入粘贴队列（⌘⏎）")
+                .help(L10n.string("list.stage.addHelp", language: settings.appLanguage))
             } else if isSelected {
                 DSKeyBadge(label: "⏎", role: .onAccent)
             } else if index < 9 {
@@ -219,13 +242,14 @@ struct ClipboardItemRow: View {
 
     private func displayContent(for item: ClipboardItem) -> String {
         if item.type == "color" {
-            return ColorFormatting.hex(from: item.content ?? "") ?? (item.content ?? "颜色")
+            return ColorFormatting.hex(from: item.content ?? "")
+                ?? (item.content ?? L10n.string("list.display.colorFallback", language: settings.appLanguage))
         }
         if item.type == "file", let content = item.content {
             let paths = RowPresentation.filePaths(from: content)
             let firstName = URL(fileURLWithPath: paths.first ?? content).lastPathComponent
             if paths.count > 1 {
-                return "\(paths.count) 个文件 — \(firstName)…"
+                return L10n.format("list.display.files", paths.count, firstName, language: settings.appLanguage)
             }
             return firstName
         }
@@ -233,12 +257,12 @@ struct ClipboardItemRow: View {
             return content.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         if item.type == "image" {
-            return "图片数据"
+            return L10n.string("list.display.imageData", language: settings.appLanguage)
         }
         if item.type == "rtf" {
-            return "富文本"
+            return L10n.string("list.display.richText", language: settings.appLanguage)
         }
-        return "未知内容"
+        return L10n.string("row.type.unknownContent", language: settings.appLanguage)
     }
 }
 

@@ -3,6 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "VeloxClip",
+    defaultLocalization: "en",
     platforms: [
         .macOS(.v14)
     ],
@@ -20,7 +21,10 @@ let package = Package(
                 .product(name: "SQLite", package: "SQLite.swift"),
                 .product(name: "MarkdownUI", package: "swift-markdown-ui"),
             ],
-            path: "VeloxClip"
+            path: "VeloxClip",
+            resources: [
+                .process("Resources")
+            ]
         ),
         .testTarget(
             name: "VeloxClipTests",

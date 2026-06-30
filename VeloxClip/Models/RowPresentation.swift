@@ -46,42 +46,49 @@ enum RowPresentation {
     // MARK: - Subtitle (content metadata)
 
     /// The second row line: content-specific metadata, never the source app.
-    static func subtitle(type: String, content: String?, tags: [String]) -> String {
+    static func subtitle(type: String,
+                         content: String?,
+                         tags: [String],
+                         language: AppLanguage = .zhHans) -> String {
         let kind = iconKind(type: type, tags: tags)
 
         switch kind {
         case .image:
             // Dimensions need the image blob, which the list view does not load
             // (lazy blob loading). Deviation from the kit: just "图片".
-            return "图片"
+            return L10n.string("row.type.image", language: language)
 
         case .color:
-            guard let content, let rgb = ColorFormatting.rgb(from: content) else { return "颜色" }
+            let color = L10n.string("row.type.color", language: language)
+            guard let content, let rgb = ColorFormatting.rgb(from: content) else { return color }
             let parts = rgb.split(separator: " ")
-            guard parts.count == 3 else { return "颜色" }
-            return "RGB \(parts[0]) · \(parts[1]) · \(parts[2]) · 颜色"
+            guard parts.count == 3 else { return color }
+            return "RGB \(parts[0]) · \(parts[1]) · \(parts[2]) · \(color)"
 
         case .file:
-            guard let content else { return "文件" }
+            let file = L10n.string("row.type.file", language: language)
+            guard let content else { return file }
             let paths = filePaths(from: content)
-            guard let first = paths.first else { return "文件" }
+            guard let first = paths.first else { return file }
             let parent = URL(fileURLWithPath: first).deletingLastPathComponent().lastPathComponent
             let dir = parent.isEmpty ? "/" : parent
             if paths.count > 1 {
-                return "\(paths.count) 个文件 · \(dir) · 文件"
+                return "\(L10n.format("row.unit.files", paths.count, language: language)) · \(dir) · \(file)"
             }
-            return "\(dir) · 文件"
+            return "\(dir) · \(file)"
 
         case .url:
-            guard let content else { return "链接" }
+            let link = L10n.string("row.type.link", language: language)
+            guard let content else { return link }
             let host = URL(string: content)?.host ?? content
-            return "\(host) · 链接"
+            return "\(host) · \(link)"
 
         case .code:
-            guard let content else { return "代码" }
+            let code = L10n.string("row.type.code", language: language)
+            guard let content else { return code }
             let lines = content.components(separatedBy: .newlines)
                 .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-            return "代码 · \(lines.count) 行"
+            return "\(code) · \(L10n.format("row.unit.lines", lines.count, language: language))"
 
         case .json:
             guard let content else { return "JSON" }
@@ -89,22 +96,23 @@ enum RowPresentation {
             guard let data = trimmed.data(using: .utf8),
                   let obj = try? JSONSerialization.jsonObject(with: data) else { return "JSON" }
             if let dict = obj as? [String: Any] {
-                return "JSON · \(dict.count) 个键"
+                return "JSON · \(L10n.format("row.unit.keys", dict.count, language: language))"
             }
             if let arr = obj as? [Any] {
-                return "JSON · \(arr.count) 项"
+                return "JSON · \(L10n.format("row.unit.items", arr.count, language: language))"
             }
             return "JSON"
 
         case .rtf:
-            guard let content else { return "富文本" }
+            let rtf = L10n.string("row.type.rtf", language: language)
+            guard let content else { return rtf }
             let count = content.trimmingCharacters(in: .whitespacesAndNewlines).count
-            return "富文本 · \(count) 字"
+            return "\(rtf) · \(L10n.format("row.unit.chars", count, language: language))"
 
         case .text:
-            guard let content else { return "未知内容" }
+            guard let content else { return L10n.string("row.type.unknownContent", language: language) }
             let count = content.trimmingCharacters(in: .whitespacesAndNewlines).count
-            return "纯文本 · \(count) 字"
+            return "\(L10n.string("row.type.text", language: language)) · \(L10n.format("row.unit.chars", count, language: language))"
         }
     }
 
@@ -112,19 +120,21 @@ enum RowPresentation {
 
     /// Short relative-time label. `now` is a parameter for testability — the view
     /// passes `Date()`.
-    static func relativeTime(_ date: Date, now: Date) -> String {
+    static func relativeTime(_ date: Date,
+                             now: Date,
+                             language: AppLanguage = .zhHans) -> String {
         let seconds = now.timeIntervalSince(date)
-        if seconds < 60 { return "刚刚" }
-        if seconds < 3600 { return "\(Int(seconds / 60)) 分钟" }
-        if seconds < 86_400 { return "\(Int(seconds / 3600)) 小时" }
+        if seconds < 60 { return L10n.string("row.time.justNow", language: language) }
+        if seconds < 3600 { return L10n.format("row.time.minutes", Int(seconds / 60), language: language) }
+        if seconds < 86_400 { return L10n.format("row.time.hours", Int(seconds / 3600), language: language) }
 
         let cal = Calendar.current
         if let yesterday = cal.date(byAdding: .day, value: -1, to: now),
-           cal.isDate(date, inSameDayAs: yesterday) { return "昨天" }
+           cal.isDate(date, inSameDayAs: yesterday) { return L10n.string("row.time.yesterday", language: language) }
 
         let comps = cal.dateComponents([.month, .day], from: date)
         let month = comps.month ?? 1
         let day = comps.day ?? 1
-        return "\(month)月\(day)日"
+        return L10n.format("row.time.monthDay", month, day, language: language)
     }
 }

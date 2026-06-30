@@ -35,12 +35,17 @@ final class RowPresentationTests: XCTestCase {
 
     func testSubtitleText() {
         XCTAssertEqual(RowPresentation.subtitle(type: "text", content: "hello", tags: []), "纯文本 · 5 字")
+        XCTAssertEqual(RowPresentation.subtitle(type: "text", content: "hello", tags: [], language: .en), "Plain Text · 5 chars")
     }
 
     func testSubtitleJSONObject() {
         XCTAssertEqual(
             RowPresentation.subtitle(type: "text", content: "{\"a\":1,\"b\":2}", tags: ["JSON"]),
             "JSON · 2 个键"
+        )
+        XCTAssertEqual(
+            RowPresentation.subtitle(type: "text", content: "{\"a\":1,\"b\":2}", tags: ["JSON"], language: .en),
+            "JSON · 2 keys"
         )
     }
 
@@ -83,6 +88,10 @@ final class RowPresentationTests: XCTestCase {
             RowPresentation.subtitle(type: "file", content: "/Users/me/Documents/a.txt\n/Users/me/Documents/b.txt", tags: []),
             "2 个文件 · Documents · 文件"
         )
+        XCTAssertEqual(
+            RowPresentation.subtitle(type: "file", content: "/Users/me/Documents/a.txt\n/Users/me/Documents/b.txt", tags: [], language: .en),
+            "2 files · Documents · File"
+        )
     }
 
     func testSubtitleImage() {
@@ -103,6 +112,7 @@ final class RowPresentationTests: XCTestCase {
     func testRelativeTimeMinutes() {
         let now = Date()
         XCTAssertEqual(RowPresentation.relativeTime(now.addingTimeInterval(-120), now: now), "2 分钟")
+        XCTAssertEqual(RowPresentation.relativeTime(now.addingTimeInterval(-120), now: now, language: .en), "2 min")
     }
 
     func testRelativeTimeHours() {

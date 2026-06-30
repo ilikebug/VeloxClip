@@ -5,6 +5,7 @@ import AppKit
 struct ColorPreviewView: View {
     @Environment(\.colorScheme) private var scheme
     let colorString: String
+    @ObservedObject private var settings = AppSettings.shared
     @State private var color: Color?
     @State private var formats: [ColorFormat] = []
 
@@ -57,22 +58,22 @@ struct ColorPreviewView: View {
                 // Color info
                 if let rgb = extractRGB(from: color) {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("颜色信息")
+                        Text(L10n.string("preview.color.info", language: settings.appLanguage))
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundColor(c.text)
 
                         Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 12) {
                             GridRow {
-                                infoLabel("红")
+                                infoLabel(L10n.string("preview.color.red", language: settings.appLanguage))
                                 Text("\(rgb.r)").font(.dsMonoBody).foregroundColor(c.text)
-                                infoLabel("绿")
+                                infoLabel(L10n.string("preview.color.green", language: settings.appLanguage))
                                 Text("\(rgb.g)").font(.dsMonoBody).foregroundColor(c.text)
                             }
 
                             GridRow {
-                                infoLabel("蓝")
+                                infoLabel(L10n.string("preview.color.blue", language: settings.appLanguage))
                                 Text("\(rgb.b)").font(.dsMonoBody).foregroundColor(c.text)
-                                infoLabel("透明度")
+                                infoLabel(L10n.string("preview.color.alpha", language: settings.appLanguage))
                                 Text(String(format: "%.2f", rgb.a)).font(.dsMonoBody).foregroundColor(c.text)
                             }
                         }
@@ -90,24 +91,24 @@ struct ColorPreviewView: View {
                         let displayed = formats.first(where: { $0.name == "HEX" })?.value ?? ""
                         copyFormat(ColorFormatting.hex(from: colorString) ?? displayed)
                     }) {
-                        Label("复制 HEX", systemImage: "doc.on.doc")
+                        Label(L10n.string("command.copyHex", language: settings.appLanguage), systemImage: "doc.on.doc")
                     }
                     .dsButton()
 
                     Button(action: { copyFormat(formats.first(where: { $0.name == "RGB" })?.value ?? "") }) {
-                        Label("复制 RGB", systemImage: "doc.on.doc")
+                        Label(L10n.string("command.copyRgb", language: settings.appLanguage), systemImage: "doc.on.doc")
                     }
                     .dsButton()
 
                     Button(action: { copyAllFormats() }) {
-                        Label("全部复制", systemImage: "doc.on.doc.fill")
+                        Label(L10n.string("preview.color.copyAll", language: settings.appLanguage), systemImage: "doc.on.doc.fill")
                     }
                     .dsButton(.prominent)
 
                     Spacer()
                 }
             } else {
-                Text("无效的颜色格式")
+                Text(L10n.string("preview.color.invalid", language: settings.appLanguage))
                     .font(.system(size: 12))
                     .foregroundColor(.orange)
                     .padding(12)
@@ -227,4 +228,3 @@ struct ColorPreviewView: View {
         copyFormat(allFormats)
     }
 }
-

@@ -13,6 +13,7 @@ struct PreviewView: View {
     /// When non-nil, the header renders a trailing ✕ 关闭 button (push-in detail mode).
     var onClose: (() -> Void)? = nil
     @ObservedObject var store = ClipboardStore.shared
+    @ObservedObject private var settings = AppSettings.shared
     @StateObject private var viewModel = PreviewViewModel()
     @State private var debouncedItem: ClipboardItem?
     @State private var debounceTask: Task<Void, Never>?
@@ -50,7 +51,11 @@ struct PreviewView: View {
                     actionsToolbar(for: item)
                 }
             } else {
-                ContentUnavailableView("请选择一个项目", systemImage: "paperclip", description: Text("从历史记录中选择一条剪贴内容以预览。"))
+                ContentUnavailableView(
+                    L10n.string("detail.empty.title", language: settings.appLanguage),
+                    systemImage: "paperclip",
+                    description: Text(L10n.string("detail.empty.subtitle", language: settings.appLanguage))
+                )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
@@ -107,7 +112,7 @@ struct PreviewView: View {
                         HStack(spacing: 3) {
                             Image(systemName: "chevron.left")
                                 .font(.system(size: 13, weight: .semibold))
-                            Text("返回")
+                            Text(L10n.string("detail.back", language: settings.appLanguage))
                                 .font(.system(size: 13))
                         }
                         .foregroundColor(c.text2)
@@ -115,7 +120,7 @@ struct PreviewView: View {
                     .buttonStyle(.plain)
                 }
 
-                Text(displayItem.localizedTypeName)
+                Text(displayItem.localizedTypeName(language: settings.appLanguage))
                     .font(.system(size: 13.5, weight: .semibold))
                     .foregroundColor(c.text)
                     .lineLimit(1)
@@ -178,7 +183,9 @@ struct PreviewView: View {
         let c = DSColors(scheme: scheme)
         return VStack(spacing: 12) {
             ProgressView().scaleEffect(0.8)
-            Text("识别内容中…").font(.system(size: 11.5)).foregroundColor(c.text2)
+            Text(L10n.string("detail.loading", language: settings.appLanguage))
+                .font(.system(size: 11.5))
+                .foregroundColor(c.text2)
         }
         .frame(maxWidth: .infinity).padding(.vertical, 40)
     }
@@ -258,8 +265,10 @@ struct PreviewView: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
                     Image(systemName: "text.viewfinder").foregroundColor(c.accent)
-                    Text("图中文字").font(.system(size: 11.5)).foregroundColor(c.text2)
-                    Button("复制") { viewModel.copyTransformedText(ocrText) }
+                    Text(L10n.string("detail.ocrText", language: settings.appLanguage))
+                        .font(.system(size: 11.5))
+                        .foregroundColor(c.text2)
+                    Button(L10n.string("command.copy", language: settings.appLanguage)) { viewModel.copyTransformedText(ocrText) }
                         .dsButton(.secondary, small: true)
                     Spacer()
                 }
@@ -281,7 +290,7 @@ struct PreviewView: View {
             Text(displayContent).font(.dsBody).foregroundColor(c.text).lineLimit(nil)
                 .textSelection(.enabled)
             if content.count > maxChars {
-                Text("… (还有 \(content.count - maxChars) 个字符)")
+                Text(L10n.format("detail.truncated", content.count - maxChars, language: settings.appLanguage))
                     .font(.system(size: 11)).foregroundColor(c.text2).italic()
             }
         }
@@ -291,7 +300,7 @@ struct PreviewView: View {
     private func actionsToolbar(for item: ClipboardItem) -> some View {
         HStack {
             Button(action: { viewModel.copyToClipboard(item) }) {
-                Label("复制", systemImage: "doc.on.doc")
+                Label(L10n.string("command.copy", language: settings.appLanguage), systemImage: "doc.on.doc")
             }
             .dsButton(.prominent)
 
@@ -302,7 +311,7 @@ struct PreviewView: View {
                         ScreenshotEditorService.shared.showEditor(with: nsImage)
                     }
                 }) {
-                    Label("编辑", systemImage: "pencil")
+                    Label(L10n.string("detail.edit", language: settings.appLanguage), systemImage: "pencil")
                 }
                 .dsButton()
             }
@@ -323,7 +332,7 @@ struct PreviewView: View {
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "wrench.and.screwdriver")
-                    Text("工具")
+                    Text(L10n.string("detail.tools", language: settings.appLanguage))
                     Image(systemName: "chevron.down")
                         .font(.system(size: 9, weight: .semibold))
                         .foregroundColor(c.text2)
@@ -339,9 +348,9 @@ struct PreviewView: View {
     @ViewBuilder
     private func standardTextTools(content: String) -> some View {
         Group {
-            Button(TextToolsPresentation.uppercaseButtonTitle) { viewModel.copyTransformedText(AIService.shared.convertCase(content, to: .uppercase)) }
-            Button(TextToolsPresentation.lowercaseButtonTitle) { viewModel.copyTransformedText(AIService.shared.convertCase(content, to: .lowercase)) }
-            Button(TextToolsPresentation.cleanupWhitespaceButtonTitle) { viewModel.copyTransformedText(AIService.shared.cleanupText(content)) }
+            Button(TextToolsPresentation.uppercaseButtonTitle(language: settings.appLanguage)) { viewModel.copyTransformedText(AIService.shared.convertCase(content, to: .uppercase)) }
+            Button(TextToolsPresentation.lowercaseButtonTitle(language: settings.appLanguage)) { viewModel.copyTransformedText(AIService.shared.convertCase(content, to: .lowercase)) }
+            Button(TextToolsPresentation.cleanupWhitespaceButtonTitle(language: settings.appLanguage)) { viewModel.copyTransformedText(AIService.shared.cleanupText(content)) }
         }
     }
     
@@ -350,7 +359,9 @@ struct PreviewView: View {
         let c = DSColors(scheme: scheme)
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("标签").font(.system(size: 11)).foregroundColor(c.text2)
+                Text(L10n.string("detail.tags", language: settings.appLanguage))
+                    .font(.system(size: 11))
+                    .foregroundColor(c.text2)
                 Spacer()
                 Button(action: { isEditingTags.toggle(); isTagInputFocused = isEditingTags }) {
                     Image(systemName: isEditingTags ? "checkmark.circle.fill" : "plus.circle")
@@ -369,7 +380,10 @@ struct PreviewView: View {
                         tagInputField(for: item)
                     }
                     if !isEditingTags && item.tags.isEmpty {
-                        Text("暂无标签").font(.system(size: 11)).foregroundColor(c.text2).italic()
+                        Text(L10n.string("detail.noTags", language: settings.appLanguage))
+                            .font(.system(size: 11))
+                            .foregroundColor(c.text2)
+                            .italic()
                     }
                 }
                 .padding(.horizontal, 16).padding(.bottom, 8)
@@ -398,7 +412,7 @@ struct PreviewView: View {
     @ViewBuilder
     private func tagInputField(for item: ClipboardItem) -> some View {
         let c = DSColors(scheme: scheme)
-        TextField("新标签…", text: $newTagText)
+        TextField(L10n.string("detail.newTag.placeholder", language: settings.appLanguage), text: $newTagText)
             .textFieldStyle(.plain)
             .font(.system(size: 11))
             .foregroundColor(c.text)

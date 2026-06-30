@@ -5,6 +5,7 @@ import AppKit
 struct JSONPreviewView: View {
     @Environment(\.colorScheme) private var scheme
     let jsonString: String
+    @ObservedObject private var settings = AppSettings.shared
     @State private var formattedJSON: String = ""
     @State private var minifiedJSONText: String = ""
     @State private var isValidJSON = false
@@ -15,11 +16,11 @@ struct JSONPreviewView: View {
     enum ViewMode {
         case formatted, minified, tree
 
-        var segmentLabel: String {
+        func segmentLabel(language: AppLanguage) -> String {
             switch self {
-            case .formatted: return "格式化"
-            case .minified: return "压缩"
-            case .tree: return "树状"
+            case .formatted: return L10n.string("preview.json.formatted", language: language)
+            case .minified: return L10n.string("preview.json.minified", language: language)
+            case .tree: return L10n.string("preview.json.tree", language: language)
             }
         }
     }
@@ -50,14 +51,14 @@ struct JSONPreviewView: View {
             if !isLoading {
                 HStack(spacing: 4) {
                     ForEach([ViewMode.formatted, .minified, .tree], id: \.self) { mode in
-                        Button(mode.segmentLabel) { viewMode = mode }
+                        Button(mode.segmentLabel(language: settings.appLanguage)) { viewMode = mode }
                             .dsButton(viewMode == mode ? .prominent : .secondary, small: true)
                     }
                 }
                 .padding(.trailing, 30) // Move it a little bit to the left relative to the Copy button
 
                 Button(action: copyJSON) {
-                    Label("复制", systemImage: "doc.on.doc")
+                    Label(L10n.string("command.copy", language: settings.appLanguage), systemImage: "doc.on.doc")
                 }
                 .dsButton(small: true)
             }
@@ -70,11 +71,11 @@ struct JSONPreviewView: View {
         let c = DSColors(scheme: scheme)
         if isLoading {
             ProgressView().scaleEffect(0.7)
-            Text("校验中…").font(.system(size: 11)).foregroundColor(c.text2)
+            Text(L10n.string("preview.json.validating", language: settings.appLanguage)).font(.system(size: 11)).foregroundColor(c.text2)
         } else if isValidJSON {
-            Label("JSON 有效", systemImage: "checkmark.circle.fill").font(.system(size: 11)).foregroundColor(.green)
+            Label(L10n.string("preview.json.valid", language: settings.appLanguage), systemImage: "checkmark.circle.fill").font(.system(size: 11)).foregroundColor(.green)
         } else if let error = validationError {
-            Label("JSON 无效", systemImage: "xmark.circle.fill").font(.system(size: 11)).foregroundColor(.red).help(error)
+            Label(L10n.string("preview.json.invalid", language: settings.appLanguage), systemImage: "xmark.circle.fill").font(.system(size: 11)).foregroundColor(.red).help(error)
         }
     }
 
@@ -111,7 +112,7 @@ struct JSONPreviewView: View {
         let c = DSColors(scheme: scheme)
         return VStack(spacing: 8) {
             ProgressView()
-            Text("加载 JSON 中…").font(.system(size: 11)).foregroundColor(c.text2)
+            Text(L10n.string("preview.json.loading", language: settings.appLanguage)).font(.system(size: 11)).foregroundColor(c.text2)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 80)
@@ -163,12 +164,12 @@ struct JSONPreviewView: View {
     private var errorView: some View {
         let c = DSColors(scheme: scheme)
         return VStack(alignment: .leading, spacing: 8) {
-            Text("JSON 校验错误：").font(.system(size: 13, weight: .semibold)).foregroundColor(.red)
+            Text(L10n.string("preview.json.error", language: settings.appLanguage)).font(.system(size: 13, weight: .semibold)).foregroundColor(.red)
             if let error = validationError {
                 Text(error).font(.dsMonoBody).foregroundColor(c.text2)
             }
             Divider()
-            Text("原始内容：").font(.system(size: 11)).foregroundColor(c.text2)
+            Text(L10n.string("preview.json.raw", language: settings.appLanguage)).font(.system(size: 11)).foregroundColor(c.text2)
             Text(jsonString).font(.dsMonoBody).foregroundColor(c.text).textSelection(.enabled)
         }
         .padding(12)
@@ -245,6 +246,7 @@ struct JSONTreeView: View {
     let jsonObject: Any
     let level: Int
     let key: String?
+    @ObservedObject private var settings = AppSettings.shared
     @State private var isExpanded = true
 
     private let indent: CGFloat = 20
@@ -267,13 +269,13 @@ struct JSONTreeView: View {
         let c = DSColors(scheme: scheme)
         VStack(alignment: .leading, spacing: 2) {
             if let dict = jsonObject as? [String: Any] {
-                collectionHeader(label: "{", count: dict.count, type: "个键")
+                collectionHeader(label: "{", count: dict.count, type: L10n.string("preview.json.keys", language: settings.appLanguage))
                 if isExpanded {
                     dictionaryContent(dict)
                     Text("}").foregroundColor(bracketColor).font(.dsMonoBody)
                 }
             } else if let array = jsonObject as? [Any] {
-                collectionHeader(label: "[", count: array.count, type: "项")
+                collectionHeader(label: "[", count: array.count, type: L10n.string("preview.json.items", language: settings.appLanguage))
                 if isExpanded {
                     arrayContent(array)
                     Text("]").foregroundColor(bracketColor).font(.dsMonoBody)
@@ -370,4 +372,3 @@ struct JSONTreeView: View {
         }
     }
 }
-

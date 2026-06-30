@@ -52,15 +52,21 @@ struct MenuBarDashboardPresentation: Equatable {
     }
 
     var statusText: String {
+        statusText()
+    }
+
+    func statusText(language: AppLanguage = .zhHans) -> String {
         switch phase {
         case .active:
-            return "Paste Stack 进行中"
+            return L10n.string("menubar.status.active", language: language)
         case .paused:
-            return "Paste Stack 已暂停"
+            return L10n.string("menubar.status.paused", language: language)
         case .completed:
-            return "Paste Stack 已完成"
+            return L10n.string("menubar.status.completed", language: language)
         case .idle:
-            return stagedCount > 0 ? "已暂存 \(stagedCount) 项" : "空闲"
+            return stagedCount > 0
+                ? L10n.format("menubar.status.staged", stagedCount, language: language)
+                : L10n.string("menubar.status.idle", language: language)
         }
     }
 }

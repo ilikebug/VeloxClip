@@ -16,6 +16,7 @@ final class MenuBarDashboardPresentationTests: XCTestCase {
         XCTAssertEqual(presentation.favoriteValue, "3")
         XCTAssertEqual(presentation.queueValue, "2")
         XCTAssertEqual(presentation.statusText, "已暂存 2 项")
+        XCTAssertEqual(presentation.statusText(language: .en), "2 items staged")
     }
 
     func testActiveDashboardShowsQueueProgress() {
@@ -30,6 +31,7 @@ final class MenuBarDashboardPresentationTests: XCTestCase {
 
         XCTAssertEqual(presentation.queueValue, "2/4")
         XCTAssertEqual(presentation.statusText, "Paste Stack 进行中")
+        XCTAssertEqual(presentation.statusText(language: .en), "Paste Stack active")
     }
 
     func testPausedDashboardShowsPausedProgress() {
@@ -44,6 +46,7 @@ final class MenuBarDashboardPresentationTests: XCTestCase {
 
         XCTAssertEqual(presentation.queueValue, "3/4")
         XCTAssertEqual(presentation.statusText, "Paste Stack 已暂停")
+        XCTAssertEqual(presentation.statusText(language: .en), "Paste Stack paused")
     }
 
     func testDashboardDoesNotExposeConfigurableShortcutDefaults() {

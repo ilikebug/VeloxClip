@@ -25,14 +25,18 @@ struct ClipboardItem: Identifiable, Codable, Hashable, Equatable {
         Self.decodeVector(embedding)
     }
 
-    /// User-facing Chinese name for the clipboard type.
+    /// User-facing name for the clipboard type. Defaults to Chinese for legacy tests and callers.
     var localizedTypeName: String {
+        localizedTypeName(language: .zhHans)
+    }
+
+    func localizedTypeName(language: AppLanguage) -> String {
         switch type {
-        case "text":  return "文本"
-        case "image": return "图片"
-        case "file":  return "文件"
-        case "color": return "颜色"
-        case "rtf":   return "富文本"
+        case "text":  return L10n.string("clipboard.type.text", language: language)
+        case "image": return L10n.string("clipboard.type.image", language: language)
+        case "file":  return L10n.string("clipboard.type.file", language: language)
+        case "color": return L10n.string("clipboard.type.color", language: language)
+        case "rtf":   return L10n.string("clipboard.type.rtf", language: language)
         default:      return type.capitalized
         }
     }
