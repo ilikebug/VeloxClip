@@ -6,6 +6,7 @@ struct Command: Identifiable, Equatable {
     let keyHint: String?
     let icon: String   // SF Symbol name
 
+    // equal by identity; ids are unique within a resolver result
     static func == (lhs: Command, rhs: Command) -> Bool { lhs.id == rhs.id }
 }
 

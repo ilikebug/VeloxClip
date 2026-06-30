@@ -83,7 +83,13 @@ struct ColorPreviewView: View {
 
                 // Quick actions
                 HStack {
-                    Button(action: { copyFormat(formats.first(where: { $0.name == "HEX" })?.value ?? "") }) {
+                    Button(action: {
+                        // Route through the shared formatter so the palette and the
+                        // preview can never disagree on the canonical #RRGGBB.
+                        // Falls back to the displayed HEX value if unparseable.
+                        let displayed = formats.first(where: { $0.name == "HEX" })?.value ?? ""
+                        copyFormat(ColorFormatting.hex(from: colorString) ?? displayed)
+                    }) {
                         Label("复制 HEX", systemImage: "doc.on.doc")
                     }
                     .dsButton()

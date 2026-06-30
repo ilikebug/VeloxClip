@@ -184,7 +184,7 @@ struct MainView: View {
             .background(DesignSystem.backgroundBlur)
             .onKeyPress { press in
                 // ⌘K opens the command palette.
-                if press.modifiers.contains(.command), press.characters == "k" {
+                if press.modifiers.contains(.command), press.characters.lowercased() == "k" {
                     showCommandPalette = true
                     return .handled
                 }
@@ -380,10 +380,16 @@ struct MainView: View {
         switch cmd.id {
         case "paste":
             if let i = item { WindowManager.shared.selectAndPaste(i) }
-        case "copy", "copyHex":
+        case "copy":
             copyToPasteboard(item?.content)
+        case "copyHex":
+            if let content = item?.content {
+                copyToPasteboard(ColorFormatting.hex(from: content) ?? content)
+            }
         case "copyRgb":
-            copyToPasteboard(rgbString(from: item?.content) ?? item?.content)
+            if let content = item?.content {
+                copyToPasteboard(ColorFormatting.rgb(from: content) ?? content)
+            }
         case "favorite":
             if let i = item { ClipboardStore.shared.toggleFavorite(for: i) }
         case "stack":
@@ -407,20 +413,6 @@ struct MainView: View {
         let pb = NSPasteboard.general
         pb.clearContents()
         pb.setString(string, forType: .string)
-    }
-
-    /// Parses a "#RRGGBB" hex string into a space-separated "R G B" string.
-    /// Returns nil if it can't be parsed.
-    private func rgbString(from hex: String?) -> String? {
-        guard var s = hex?.trimmingCharacters(in: .whitespacesAndNewlines) else { return nil }
-        s = s.replacingOccurrences(of: "#", with: "")
-        guard s.count == 6 else { return nil }
-        var rgb: UInt64 = 0
-        guard Scanner(string: s).scanHexInt64(&rgb) else { return nil }
-        let r = (rgb & 0xFF0000) >> 16
-        let g = (rgb & 0x00FF00) >> 8
-        let b = rgb & 0x0000FF
-        return "\(r) \(g) \(b)"
     }
 
     private func moveSelection(direction: Int) {
