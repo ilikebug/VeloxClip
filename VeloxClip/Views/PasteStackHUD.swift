@@ -40,7 +40,11 @@ final class PasteStackHUDController {
         if phase == .idle {
             hide()
         } else if AppSettings.shared.showPasteStackHUD {
-            show()
+            // Don't reposition here: an existing panel is still at its correct
+            // place, and refit() re-anchors at the new phase's size right after.
+            // Repositioning now (at the stale size) would jump top-anchored HUDs
+            // by one frame. A freshly created panel still gets placed inside show().
+            show(reposition: false)
             // The three states differ in height; re-fit the panel to the current
             // content (preserving the configured corner position) on every change.
             refit()
@@ -49,23 +53,44 @@ final class PasteStackHUDController {
 
     // Resize the panel to fit the current phase's content, then re-anchor it so
     // it stays pinned to the configured corner (a taller panel must not drift
-    // off the bottom edge). Runs synchronously so our own move isn't mistaken
-    // for a user drag.
+    // off the bottom edge).
     private func refit() {
-        guard let panel, let hosting else { return }
-        let fitted = hosting.sizeThatFits(in: NSSize(width: 800, height: 600))
-        isRepositioningProgrammatically = true
-        panel.setContentSize(fitted)
-        panel.setFrameOrigin(targetOrigin(for: panel.frame.size))
-        isRepositioningProgrammatically = false
+        guard panel != nil, hosting != nil else { return }
+        // The phase change that triggered this refit is applied to the SwiftUI
+        // view on the NEXT runloop pass (@Published → @ObservedObject updates are
+        // not synchronous with our Combine sink), so measuring synchronously here
+        // returns the PREVIOUS phase's height — which clips taller states off the
+        // bottom (notably the paused strip's Resume/Cancel buttons). Defer one
+        // tick so the new content is laid out before we measure.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let panel = self.panel, let hosting = self.hosting else { return }
+            let fitted = hosting.sizeThatFits(in: NSSize(width: 800, height: 600))
+            // Bracket the guard TIGHTLY around our own resize/move — setFrameOrigin
+            // posts didMoveNotification synchronously, so this covers it — and never
+            // hold the flag across the async hop: overlapping refits (rapid phase
+            // changes) would otherwise clear each other's guard and let one move be
+            // misread as a user drag, corrupting the saved corner into "custom".
+            self.isRepositioningProgrammatically = true
+            panel.setContentSize(fitted)
+            panel.setFrameOrigin(self.targetOrigin(for: panel.frame.size))
+            self.isRepositioningProgrammatically = false
+            panel.invalidateShadow() // window shadow must track the new content shape
+        }
     }
 
-    private func show() {
+    // `reposition` controls whether an ALREADY-EXISTING panel is re-anchored: the
+    // settings-toggle path wants it (no refit follows), the phase-change path does
+    // not (refit re-anchors at the new size). A freshly created panel is always
+    // placed regardless, so it never first appears at the origin.
+    private func show(reposition: Bool = true) {
+        let created = (panel == nil)
         if panel == nil {
             let hosting = NSHostingController(rootView: PasteStackHUDView())
             hosting.sizingOptions = []
+            // Placeholder size (matches the view's 240 content width); setContentSize
+            // below replaces it with the measured fit before the panel is shown.
             let panel = NSPanel(
-                contentRect: NSRect(x: 0, y: 0, width: 260, height: 64),
+                contentRect: NSRect(x: 0, y: 0, width: 240, height: 64),
                 styleMask: [.nonactivatingPanel, .borderless, .fullSizeContentView],
                 backing: .buffered,
                 defer: false
@@ -74,13 +99,15 @@ final class PasteStackHUDController {
             // routes its display cycle through NSHostingView's window-sizing
             // machinery, which mutates constraints mid-pass and throws
             // NSInternalInconsistencyException. A plain container breaks that link.
-            let container = NSView(frame: NSRect(x: 0, y: 0, width: 260, height: 64))
+            let container = NSView(frame: NSRect(x: 0, y: 0, width: 240, height: 64))
             hosting.view.frame = container.bounds
             hosting.view.autoresizingMask = [.width, .height]
             container.addSubview(hosting.view)
             panel.contentView = container
-            // The HUD view has a fixed frame; size the panel once at creation
-            panel.setContentSize(hosting.sizeThatFits(in: NSSize(width: 800, height: 300)))
+            // The HUD view has a fixed frame; size the panel once at creation.
+            // Use the same generous height bound as refit() so a tall first phase
+            // (many staged items) isn't clamped/clipped before the first refit.
+            panel.setContentSize(hosting.sizeThatFits(in: NSSize(width: 800, height: 600)))
             self.hosting = hosting
             panel.backgroundColor = .clear
             panel.isOpaque = false
@@ -91,10 +118,11 @@ final class PasteStackHUDController {
             panel.hidesOnDeactivate = false
             panel.isReleasedWhenClosed = false
 
-            // Must run SYNCHRONOUSLY: a deferred Task lands after the
-            // isRepositioningProgrammatically flag is reset, so our own
-            // setFrameOrigin would be misread as a user drag and clobber the
-            // position setting back to "custom" on every show
+            // panelDidMove records the position as a user-dragged "custom" corner.
+            // Every programmatic move (here and in refit) must therefore be wrapped
+            // by isRepositioningProgrammatically so it isn't mistaken for a drag —
+            // and each move must set + clear that flag around itself synchronously,
+            // since didMoveNotification is posted synchronously during the move.
             NotificationCenter.default.addObserver(
                 forName: NSWindow.didMoveNotification,
                 object: panel,
@@ -109,10 +137,13 @@ final class PasteStackHUDController {
         }
 
         guard let panel else { return }
-        isRepositioningProgrammatically = true
-        panel.setFrameOrigin(targetOrigin(for: panel.frame.size))
-        isRepositioningProgrammatically = false
+        if created || reposition {
+            isRepositioningProgrammatically = true
+            panel.setFrameOrigin(targetOrigin(for: panel.frame.size))
+            isRepositioningProgrammatically = false
+        }
         panel.orderFrontRegardless()
+        panel.invalidateShadow() // recompute the window shadow for the current shape
     }
 
     private func hide() {
@@ -132,12 +163,19 @@ final class PasteStackHUDController {
             let parts = settings.pasteStackHUDCustomOrigin.split(separator: ",")
             if parts.count == 2, let x = Double(parts[0]), let y = Double(parts[1]) {
                 let pt = NSPoint(x: x, y: y)
-                // Only honor a saved drag position if it still lands on a connected
-                // screen — otherwise (unplugged external display) fall through to a
-                // corner so the HUD never opens off-screen.
                 let rect = NSRect(origin: pt, size: size)
-                if NSScreen.screens.contains(where: { $0.frame.intersects(rect) }) {
-                    return pt
+                // Honor a saved drag position only if it still lands on a connected
+                // screen (otherwise — e.g. an unplugged external display — fall
+                // through to a corner so the HUD never opens off-screen). Clamp it
+                // into that screen's visible frame so a panel that has since grown
+                // taller (more staged items) can't spill past an edge. The inner
+                // max(..) guards the range when the panel is larger than the screen.
+                if let screen = NSScreen.screens.first(where: { $0.frame.intersects(rect) }) {
+                    let vf = screen.visibleFrame
+                    return NSPoint(
+                        x: min(max(pt.x, vf.minX), max(vf.maxX - size.width, vf.minX)),
+                        y: min(max(pt.y, vf.minY), max(vf.maxY - size.height, vf.minY))
+                    )
                 }
             }
         }
@@ -191,8 +229,13 @@ struct PasteStackHUDView: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(c.divider, lineWidth: 0.5)
         )
-        .shadow(color: DesignSystem.panelShadow(scheme), radius: 25, x: 0, y: 9)
-        .padding(10)
+        // The panel is a borderless NSPanel sized tightly to this content, so a
+        // SwiftUI `.shadow` (radius 25 / y 9) would spill ~34pt past the window
+        // edge and get hard-clipped — and stack on top of the window's own
+        // `hasShadow`. Standalone windows in this app (see WindowManager) use the
+        // window shadow instead; the HUD follows suit — no SwiftUI shadow, no
+        // transparent margin, so the panel bounds equal the visible bounds and
+        // the corner anchoring margin is exact.
     }
 
     // MARK: - 进行中 / 暂停
