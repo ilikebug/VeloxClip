@@ -160,6 +160,10 @@
 "command.detail" = "Detail";
 "command.copyHex" = "Copy HEX";
 "command.copyRgb" = "Copy RGB";
+"command.editImage" = "Edit Image";
+"command.openURL" = "Open Link";
+"command.revealInFinder" = "Reveal in Finder";
+"command.copyPath" = "Copy Path";
 "command.favorite" = "Favorite";
 "command.stack" = "Add to Paste Queue";
 "command.delete" = "Delete";

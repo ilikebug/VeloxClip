@@ -60,6 +60,16 @@ struct MainFocusRoutingPolicy {
     }
 }
 
+struct MainCommandPaletteLifecyclePolicy {
+    static func shouldClosePaletteOnOverlayWillShow(isPresented: Bool) -> Bool {
+        isPresented
+    }
+
+    static func shouldClosePaletteOnOverlayResignKey(isPresented: Bool) -> Bool {
+        isPresented
+    }
+}
+
 enum ViewMode {
     case favorites
     case history
@@ -353,9 +363,18 @@ struct MainView: View {
             // isn't in the tree (this would be a no-op anyway — kept for symmetry).
             if detailItem == nil { restoreSearchFocusSoon() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { notification in
+            guard notification.object is OverlayWindow else { return }
+            if MainCommandPaletteLifecyclePolicy.shouldClosePaletteOnOverlayResignKey(isPresented: showCommandPalette) {
+                showCommandPalette = false
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .veloxOverlayWillShow)) { _ in
             // Reset state only when the overlay is (re)opened, not every time it
             // regains key status (e.g. after closing a popover)
+            if MainCommandPaletteLifecyclePolicy.shouldClosePaletteOnOverlayWillShow(isPresented: showCommandPalette) {
+                showCommandPalette = false
+            }
             isSearchFocused = true
             detailItem = nil
             viewMode = .history
@@ -621,6 +640,14 @@ struct MainView: View {
             if let content = item?.content {
                 copyString(ColorFormatting.rgb(from: content) ?? content)
             }
+        case "editImage":
+            if let i = item { editImage(i) }
+        case "openURL":
+            if let content = item?.content { openURL(content) }
+        case "revealInFinder":
+            if let content = item?.content { revealFilesInFinder(content) }
+        case "copyPath":
+            if let content = item?.content { copyString(content) }
         case "favorite":
             if let i = item { ClipboardStore.shared.toggleFavorite(for: i) }
         case "stack":
@@ -657,6 +684,32 @@ struct MainView: View {
         let pb = NSPasteboard.general
         pb.clearContents()
         pb.setString(string, forType: .string)
+    }
+
+    private func editImage(_ item: ClipboardItem) {
+        Task { @MainActor in
+            var full = item
+            if full.data == nil {
+                full.data = await ClipboardStore.shared.loadData(for: item.id)
+            }
+            guard let data = full.data, let nsImage = NSImage(data: data) else { return }
+            ScreenshotEditorService.shared.showEditor(with: nsImage)
+        }
+    }
+
+    private func openURL(_ content: String) {
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: trimmed),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https" else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    private func revealFilesInFinder(_ content: String) {
+        let urls = RowPresentation.filePaths(from: content)
+            .map { URL(fileURLWithPath: $0) }
+        guard !urls.isEmpty else { return }
+        NSWorkspace.shared.activateFileViewerSelecting(urls)
     }
 
     private func moveSelection(direction: Int) {

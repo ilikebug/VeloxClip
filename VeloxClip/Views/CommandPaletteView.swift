@@ -14,7 +14,7 @@ struct CommandPaletteView: View {
     @FocusState private var fieldFocused: Bool
 
     private var allCommands: [Command] {
-        CommandResolver.commands(forType: item?.type ?? "text", language: settings.appLanguage)
+        CommandResolver.commands(for: item, language: settings.appLanguage)
     }
 
     private var filteredCommands: [Command] {

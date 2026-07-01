@@ -9,6 +9,11 @@ enum RowIconKind: Equatable {
     case color, image, url, code, json, file, rtf, text
 }
 
+struct RowTagBadges: Equatable {
+    let visible: [String]
+    let overflowCount: Int
+}
+
 enum RowPresentation {
 
     // MARK: - Icon kind
@@ -33,6 +38,26 @@ enum RowPresentation {
         if lower.contains("code") { return .code }
 
         return type == "rtf" ? .rtf : .text
+    }
+
+    // MARK: - Tag badges
+
+    static func visibleTagBadges(from tags: [String], maxVisible: Int) -> RowTagBadges {
+        let maxTagCharacters = 12
+        let cleaned = tags
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .map { displayTag($0, maxCharacters: maxTagCharacters) }
+        let visible = Array(cleaned.prefix(maxVisible))
+        return RowTagBadges(
+            visible: visible,
+            overflowCount: max(0, cleaned.count - visible.count)
+        )
+    }
+
+    private static func displayTag(_ tag: String, maxCharacters: Int) -> String {
+        guard tag.count > maxCharacters else { return tag }
+        return String(tag.prefix(max(0, maxCharacters - 3))) + "..."
     }
 
     // MARK: - File paths

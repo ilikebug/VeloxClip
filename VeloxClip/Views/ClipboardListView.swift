@@ -128,16 +128,9 @@ struct ClipboardItemRow: View {
                     .font(.system(size: 13))
                     .foregroundColor(isSelected ? .white : c.text)
 
-                Text(RowPresentation.subtitle(
-                    type: item.type,
-                    content: item.content,
-                    tags: item.tags,
-                    language: settings.appLanguage
-                ))
-                    .lineLimit(1)
-                    .font(.system(size: 11.5))
-                    .foregroundColor(isSelected ? Color.white.opacity(0.8) : c.text2)
+                subtitleAndTags(c: c)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             Spacer()
 
@@ -238,6 +231,51 @@ struct ClipboardItemRow: View {
         case .text:  return "textformat"
         case .color, .image: return "textformat" // handled above; unreachable
         }
+    }
+
+    @ViewBuilder
+    private func subtitleAndTags(c: DSColors) -> some View {
+        let badges = RowPresentation.visibleTagBadges(from: item.tags, maxVisible: 2)
+        HStack(spacing: 6) {
+            Text(RowPresentation.subtitle(
+                type: item.type,
+                content: item.content,
+                tags: item.tags,
+                language: settings.appLanguage
+            ))
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .font(.system(size: 11.5))
+                .foregroundColor(isSelected ? Color.white.opacity(0.8) : c.text2)
+                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+
+            if !badges.visible.isEmpty {
+                HStack(spacing: 4) {
+                    ForEach(badges.visible, id: \.self) { tag in
+                        rowTagBadge(tag, c: c)
+                    }
+                    if badges.overflowCount > 0 {
+                        rowTagBadge("+\(badges.overflowCount)", c: c)
+                    }
+                }
+                .fixedSize()
+                .layoutPriority(1)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func rowTagBadge(_ text: String, c: DSColors) -> some View {
+        Text(text)
+            .font(.system(size: 9.5, weight: .semibold))
+            .lineLimit(1)
+            .foregroundColor(isSelected ? Color.white.opacity(0.9) : c.accent)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1)
+            .background(
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(isSelected ? Color.white.opacity(0.16) : c.accentSoft)
+            )
     }
 
     private func displayContent(for item: ClipboardItem) -> String {

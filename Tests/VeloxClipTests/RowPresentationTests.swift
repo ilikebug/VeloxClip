@@ -31,6 +31,28 @@ final class RowPresentationTests: XCTestCase {
         XCTAssertEqual(RowPresentation.iconKind(type: "file", tags: ["Code"]), .file)
     }
 
+    // MARK: - tag badges
+
+    func testVisibleTagBadgesShowsFirstTwoTagsAndOverflow() {
+        let badges = RowPresentation.visibleTagBadges(from: ["URL", "Code", "JSON"], maxVisible: 2)
+
+        XCTAssertEqual(badges.visible, ["URL", "Code"])
+        XCTAssertEqual(badges.overflowCount, 1)
+    }
+
+    func testVisibleTagBadgesDropsEmptyTags() {
+        let badges = RowPresentation.visibleTagBadges(from: ["URL", " ", "Code"], maxVisible: 2)
+
+        XCTAssertEqual(badges.visible, ["URL", "Code"])
+        XCTAssertEqual(badges.overflowCount, 0)
+    }
+
+    func testVisibleTagBadgesTruncatesLongTagsForRowLayout() {
+        let badges = RowPresentation.visibleTagBadges(from: ["VeryLongTagName"], maxVisible: 2)
+
+        XCTAssertEqual(badges.visible, ["VeryLongT..."])
+    }
+
     // MARK: - subtitle
 
     func testSubtitleText() {

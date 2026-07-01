@@ -160,6 +160,10 @@
 "command.detail" = "详情";
 "command.copyHex" = "复制 HEX";
 "command.copyRgb" = "复制 RGB";
+"command.editImage" = "编辑图片";
+"command.openURL" = "打开链接";
+"command.revealInFinder" = "在 Finder 中显示";
+"command.copyPath" = "复制路径";
 "command.favorite" = "收藏";
 "command.stack" = "加入粘贴队列";
 "command.delete" = "删除";

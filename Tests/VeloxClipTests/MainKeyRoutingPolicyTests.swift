@@ -124,4 +124,14 @@ final class MainKeyRoutingPolicyTests: XCTestCase {
             isCommandPalettePresented: true
         ))
     }
+
+    func testClosesCommandPaletteWhenOverlayWillShow() {
+        XCTAssertTrue(MainCommandPaletteLifecyclePolicy.shouldClosePaletteOnOverlayWillShow(isPresented: true))
+        XCTAssertFalse(MainCommandPaletteLifecyclePolicy.shouldClosePaletteOnOverlayWillShow(isPresented: false))
+    }
+
+    func testClosesCommandPaletteWhenOverlayResignsKey() {
+        XCTAssertTrue(MainCommandPaletteLifecyclePolicy.shouldClosePaletteOnOverlayResignKey(isPresented: true))
+        XCTAssertFalse(MainCommandPaletteLifecyclePolicy.shouldClosePaletteOnOverlayResignKey(isPresented: false))
+    }
 }
