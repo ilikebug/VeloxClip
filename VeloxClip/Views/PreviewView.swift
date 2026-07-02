@@ -425,6 +425,12 @@ struct PreviewView: View {
                     store.addTag(newTagText, to: item)
                     newTagText = ""
                 }
+                // Committing (or ⏎ on an empty field) CLOSES the input — a new one
+                // only opens via the + button. Without this the field stays focused,
+                // `editingText` stays true, and detail-mode keys (←/Esc/⏎) keep
+                // falling through to an empty tag field instead of navigating.
+                isEditingTags = false
+                isTagInputFocused = false
             }
     }
 }
