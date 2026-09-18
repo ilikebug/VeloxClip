@@ -226,9 +226,25 @@ rm -f "$DMG_TEMP" "$DMG_NAME"
 APP_SIZE=$(du -sk "$DMG_TEMP_DIR" | cut -f1)
 echo "[Size] App size: $((APP_SIZE / 1024))MB"
 
-# Create temporary DMG (hdiutil will auto-calculate size from srcfolder)
-hdiutil create -srcfolder "$DMG_TEMP_DIR" -volname "$DMG_VOLUME_NAME" \
-    -fs HFS+ -fsargs "-c c=64,a=16,e=16" -format UDRW "$DMG_TEMP"
+# Create temporary DMG (hdiutil will auto-calculate size from srcfolder).
+# On some macOS versions `hdiutil create` fails with "Resource busy" for any
+# source at all; makehybrid needs no writable device and still produces a
+# mountable HFS+ image, so fall back to it (losing only the Finder window
+# layout below, which needs a read-write image to set).
+USED_HYBRID_FALLBACK=0
+if ! hdiutil create -srcfolder "$DMG_TEMP_DIR" -volname "$DMG_VOLUME_NAME" \
+    -fs HFS+ -fsargs "-c c=64,a=16,e=16" -format UDRW "$DMG_TEMP"; then
+    echo "[Warn] hdiutil create failed; falling back to makehybrid (no custom window layout)"
+    rm -f "$DMG_NAME"
+    if ! hdiutil makehybrid -hfs -hfs-volume-name "$DMG_VOLUME_NAME" -o "$DMG_NAME" "$DMG_TEMP_DIR"; then
+        echo "[Error] Could not create the DMG with either method!"
+        rm -rf "$DMG_TEMP_DIR"
+        exit 1
+    fi
+    USED_HYBRID_FALLBACK=1
+fi
+
+if [ "$USED_HYBRID_FALLBACK" -eq 0 ]; then
 
 # Mount the DMG
 MOUNT_DIR="/Volumes/$DMG_VOLUME_NAME"
@@ -317,6 +333,17 @@ fi
 
 # Convert to compressed read-only DMG
 hdiutil convert "$DMG_TEMP" -format UDZO -imagekey zlib-level=9 -o "$DMG_NAME"
+
+fi   # USED_HYBRID_FALLBACK
+
+# Never claim success for a DMG that isn't there — this used to print
+# "[Success] DMG package created successfully!" over a failed hdiutil run
+if [ ! -f "$DMG_NAME" ]; then
+    echo "[Error] $DMG_NAME was not created!"
+    rm -rf "$DMG_TEMP_DIR"
+    rm -f "$DMG_TEMP"
+    exit 1
+fi
 
 # Remove quarantine attributes from DMG to prevent "damaged" warning when downloading from GitHub
 # This is safe and commonly done by open-source projects
