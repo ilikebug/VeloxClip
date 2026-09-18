@@ -45,7 +45,9 @@ struct ClipboardListView: View {
     // or rows shift under the cursor and selection feels janky
     @Binding var scrollTarget: UUID?
     var emptyKind: EmptyKind
-    var onUserInteract: (MainListInteraction) -> Void = { _ in }
+    var onUserInteract: () -> Void = {}
+    /// Right-click on a row → open the command palette for that item.
+    var onContextMenu: (ClipboardItem) -> Void = { _ in }
 
     var body: some View {
         if items.isEmpty {
@@ -65,15 +67,16 @@ struct ClipboardListView: View {
                         stagedIndex: pasteStack.stagedIndex(of: item.id),
                         onSelect: {
                             selectedItem = item
-                            onUserInteract(.rowSelection)
+                            onUserInteract()
                         },
                         onDoubleClick: {
                             WindowManager.shared.selectAndPaste(item)
                         },
                         onToggleStage: {
                             pasteStack.toggleStaged(item)
-                            onUserInteract(.rowControl)
-                        }
+                            onUserInteract()
+                        },
+                        onRightClick: { onContextMenu(item) }
                     )
                     .tag(item)
                     .id(item.id)
@@ -112,6 +115,7 @@ struct ClipboardItemRow: View {
     let onSelect: () -> Void
     let onDoubleClick: () -> Void
     let onToggleStage: () -> Void
+    let onRightClick: () -> Void
 
     @Environment(\.colorScheme) private var scheme
     @ObservedObject private var settings = AppSettings.shared
@@ -190,6 +194,9 @@ struct ClipboardItemRow: View {
                 onSelect()
             }
         )
+        // Right-click → context actions. The catcher only claims right-button
+        // hits, so the tap gestures above are unaffected.
+        .overlay(RightClickCatcher(onRightClick: onRightClick))
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
     
@@ -203,7 +210,7 @@ struct ClipboardItemRow: View {
             ImageRowThumbnail(itemID: item.id, fallbackColor: c.text2)
         case .color:
             RoundedRectangle(cornerRadius: 6)
-                .fill(Color(hex: ColorFormatting.hex(from: item.content ?? "") ?? "") ?? c.chip)
+                .fill(Color(clipboardColor: item.content ?? "") ?? c.chip)
                 .frame(width: 26, height: 26)
                 .overlay(
                     RoundedRectangle(cornerRadius: 6)

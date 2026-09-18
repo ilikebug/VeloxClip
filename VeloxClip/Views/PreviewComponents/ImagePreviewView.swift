@@ -6,8 +6,9 @@ struct ImagePreviewView: View {
     @Environment(\.colorScheme) private var scheme
     let imageData: Data
     @ObservedObject private var settings = AppSettings.shared
-    private let layoutPolicy = ImagePreviewLayoutPolicy.detailImage
-    @State private var zoomLevel: CGFloat = ImagePreviewLayoutPolicy.detailImage.defaultZoomLevel
+    // The image is always fitted to the panel width, so 1.0 is both the default and the ceiling
+    private static let maximumZoom: CGFloat = 1.0
+    @State private var zoomLevel: CGFloat = ImagePreviewView.maximumZoom
     @State private var imageContainerWidth: CGFloat = 0
     @State private var imageInfo: ImageInfo?
     @State private var displayImage: NSImage?
@@ -16,8 +17,6 @@ struct ImagePreviewView: View {
         let size: NSSize
         let fileSize: Int
         let format: String
-        let colorSpace: String?
-        let hasAlpha: Bool
     }
     
     @State private var isLoading = true
@@ -81,20 +80,12 @@ struct ImagePreviewView: View {
         }
     }
 
-    @ViewBuilder
     private func imageView(_ nsImage: NSImage) -> some View {
-        if layoutPolicy.fitsImageToAvailablePanel {
-            Image(nsImage: nsImage)
-                .resizable()
-                .interpolation(.high)
-                .antialiased(true)
-                .aspectRatio(nsImage.size, contentMode: .fit)
-        } else {
-            Image(nsImage: nsImage)
-                .resizable()
-                .interpolation(.high)
-                .antialiased(true)
-        }
+        Image(nsImage: nsImage)
+            .resizable()
+            .interpolation(.high)
+            .antialiased(true)
+            .aspectRatio(nsImage.size, contentMode: .fit)
     }
 
     private var zoomControls: some View {
@@ -108,13 +99,13 @@ struct ImagePreviewView: View {
             Text("\(Int(zoomLevel * 100))%")
                 .font(.system(size: 11)).foregroundColor(c.text2).frame(width: 60)
 
-            Button(action: { zoomLevel = min(layoutPolicy.maximumZoomLevel, zoomLevel + 0.25) }) {
+            Button(action: { zoomLevel = min(Self.maximumZoom, zoomLevel + 0.25) }) {
                 Image(systemName: "plus.magnifyingglass")
             }
             .dsButton(small: true)
-            .disabled(zoomLevel >= layoutPolicy.maximumZoomLevel)
+            .disabled(zoomLevel >= Self.maximumZoom)
 
-            Button(L10n.string("preview.image.fit", language: settings.appLanguage)) { zoomLevel = layoutPolicy.defaultZoomLevel }.dsButton(small: true)
+            Button(L10n.string("preview.image.fit", language: settings.appLanguage)) { zoomLevel = Self.maximumZoom }.dsButton(small: true)
 
             Spacer()
         }
@@ -163,13 +154,9 @@ struct ImagePreviewView: View {
             let size = imageRep.size
             let fileSize = imageData.count
             var format = "Unknown"
-            var colorSpace: String? = nil
-            var hasAlpha = false
             
             if let bitmapRep = imageRep as? NSBitmapImageRep {
                 format = bitmapRep.bitmapFormat.contains(.alphaFirst) ? "PNG" : "JPEG"
-                colorSpace = bitmapRep.colorSpace.localizedName
-                hasAlpha = bitmapRep.hasAlpha
             }
             
             if format == "Unknown" {
@@ -178,7 +165,7 @@ struct ImagePreviewView: View {
                 else if imageData.starts(with: [0x52, 0x49, 0x46, 0x46]) { format = "WebP" }
             }
             
-            let info = ImageInfo(size: size, fileSize: fileSize, format: format, colorSpace: colorSpace, hasAlpha: hasAlpha)
+            let info = ImageInfo(size: size, fileSize: fileSize, format: format)
             return (nsImage, info)
         }.value
         
@@ -190,10 +177,7 @@ struct ImagePreviewView: View {
     }
     
     private func formatFileSize(_ bytes: Int) -> String {
-        let formatter = ByteCountFormatter()
-        formatter.allowedUnits = [.useKB, .useMB]
-        formatter.countStyle = .file
-        return formatter.string(fromByteCount: Int64(bytes))
+        FilePreviewPresentation.fileSizeString(Int64(bytes))
     }
 
     private func fittedImageSize(imageSize: NSSize, availableWidth: CGFloat, zoomLevel: CGFloat) -> CGSize {

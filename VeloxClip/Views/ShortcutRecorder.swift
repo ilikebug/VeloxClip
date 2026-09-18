@@ -108,6 +108,8 @@ class ShortcutRecorderView: NSView {
         button.layer?.borderColor = chrome.borderColor.cgColor
     }
     
+    private var recordingTimeout: Task<Void, Never>?
+
     @objc private func startRecording() {
         guard !isRecording else { return }
         
@@ -123,7 +125,7 @@ class ShortcutRecorderView: NSView {
                 let keyCode = event.keyCode
                 
                 // Allow function keys (F1-F12) without modifiers, or require at least one modifier for other keys
-                let isFunctionKey = self.isFunctionKey(keyCode)
+                let isFunctionKey = KeyCodeTable.isFunctionKey(keyCode)
                 let hasModifier = modifiers.contains(.command) || modifiers.contains(.shift) || modifiers.contains(.option) || modifiers.contains(.control)
                 
                 guard isFunctionKey || hasModifier else {
@@ -134,8 +136,11 @@ class ShortcutRecorderView: NSView {
                     return event
                 }
                 
-                // Build shortcut string
-                let shortcutString = self.buildShortcutString(modifiers: modifiers, keyCode: keyCode)
+                // Build shortcut string; a key we can't name (e.g. a media key) is
+                // ignored rather than committed as a key-less "cmd+shift"
+                guard let shortcutString = ShortcutParser.string(modifiers: modifiers, keyCode: keyCode) else {
+                    return nil
+                }
                 self.shortcut = shortcutString
                 self.isRecording = false
                 self.updateButton()
@@ -152,11 +157,13 @@ class ShortcutRecorderView: NSView {
             return event
         }
         
-        // Cancel recording after 10 seconds
-        DispatchQueue.main.asyncAfter(deadline: .now() + 10.0) { [weak self] in
-            if self?.isRecording == true {
-                self?.cancelRecording()
-            }
+        // Cancel recording after 10 seconds. Tied to THIS recording — a stale
+        // timer from an earlier, cancelled recording must not kill a new one
+        recordingTimeout?.cancel()
+        recordingTimeout = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 10_000_000_000)
+            guard !Task.isCancelled, self?.isRecording == true else { return }
+            self?.cancelRecording()
         }
     }
     
@@ -167,64 +174,12 @@ class ShortcutRecorderView: NSView {
     }
     
     private func stopMonitoring() {
+        recordingTimeout?.cancel()
+        recordingTimeout = nil
         if let monitor = eventMonitor {
             NSEvent.removeMonitor(monitor)
             eventMonitor = nil
         }
-    }
-    
-    private func buildShortcutString(modifiers: NSEvent.ModifierFlags, keyCode: UInt16) -> String {
-        var parts: [String] = []
-        
-        if modifiers.contains(.command) {
-            parts.append("cmd")
-        }
-        if modifiers.contains(.shift) {
-            parts.append("shift")
-        }
-        if modifiers.contains(.option) {
-            parts.append("alt")
-        }
-        if modifiers.contains(.control) {
-            parts.append("ctrl")
-        }
-        
-        // Convert keyCode to character
-        if let keyChar = keyCodeToString(keyCode) {
-            parts.append(keyChar.lowercased())
-        }
-        
-        // If no modifiers, return just the key (for function keys)
-        if parts.count == 1 {
-            return parts[0]
-        }
-        
-        return parts.joined(separator: "+")
-    }
-    
-    private func isFunctionKey(_ keyCode: UInt16) -> Bool {
-        // Function keys F1-F12 key codes
-        let functionKeyCodes: Set<UInt16> = [122, 120, 99, 118, 96, 97, 98, 100, 101, 109, 103, 111]
-        return functionKeyCodes.contains(keyCode)
-    }
-    
-    private func keyCodeToString(_ keyCode: UInt16) -> String? {
-        // Map common key codes to characters
-        let keyMap: [UInt16: String] = [
-            0: "a", 1: "s", 2: "d", 3: "f", 4: "h", 5: "g", 6: "z", 7: "x",
-            8: "c", 9: "v", 11: "b", 12: "q", 13: "w", 14: "e", 15: "r",
-            16: "y", 17: "t", 31: "o", 32: "u", 34: "i", 35: "p", 37: "l",
-            38: "j", 40: "k", 45: "n", 46: "m", 36: "return", 48: "tab",
-            49: "space", 51: "delete", 53: "escape", 123: "left", 124: "right",
-            125: "down", 126: "up", 27: "[", 30: "]", 33: "\\", 39: "'",
-            41: ";", 42: "\\", 43: ",", 44: "/", 47: ".", 50: "`",
-            // Function keys F1-F12
-            122: "f1", 120: "f2", 99: "f3", 118: "f4",
-            96: "f5", 97: "f6", 98: "f7", 100: "f8",
-            101: "f9", 109: "f10", 103: "f11", 111: "f12"
-        ]
-        
-        return keyMap[keyCode]
     }
     
     private func displayShortcut(_ shortcut: String) -> String {

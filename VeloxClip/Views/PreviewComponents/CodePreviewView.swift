@@ -282,8 +282,7 @@ struct CodePreviewView: View {
             if trimmed.hasSuffix("{") || trimmed.hasSuffix("[") { indent += 1 }
         }
         
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(formatted.joined(separator: "\n"), forType: .string)
+        PasteboardSelfWriteGate.shared.write(formatted.joined(separator: "\n"))
     }
 }
 

@@ -32,7 +32,8 @@ swift test --filter DatabaseManagerMigrationTests
 
 ```
 macOS Pasteboard
-  → ClipboardMonitor (polls every 0.5s; skips self-writes via PasteboardSelfWriteGate; TIFF → PNG)
+  → ClipboardMonitor (polls every 0.5s; skips self-writes via PasteboardSelfWriteGate; TIFF → PNG;
+                      5s repeat-copy window + image size cap via ClipboardIngestion)
   → ClipboardItem (type detection: text, image, RTF, file, color)
   → ClipboardStore (@MainActor — dedup by content/dataHash, favorites, history limit)
   → DatabaseManager (@actor — async SQLite, thread-safe)
@@ -42,7 +43,9 @@ macOS Pasteboard
 **IMPORTANT — lazy blob loading**: list queries do NOT fetch the `data` column. For
 items loaded from the DB, `item.data` is nil even for images/RTF; load it on demand via
 `ClipboardStore.loadData(for:)`. Never persist an item assuming `data` is populated —
-`DatabaseManager.updateClipboardItem` only writes the blob when `item.data != nil`.
+there is deliberately no full-row "update from snapshot"; `DatabaseManager` only offers
+narrow setters (`updateTags`, `updateContent`, `updateDetectedMetadata`, `touchItem`),
+none of which touch the blob or the favorite columns.
 Dedup uses the `dataHash` (SHA256) column; "move to top on reuse" uses `lastUsedAt`
 (never rewrite `createdAt`); ordering is `COALESCE(lastUsedAt, createdAt) DESC`.
 
@@ -51,7 +54,7 @@ Dedup uses the `dataHash` (SHA256) column; "move to top on reuse" uses `lastUsed
 **App/** — Entry point and window management. `VeloxClipApp.swift` handles menu bar setup and single-instance enforcement. `WindowManager.swift` manages the overlay window lifecycle.
 
 **Models/** — Core state:
-- `ClipboardStore` — @MainActor central state container; owns the items array, favorites, deduplication (5s window), and enforces history limit (only non-favorites count toward the limit)
+- `ClipboardStore` — @MainActor central state container; owns the items array, favorites, deduplication against the whole history (same type + content/dataHash → move existing item to top), and enforces history limit (only non-favorites count toward the limit). The 5-second repeat-copy window lives in `ClipboardIngestion.recentDuplicate` (used by the monitor)
 - `DatabaseManager` — @actor async SQLite wrapper; all DB reads/writes are async and must be awaited
 - `AppSettings` — @MainActor settings model; changes propagate to DB via `didSet`
 

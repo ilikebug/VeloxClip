@@ -249,13 +249,6 @@ struct MenuBarDashboard: View {
         VStack(spacing: 0) {
             Divider().overlay(c.divider)
             HStack {
-                if let footerShortcutHint = presentation.footerShortcutHint {
-                    Text(footerShortcutHint)
-                        .font(.system(size: 10.8))
-                        .foregroundColor(c.text2)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
                 Spacer()
                 Button(L10n.string("menubar.quit", language: settings.appLanguage)) {
                     NSApplication.shared.terminate(nil)

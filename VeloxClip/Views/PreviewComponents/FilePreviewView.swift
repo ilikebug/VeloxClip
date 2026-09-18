@@ -8,9 +8,7 @@ struct FilePreviewView: View {
     let filePath: String
 
     private var paths: [String] {
-        filePath.components(separatedBy: .newlines)
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
+        RowPresentation.filePaths(from: filePath)
     }
 
     var body: some View {
@@ -79,11 +77,8 @@ struct MultiFilePreview: View {
     private var summaryLine: String {
         let existing = entries.filter(\.exists)
         let totalSize = existing.reduce(Int64(0)) { $0 + $1.size }
-        let formatter = ByteCountFormatter()
-        formatter.allowedUnits = [.useKB, .useMB, .useGB]
-        formatter.countStyle = .file
 
-        var parts = [formatter.string(fromByteCount: totalSize)]
+        var parts = [FilePreviewPresentation.fileSizeString(totalSize)]
         let missingCount = entries.count - existing.count
         if missingCount > 0 {
             parts.append(FilePreviewPresentation.missingSummary(count: missingCount))
@@ -163,10 +158,7 @@ struct MultiFilePreview: View {
     }
 
     private func formatFileSize(_ bytes: Int64) -> String {
-        let formatter = ByteCountFormatter()
-        formatter.allowedUnits = [.useKB, .useMB, .useGB]
-        formatter.countStyle = .file
-        return formatter.string(fromByteCount: bytes)
+        FilePreviewPresentation.fileSizeString(bytes)
     }
 
     private func revealInFinder(_ entry: FileEntry) {
@@ -181,6 +173,7 @@ struct MultiFilePreview: View {
     private func copySingleFile(_ entry: FileEntry) {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
+        defer { PasteboardSelfWriteGate.shared.recordSelfWrite() }
         if entry.exists, pasteboard.writeObjects([URL(fileURLWithPath: entry.path) as NSURL]) {
             return
         }
@@ -364,10 +357,7 @@ struct SingleFilePreview: View {
     }
     
     private func formatFileSize(_ bytes: Int64) -> String {
-        let formatter = ByteCountFormatter()
-        formatter.allowedUnits = [.useKB, .useMB, .useGB]
-        formatter.countStyle = .file
-        return formatter.string(fromByteCount: bytes)
+        FilePreviewPresentation.fileSizeString(bytes)
     }
     
     private func openFile() {
@@ -381,15 +371,11 @@ struct SingleFilePreview: View {
     }
     
     private func copyPath() {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(filePath, forType: .string)
+        PasteboardSelfWriteGate.shared.write(filePath)
     }
     
     private func copyName() {
         guard let info = fileInfo else { return }
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(info.name, forType: .string)
+        PasteboardSelfWriteGate.shared.write(info.name)
     }
 }

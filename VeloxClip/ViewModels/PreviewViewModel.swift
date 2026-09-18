@@ -28,9 +28,7 @@ class PreviewViewModel: ObservableObject {
     }
     
     func copyTransformedText(_ text: String) {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(text, forType: .string)
+        PasteboardSelfWriteGate.shared.write(text)
     }
     
     func copyToClipboard(_ item: ClipboardItem) {

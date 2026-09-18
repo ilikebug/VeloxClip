@@ -31,7 +31,12 @@
 "settings.shortcut.textCapture" = "屏幕取词";
 "settings.shortcut.pasteImage" = "粘贴图片";
 "settings.clearCache" = "清缓存";
+"textCapture.noText" = "未识别到文字";
+"textCapture.noTextNoPermission" = "未识别到文字 — 可能缺少「屏幕录制」权限";
+"textCapture.recognized" = "已识别 %d 个字符";
 "settings.clearHistory" = "清历史";
+"settings.clearHistory.confirm" = "删除所有非收藏条目？";
+"settings.clearHistory.confirm.yes" = "删除";
 
 "preview.table.delimiter" = "分隔符";
 "preview.table.search" = "搜索...";

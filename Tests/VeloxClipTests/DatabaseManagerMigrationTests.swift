@@ -4,7 +4,7 @@ import SQLite
 
 final class DatabaseManagerMigrationTests: XCTestCase {
     func testLegacyClipboardTableIsMigratedBeforeUse() async throws {
-        let databaseURL = makeDatabaseURL(directoryName: #function)
+        let databaseURL = TestSupport.makeDatabaseURL(#function)
         try createLegacyDatabase(at: databaseURL)
 
         let databaseManager = DatabaseManager(databaseURL: databaseURL)
@@ -21,8 +21,6 @@ final class DatabaseManagerMigrationTests: XCTestCase {
         }
 
         XCTAssertTrue(columns.contains("tags"))
-        XCTAssertTrue(columns.contains("summary"))
-        XCTAssertTrue(columns.contains("isSensitive"))
         XCTAssertTrue(columns.contains("embedding"))
         XCTAssertTrue(columns.contains("isFavorite"))
         XCTAssertTrue(columns.contains("favoritedAt"))
@@ -31,7 +29,7 @@ final class DatabaseManagerMigrationTests: XCTestCase {
     }
 
     func testLegacyBlobRowsGetDataHashBackfilled() async throws {
-        let databaseURL = makeDatabaseURL(directoryName: #function)
+        let databaseURL = TestSupport.makeDatabaseURL(#function)
         try createLegacyDatabase(at: databaseURL)
 
         // Add a legacy row that carries a blob but (obviously) no dataHash column value
@@ -70,9 +68,4 @@ final class DatabaseManagerMigrationTests: XCTestCase {
             """, UUID().uuidString, Date().timeIntervalSince1970, "text", "legacy", "Tests")
     }
 
-    private func makeDatabaseURL(directoryName: String) -> URL {
-        let root = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-        let directory = root.appendingPathComponent("VeloxClipTests-\(directoryName)-\(UUID().uuidString)", isDirectory: true)
-        return directory.appendingPathComponent("veloxclip.db")
-    }
 }

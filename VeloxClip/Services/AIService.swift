@@ -42,26 +42,35 @@ private actor EmbeddingCache {
     }
 }
 
-class AIService {
-    nonisolated(unsafe) static let shared = AIService()
-    
-    // Sentence embedding models for semantic search (thread-safe).
+// Owns the NLEmbedding models. They are not documented thread-safe, and the
+// per-copy embedding (background task) and the search-as-you-type embedding
+// (another detached task) used to call into the same instance concurrently.
+private actor EmbeddingEngine {
     // Chinese content needs its own model — the English model returns nil for it.
-    private let englishEmbedding = NLEmbedding.sentenceEmbedding(for: .english)
-    private let chineseEmbedding = NLEmbedding.sentenceEmbedding(for: .simplifiedChinese)
+    private let english = NLEmbedding.sentenceEmbedding(for: .english)
+    private let chinese = NLEmbedding.sentenceEmbedding(for: .simplifiedChinese)
+
+    func vector(for text: String) -> [Double]? {
+        let recognizer = NLLanguageRecognizer()
+        recognizer.processString(String(text.prefix(200)))
+        let model: NLEmbedding?
+        if let language = recognizer.dominantLanguage,
+           language == .simplifiedChinese || language == .traditionalChinese {
+            model = chinese ?? english
+        } else {
+            model = english
+        }
+        return model?.vector(for: text)
+    }
+}
+
+final class AIService: Sendable {
+    static let shared = AIService()
+    
+    private let engine = EmbeddingEngine()
 
     // Thread-safe embedding cache using actor
     private let embeddingCache = EmbeddingCache(maxSize: 200)
-
-    private func embeddingModel(for text: String) -> NLEmbedding? {
-        let recognizer = NLLanguageRecognizer()
-        recognizer.processString(String(text.prefix(200)))
-        if let language = recognizer.dominantLanguage,
-           language == .simplifiedChinese || language == .traditionalChinese {
-            return chineseEmbedding ?? englishEmbedding
-        }
-        return englishEmbedding
-    }
     
     private init() {}
     
@@ -142,9 +151,8 @@ class AIService {
             return cached
         }
 
-        // Generate embedding
-        guard let embedding = embeddingModel(for: textToEmbed),
-              let vector = embedding.vector(for: textToEmbed) else {
+        // Generate embedding (serialized through the engine actor)
+        guard let vector = await engine.vector(for: textToEmbed) else {
             return nil
         }
 
@@ -178,26 +186,10 @@ class AIService {
         return denominator == 0 ? 0 : dotProduct / denominator
     }
     
-    func formatJSON(_ text: String) -> String? {
-        guard let data = text.data(using: .utf8),
-              let jsonObject = try? JSONSerialization.jsonObject(with: data),
-              let prettyData = try? JSONSerialization.data(withJSONObject: jsonObject, options: [.prettyPrinted, .sortedKeys]),
-              let formatted = String(data: prettyData, encoding: .utf8) else {
-            return nil
-        }
-        return formatted
-    }
-    
     func convertCase(_ text: String, to caseType: TextCaseType) -> String {
         switch caseType {
         case .uppercase: return text.uppercased()
         case .lowercase: return text.lowercased()
-        case .titleCase: return text.capitalized
-        case .camelCase:
-            let words = text.components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }
-            guard !words.isEmpty else { return text }
-            return ([words[0].lowercased()] + words.dropFirst().map { $0.capitalized }).joined()
-        case .snakeCase: return text.lowercased().replacingOccurrences(of: " ", with: "_")
         }
     }
     
@@ -210,5 +202,5 @@ class AIService {
 }
 
 enum TextCaseType: Sendable {
-    case uppercase, lowercase, titleCase, camelCase, snakeCase
+    case uppercase, lowercase
 }

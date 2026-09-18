@@ -8,10 +8,6 @@ struct MainSearchBarLayout {
 }
 
 struct MainKeyRoutingPolicy {
-    static func shouldStageOnSpace(isComposingText: Bool) -> Bool {
-        false
-    }
-
     static func shouldStageOnCommandReturn(isComposingText: Bool) -> Bool {
         !isComposingText
     }
@@ -35,38 +31,10 @@ struct MainKeyRoutingPolicy {
     }
 }
 
-enum MainListInteraction {
-    case rowSelection
-    case rowControl
-    case keyboardSelection
-}
-
 struct MainFocusRoutingPolicy {
-    static func shouldBlurSearchOnListInteraction(hasSelectableItems: Bool) -> Bool {
-        false
-    }
-
     static func shouldRestoreSearchFocus(isDetailPresented: Bool,
                                          isCommandPalettePresented: Bool) -> Bool {
         !isDetailPresented && !isCommandPalettePresented
-    }
-
-    static func shouldRestoreSearchFocusAfterListInteraction(_ interaction: MainListInteraction) -> Bool {
-        true
-    }
-
-    static func shouldClearSearchFocusWhenPresentingDetail() -> Bool {
-        true
-    }
-}
-
-struct MainCommandPaletteLifecyclePolicy {
-    static func shouldClosePaletteOnOverlayWillShow(isPresented: Bool) -> Bool {
-        isPresented
-    }
-
-    static func shouldClosePaletteOnOverlayResignKey(isPresented: Bool) -> Bool {
-        isPresented
     }
 }
 
@@ -134,15 +102,8 @@ struct MainView: View {
         }
     }
 
-    private func restoreSearchFocusAfterListInteraction(_ interaction: MainListInteraction) {
-        guard MainFocusRoutingPolicy.shouldRestoreSearchFocusAfterListInteraction(interaction) else { return }
-        restoreSearchFocusSoon()
-    }
-
     private func openDetail(_ item: ClipboardItem) {
-        if MainFocusRoutingPolicy.shouldClearSearchFocusWhenPresentingDetail() {
-            isSearchFocused = false
-        }
+        isSearchFocused = false
         withAnimation(.easeInOut(duration: 0.18)) {
             detailItem = item
         }
@@ -293,7 +254,8 @@ struct MainView: View {
                 ZStack {
                     Color.black.opacity(0.12).ignoresSafeArea()
                         .onTapGesture { showCommandPalette = false }
-                    CommandPaletteView(item: selectedItem,
+                    CommandPaletteView(item: paletteItem,
+                                       isDetailPresented: detailItem != nil,
                                        onExecute: { executeCommand($0) },
                                        onClose: { showCommandPalette = false })
                 }
@@ -351,9 +313,16 @@ struct MainView: View {
         }
         .onChange(of: store.items) { _, newItems in
             // Deleting an item must not leave a ghost row in active search results
-            guard !searchResults.isEmpty else { return }
             let validIDs = Set(newItems.map(\.id))
             searchResults.removeAll { !validIDs.contains($0.id) }
+            // …nor a ghost selection — ⏎ would try to paste an item that no longer
+            // exists (for an image that meant clearing the clipboard and pasting nothing)
+            if let selected = selectedItem, !validIDs.contains(selected.id) {
+                selectedItem = displayItems.first
+            }
+            if let detail = detailItem, !validIDs.contains(detail.id) {
+                withAnimation(.easeInOut(duration: 0.18)) { detailItem = nil }
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { notification in
             // Only react to the overlay window itself — other windows (Settings,
@@ -365,16 +334,12 @@ struct MainView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { notification in
             guard notification.object is OverlayWindow else { return }
-            if MainCommandPaletteLifecyclePolicy.shouldClosePaletteOnOverlayResignKey(isPresented: showCommandPalette) {
-                showCommandPalette = false
-            }
+            showCommandPalette = false
         }
         .onReceive(NotificationCenter.default.publisher(for: .veloxOverlayWillShow)) { _ in
             // Reset state only when the overlay is (re)opened, not every time it
             // regains key status (e.g. after closing a popover)
-            if MainCommandPaletteLifecyclePolicy.shouldClosePaletteOnOverlayWillShow(isPresented: showCommandPalette) {
-                showCommandPalette = false
-            }
+            showCommandPalette = false
             isSearchFocused = true
             detailItem = nil
             viewMode = .history
@@ -390,6 +355,10 @@ struct MainView: View {
         .errorAlert() // Add unified error handling
     }
     
+    /// The item the palette acts on: the previewed item in detail mode, else the
+    /// list selection — same rule ⌘C already uses.
+    private var paletteItem: ClipboardItem? { detailItem ?? selectedItem }
+
     // The list/detail VStack. Navigation/command keys are routed through the
     // window-level NSEvent monitor in `handleKeyDown` (focus-independent), so there
     // are no `.onKeyPress` handlers here — they only fire while the view tree holds
@@ -448,9 +417,16 @@ struct MainView: View {
             // editing keys reach the field editor. Hijacking them here would make
             // adding a tag or selecting preview text impossible.
             if editingText { return false }
+            // ⌘K → palette for the previewed item (the palette is detail-aware)
+            if isCmd, event.charactersIgnoringModifiers?.lowercased() == "k" {
+                showCommandPalette = true; return true
+            }
             switch key {
             case 123 where isCmd, 53: // ⌘← or Esc → back to list
                 withAnimation(.easeInOut(duration: 0.18)) { detailItem = nil }
+                return true
+            case 36 where isCmd, 76 where isCmd: // ⌘⏎ → stage, as advertised by the palette
+                if let item = detailItem { PasteStackService.shared.toggleStaged(item) }
                 return true
             case 36, 76: // ⏎ → paste
                 if !MainKeyRoutingPolicy.shouldPasteOnReturn(
@@ -518,13 +494,7 @@ struct MainView: View {
             withAnimation(.easeInOut(duration: 0.2)) { viewMode = (viewMode == .history ? .favorites : .history) }
             return true
         case 49:                                               // Space always belongs to text input / IME
-            if MainKeyRoutingPolicy.shouldStageOnSpace(
-                isComposingText: isComposingText
-            ),
-               let item = selectedItem {
-                PasteStackService.shared.toggleStaged(item); return true
-            }
-            return false   // otherwise let the space type into the search field
+            return false
         default:
             return false   // all other keys (typing) fall through to the focused field
         }
@@ -577,8 +547,10 @@ struct MainView: View {
                 items: displayItems,
                 scrollTarget: $scrollTarget,
                 emptyKind: emptyKind,
-                onUserInteract: { interaction in
-                    restoreSearchFocusAfterListInteraction(interaction)
+                onUserInteract: { restoreSearchFocusSoon() },
+                onContextMenu: { item in
+                    selectedItem = item
+                    showCommandPalette = true
                 }
             )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -610,6 +582,8 @@ struct MainView: View {
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.primary.opacity(0.04))
+        // Right-click anywhere on the preview → actions for the previewed item.
+        .overlay(RightClickCatcher { showCommandPalette = true })
     }
 
     private func executeSelection() {
@@ -624,14 +598,14 @@ struct MainView: View {
     }
     
     private func executeCommand(_ cmd: Command) {
-        let item = selectedItem
+        let item = paletteItem
         switch cmd.id {
         case "paste":
             if let i = item { WindowManager.shared.selectAndPaste(i) }
         case "copy":
             if let i = item { copyItem(i) }
         case "detail":
-            if let i = item { openDetail(i) }
+            if let i = item, detailItem == nil { openDetail(i) }
         case "copyHex":
             if let content = item?.content {
                 copyString(ColorFormatting.hex(from: content) ?? content)
@@ -655,6 +629,7 @@ struct MainView: View {
         case "delete":
             if let i = item, let idx = displayItems.firstIndex(where: { $0.id == i.id }) {
                 let items = displayItems
+                // onChange(of: store.items) drops the selection / detail pane for the removed row
                 Task { await ClipboardStore.shared.deleteItems(at: IndexSet(integer: idx), in: items) }
             }
         default:
@@ -681,9 +656,7 @@ struct MainView: View {
 
     // Copy a plain string (used by copyHex/copyRgb — hex/rgb are text values).
     private func copyString(_ string: String) {
-        let pb = NSPasteboard.general
-        pb.clearContents()
-        pb.setString(string, forType: .string)
+        PasteboardSelfWriteGate.shared.write(string)
     }
 
     private func editImage(_ item: ClipboardItem) {
@@ -699,9 +672,7 @@ struct MainView: View {
 
     private func openURL(_ content: String) {
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let url = URL(string: trimmed),
-              let scheme = url.scheme?.lowercased(),
-              scheme == "http" || scheme == "https" else { return }
+        guard let url = URL(string: trimmed), WebURL.isOpenable(url) else { return }
         NSWorkspace.shared.open(url)
     }
 
@@ -721,7 +692,7 @@ struct MainView: View {
 
         if nextIndex >= 0 && nextIndex < items.count {
             selectedItem = items[nextIndex]
-            restoreSearchFocusAfterListInteraction(.keyboardSelection)
+            restoreSearchFocusSoon()
             // Keyboard navigation keeps the selection in view; mouse clicks never scroll
             scrollTarget = items[nextIndex].id
         }

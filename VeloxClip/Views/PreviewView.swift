@@ -1,10 +1,6 @@
 import SwiftUI
 import Foundation
 
-struct PreviewSurfaceStyle {
-    static let usesOpaqueWindowBackground = true
-}
-
 struct PreviewView: View {
     @Environment(\.colorScheme) private var scheme
     let item: ClipboardItem?
@@ -59,11 +55,7 @@ struct PreviewView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .background {
-            if PreviewSurfaceStyle.usesOpaqueWindowBackground {
-                DSColors(scheme: scheme).window
-            }
-        }
+        .background(DSColors(scheme: scheme).window)
         .animation(.easeInOut(duration: 0.2), value: debouncedItem?.id)
         .onChange(of: item) { _, newValue in
             handleItemChange(newValue)
@@ -195,7 +187,7 @@ struct PreviewView: View {
         switch viewModel.detectedType {
         case .image:
             if let data = item.data {
-                ScrollView(ImagePreviewLayoutPolicy.detailImage.scrollAxes) {
+                ScrollView(.vertical) {
                     VStack(alignment: .leading, spacing: 0) {
                         ImagePreviewView(imageData: data)
                         ocrSection(for: item)
@@ -420,6 +412,13 @@ struct PreviewView: View {
             .padding(.horizontal, 6).padding(.vertical, 2)
             .background(RoundedRectangle(cornerRadius: 10).fill(c.field))
             .focused($isTagInputFocused)
+            // Esc: cancel the edit. Without this the key falls through the responder
+            // chain to OverlayWindow.cancelOperation and closes the whole overlay.
+            .onExitCommand {
+                newTagText = ""
+                isEditingTags = false
+                isTagInputFocused = false
+            }
             .onSubmit {
                 if !newTagText.isEmpty {
                     store.addTag(newTagText, to: item)

@@ -311,7 +311,11 @@ private struct ShortcutsSection: View {
 // MARK: - Advanced
 
 private struct AdvancedSection: View {
+    @Environment(\.colorScheme) private var scheme
+    @State private var confirmingClear = false
+
     var body: some View {
+        let c = DSColors(scheme: scheme)
         VStack(alignment: .leading, spacing: 0) {
             SectionHeader(title: L10n.string("settings.section.advanced"))
 
@@ -321,10 +325,26 @@ private struct AdvancedSection: View {
                 }
                 .dsButton(.secondary)
 
-                Button(L10n.string("settings.clearHistory")) {
-                    ClipboardStore.shared.clearAll()
+                if confirmingClear {
+                    // One click used to wipe everything (favorites included) with no way back
+                    Text(L10n.string("settings.clearHistory.confirm"))
+                        .font(.dsSubheadline)
+                        .foregroundColor(c.text2)
+                    Button(L10n.string("settings.clearHistory.confirm.yes")) {
+                        confirmingClear = false
+                        Task { await ClipboardStore.shared.clearHistory() }
+                    }
+                    .dsButton(.destructive)
+                    Button(L10n.string("hud.cancel")) {
+                        confirmingClear = false
+                    }
+                    .dsButton(.secondary)
+                } else {
+                    Button(L10n.string("settings.clearHistory")) {
+                        confirmingClear = true
+                    }
+                    .dsButton(.destructive)
                 }
-                .dsButton(.destructive)
             }
         }
     }

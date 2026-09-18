@@ -14,6 +14,15 @@ final class PreviewComponentPresentationTests: XCTestCase {
         XCTAssertEqual(TablePreviewPresentation.rowColumnSummary(rows: 2, columns: 3, language: .en), "2 rows, 3 columns")
     }
 
+    func testUnixTimestampParsingHandlesMilliseconds() {
+        let seconds = DateTimePreviewPresentation.unixDate(from: "1718000000")
+        let millis = DateTimePreviewPresentation.unixDate(from: " 1718000000000 ")
+        XCTAssertEqual(seconds?.timeIntervalSince1970, 1_718_000_000)
+        // 13 digits is milliseconds — parsed as seconds this showed year ≈ 56,400
+        XCTAssertEqual(millis?.timeIntervalSince1970, 1_718_000_000)
+        XCTAssertNil(DateTimePreviewPresentation.unixDate(from: "yesterday"))
+    }
+
     func testDateTimePreviewLabelsAreLocalized() {
         XCTAssertEqual(DateTimePreviewPresentation.title(language: .zhHans), "日期/时间格式")
         XCTAssertEqual(DateTimePreviewPresentation.copyISOButtonTitle(language: .zhHans), "复制 ISO")

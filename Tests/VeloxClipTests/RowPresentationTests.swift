@@ -162,4 +162,13 @@ final class RowPresentationTests: XCTestCase {
         XCTAssertNotEqual(result, "昨天")
         XCTAssertTrue(result.contains("月") && result.contains("日"))
     }
+
+    func testJSONSubtitleSkipsParsingHugeContent() {
+        let small = "{\"a\": 1, \"b\": 2}"
+        XCTAssertEqual(RowPresentation.subtitle(type: "text", content: small, tags: ["JSON"], language: .en), "JSON · 2 keys")
+
+        // Row bodies re-render on every hover; a multi-MB JSON must not be parsed each time
+        let huge = "{\"k\": \"" + String(repeating: "x", count: RowPresentation.jsonSubtitleParseLimit) + "\"}"
+        XCTAssertEqual(RowPresentation.subtitle(type: "text", content: huge, tags: ["JSON"], language: .en), "JSON")
+    }
 }

@@ -49,6 +49,20 @@ final class CommandResolverTests: XCTestCase {
         XCTAssertFalse(ids.contains("openURL"))
     }
 
+    func testNonWebSchemesNeverGetOpenURLCommand() {
+        for content in ["file:///etc/passwd", "mailto:a@b.co", "javascript:alert(1)", "ftp://example.com"] {
+            let item = ClipboardItem(type: "text", content: content, sourceApp: nil)
+            XCTAssertFalse(CommandResolver.commands(for: item).map(\.id).contains("openURL"), content)
+        }
+    }
+
+    func testDetailCommandIsHiddenWhileDetailIsPresented() {
+        let item = ClipboardItem(type: "text", content: "x", sourceApp: nil)
+        let ids = CommandResolver.commands(for: item, isDetailPresented: true).map(\.id)
+        XCTAssertFalse(ids.contains("detail"))
+        XCTAssertTrue(ids.contains("paste"))
+    }
+
     func testFileItemHasRevealAndCopyPathCommands() {
         let item = ClipboardItem(type: "file", content: "/tmp/a.txt", sourceApp: nil)
         let ids = CommandResolver.commands(for: item).map(\.id)

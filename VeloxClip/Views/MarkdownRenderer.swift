@@ -1,18 +1,22 @@
 import SwiftUI
 import MarkdownUI
 
-// Markdown chunk structure for lazy loading
+// Markdown chunk structure for lazy loading — MarkdownUI classifies the
+// content itself; chunking only exists so long documents render incrementally
 struct MarkdownChunk: Identifiable {
     let id: UUID = UUID()
     let content: String
-    let type: ChunkType
-    
-    enum ChunkType {
-        case paragraph
-        case codeBlock
-        case heading
-        case list
-        case blockquote
+}
+
+// Clipboard content is untrusted: never fetch remote images — an `![](https://…)`
+// in copied text would otherwise beacon the user's IP the moment detail opens.
+private struct NoRemoteImageProvider: ImageProvider {
+    func makeImage(url: URL?) -> some View { EmptyView() }
+}
+
+private struct NoRemoteInlineImageProvider: InlineImageProvider {
+    func image(with url: URL, label: String) async throws -> Image {
+        throw URLError(.unsupportedURL)
     }
 }
 
@@ -47,6 +51,12 @@ struct MarkdownView: View {
             .padding(.vertical, 12)
         }
         .textSelection(.enabled)
+        .markdownImageProvider(NoRemoteImageProvider())
+        .markdownInlineImageProvider(NoRemoteInlineImageProvider())
+        // Links: same http(s)-only rule as everywhere else in the app
+        .environment(\.openURL, OpenURLAction { url in
+            WebURL.isOpenable(url) ? .systemAction : .handled
+        })
         .task(id: markdown) {
             await parseChunksAsync()
         }
@@ -87,11 +97,11 @@ struct MarkdownView: View {
                 
                 if trimmed.hasPrefix("```") {
                     if inCodeBlock {
-                        if !currentChunk.isEmpty { chunks.append(MarkdownChunk(content: currentChunk, type: .codeBlock)) }
+                        if !currentChunk.isEmpty { chunks.append(MarkdownChunk(content: currentChunk)) }
                         currentChunk = ""
                         inCodeBlock = false
                     } else {
-                        if !currentChunk.isEmpty { chunks.append(MarkdownChunk(content: currentChunk.trimmingCharacters(in: .whitespacesAndNewlines), type: .paragraph)) }
+                        if !currentChunk.isEmpty { chunks.append(MarkdownChunk(content: currentChunk.trimmingCharacters(in: .whitespacesAndNewlines))) }
                         currentChunk = ""
                         inCodeBlock = true
                     }
@@ -102,13 +112,12 @@ struct MarkdownView: View {
                     currentChunk += line + "\n"
                 } else {
                     if trimmed.hasPrefix("#") {
-                        if !currentChunk.isEmpty { chunks.append(MarkdownChunk(content: currentChunk.trimmingCharacters(in: .whitespacesAndNewlines), type: .paragraph)) }
-                        chunks.append(MarkdownChunk(content: line, type: .heading))
+                        if !currentChunk.isEmpty { chunks.append(MarkdownChunk(content: currentChunk.trimmingCharacters(in: .whitespacesAndNewlines))) }
+                        chunks.append(MarkdownChunk(content: line))
                         currentChunk = ""
                     } else if trimmed.isEmpty {
                         if !currentChunk.isEmpty {
-                            let type: MarkdownChunk.ChunkType = currentChunk.contains(">") ? .blockquote : (currentChunk.contains("-") || currentChunk.contains("*") ? .list : .paragraph)
-                            chunks.append(MarkdownChunk(content: currentChunk.trimmingCharacters(in: .whitespacesAndNewlines), type: type))
+                            chunks.append(MarkdownChunk(content: currentChunk.trimmingCharacters(in: .whitespacesAndNewlines)))
                             currentChunk = ""
                         }
                     } else {
@@ -118,10 +127,10 @@ struct MarkdownView: View {
             }
             
             if !currentChunk.isEmpty {
-                chunks.append(MarkdownChunk(content: currentChunk.trimmingCharacters(in: .whitespacesAndNewlines), type: inCodeBlock ? .codeBlock : .paragraph))
+                chunks.append(MarkdownChunk(content: currentChunk.trimmingCharacters(in: .whitespacesAndNewlines)))
             }
             
-            if chunks.isEmpty { chunks.append(MarkdownChunk(content: input, type: .paragraph)) }
+            if chunks.isEmpty { chunks.append(MarkdownChunk(content: input)) }
             
             await MainActor.run {
                 Self.chunksCache[input] = chunks

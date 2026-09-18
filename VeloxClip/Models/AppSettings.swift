@@ -7,20 +7,23 @@ import ServiceManagement
 @MainActor
 class AppSettings: ObservableObject {
     static let shared = AppSettings()
-    
-    private let dbManager = DatabaseManager.shared
-    
+
+    private let dbManager: DatabaseManager
+
+    /// Fired after `historyLimit` changes post-load. `ClipboardStore` hooks this so
+    /// shrinking the limit trims immediately, without settings knowing the store.
+    var onHistoryLimitChanged: (() -> Void)?
+
     @Published var historyLimit: Int {
         didSet {
             guard !isInitializing else { return }
             Task {
                 try? await dbManager.setSetting(key: "historyLimit", value: String(historyLimit))
             }
-            // Shrinking the limit takes effect immediately, not on the next copy
-            ClipboardStore.shared.enforceHistoryLimit()
+            onHistoryLimitChanged?()
         }
     }
-    
+
     @Published var launchAtLogin: Bool {
         didSet {
             guard !isInitializing else { return }
@@ -30,7 +33,7 @@ class AppSettings: ObservableObject {
             updateLaunchAtLogin()
         }
     }
-    
+
     @Published var globalShortcut: String {
         didSet {
             if !isInitializing {
@@ -41,7 +44,7 @@ class AppSettings: ObservableObject {
             ShortcutManager.shared.updateShortcut(globalShortcut)
         }
     }
-    
+
     @Published var screenshotShortcut: String {
         didSet {
             if !isInitializing {
@@ -52,7 +55,7 @@ class AppSettings: ObservableObject {
             ShortcutManager.shared.updateScreenshotShortcut(screenshotShortcut)
         }
     }
-    
+
     @Published var pasteImageShortcut: String {
         didSet {
             if !isInitializing {
@@ -131,12 +134,19 @@ class AppSettings: ObservableObject {
 
     private var isInitializing = true
 
-    // True once loadSettings() has applied the persisted values. History
-    // trimming must not run before this — historyLimit still holds its
-    // default and trimming against it could mass-delete history at launch.
+    // True once load() has applied the persisted values. History trimming must
+    // not run before this — historyLimit still holds its default and trimming
+    // against it could mass-delete history at launch.
     private(set) var settingsLoaded = false
 
-    private init() {
+    private convenience init() {
+        self.init(dbManager: .shared)
+    }
+
+    /// `autoLoad: false` lets tests drive `load()` themselves against an injected DB.
+    init(dbManager: DatabaseManager, autoLoad: Bool = true) {
+        self.dbManager = dbManager
+
         // Initialize with default values first
         self.historyLimit = 100
         self.launchAtLogin = false
@@ -150,89 +160,81 @@ class AppSettings: ObservableObject {
         self.appearance = "light"
         self.appLanguage = .system
 
-
-        // Load settings from database asynchronously
-        Task {
-            await loadSettings()
-            // Mark initialization complete after loading
-            await MainActor.run {
-                self.isInitializing = false
-                self.settingsLoaded = true
-            }
-        }
-        
-        // Sync state with system on launch
-        if #available(macOS 13.0, *) {
-            let currentStatus = SMAppService.mainApp.status
-            if currentStatus == .enabled && !self.launchAtLogin {
-                self.launchAtLogin = true
-            } else if currentStatus != .enabled && self.launchAtLogin {
-                // If system says disabled but we thought enabled, trust system or try to re-enable?
-                // Let's trust system for now to avoid loops
-                self.launchAtLogin = false
-            }
+        if autoLoad {
+            Task { await load() }
         }
     }
-    
+
+    /// Applies persisted values, then reconciles the login item with the system.
+    func load() async {
+        await loadSettings()
+        isInitializing = false
+        settingsLoaded = true
+        syncLaunchAtLoginWithSystem()
+    }
+
+    // The system is the source of truth for the login item. Runs after load so
+    // the correction persists — before, it was applied during init (not persisted)
+    // and then overwritten by the stored value, leaving the toggle wrong.
+    // Only the two definitive states correct the toggle: `.requiresApproval`
+    // (pending in System Settings) and `.notFound` (dev build, test runner)
+    // must not flip a user's "on" to "off" or unregister a pending item.
+    private func syncLaunchAtLoginWithSystem() {
+        switch SMAppService.mainApp.status {
+        case .enabled where !launchAtLogin:      launchAtLogin = true
+        case .notRegistered where launchAtLogin: launchAtLogin = false
+        default: break
+        }
+    }
+
     private func loadSettings() async {
-        // Load historyLimit
+        // Load historyLimit — only a positive value is valid; 0/negative would
+        // trim history to nothing, so a bad stored value is replaced by the default
         if let historyLimitStr = await dbManager.getSetting(key: "historyLimit"),
-           let limit = Int(historyLimitStr) {
-            await MainActor.run {
-                self.historyLimit = limit
-            }
+           let limit = Int(historyLimitStr), limit > 0 {
+            self.historyLimit = limit
         } else {
             try? await dbManager.setSetting(key: "historyLimit", value: "100")
         }
-        
+
         // Load launchAtLogin
         if let launchAtLoginStr = await dbManager.getSetting(key: "launchAtLogin") {
-            await MainActor.run {
-                self.launchAtLogin = launchAtLoginStr == "true"
-            }
+            self.launchAtLogin = launchAtLoginStr == "true"
         } else {
             try? await dbManager.setSetting(key: "launchAtLogin", value: "false")
         }
-        
+
         // Load globalShortcut
         if let shortcut = await dbManager.getSetting(key: "globalShortcut") {
-            await MainActor.run {
-                self.globalShortcut = shortcut
-            }
+            self.globalShortcut = shortcut
         } else {
             try? await dbManager.setSetting(key: "globalShortcut", value: "cmd+shift+v")
         }
-        
+
         // Load screenshotShortcut
         if let shortcut = await dbManager.getSetting(key: "screenshotShortcut") {
-            await MainActor.run {
-                self.screenshotShortcut = shortcut
-            }
+            self.screenshotShortcut = shortcut
         } else {
             try? await dbManager.setSetting(key: "screenshotShortcut", value: "f1")
         }
-        
+
         // Load pasteImageShortcut
         if let shortcut = await dbManager.getSetting(key: "pasteImageShortcut") {
-            await MainActor.run {
-                self.pasteImageShortcut = shortcut
-            }
+            self.pasteImageShortcut = shortcut
         } else {
             try? await dbManager.setSetting(key: "pasteImageShortcut", value: "f3")
         }
-        
+
         // Load textCaptureShortcut
         if let shortcut = await dbManager.getSetting(key: "textCaptureShortcut") {
-            await MainActor.run {
-                self.textCaptureShortcut = shortcut
-            }
+            self.textCaptureShortcut = shortcut
         } else {
             try? await dbManager.setSetting(key: "textCaptureShortcut", value: "f2")
         }
 
         // Load paste stack HUD settings
         if let show = await dbManager.getSetting(key: "showPasteStackHUD") {
-            await MainActor.run { self.showPasteStackHUD = show == "true" }
+            self.showPasteStackHUD = show == "true"
         } else {
             try? await dbManager.setSetting(key: "showPasteStackHUD", value: "true")
         }
@@ -244,7 +246,7 @@ class AppSettings: ObservableObject {
         let oldDefaults = ["bottomRight", "topCenter"]
         if let position = await dbManager.getSetting(key: "pasteStackHUDPosition"),
            positionMigrated || !oldDefaults.contains(position) {
-            await MainActor.run { self.pasteStackHUDPosition = position }
+            self.pasteStackHUDPosition = position
         } else {
             try? await dbManager.setSetting(key: "pasteStackHUDPosition", value: "bottomCenter")
         }
@@ -252,20 +254,20 @@ class AppSettings: ObservableObject {
         try? await dbManager.deleteSetting(key: "hudPositionTopCenterMigration")
 
         if let origin = await dbManager.getSetting(key: "pasteStackHUDCustomOrigin") {
-            await MainActor.run { self.pasteStackHUDCustomOrigin = origin }
+            self.pasteStackHUDCustomOrigin = origin
         }
 
         // Appearance (light by default; not following the system)
         if let appearanceValue = await dbManager.getSetting(key: "appearance") {
-            await MainActor.run { self.appearance = appearanceValue }
+            self.appearance = appearanceValue
         } else {
             try? await dbManager.setSetting(key: "appearance", value: "light")
         }
-        await MainActor.run { self.applyAppearance() }
+        applyAppearance()
 
         if let languageValue = await dbManager.getSetting(key: "appLanguage"),
            let language = AppLanguage(rawValue: languageValue) {
-            await MainActor.run { self.appLanguage = language }
+            self.appLanguage = language
         } else {
             try? await dbManager.setSetting(key: "appLanguage", value: AppLanguage.system.rawValue)
         }
@@ -276,7 +278,7 @@ class AppSettings: ObservableObject {
         try? await dbManager.deleteSetting(key: "openRouterModel")
         try? await dbManager.deleteSetting(key: "aiResponseLanguage")
     }
-    
+
     // Force the whole app to the chosen appearance (overrides the system setting),
     // which propagates to every NSWindow/NSPanel and to SwiftUI's colorScheme.
     func applyAppearance() {
@@ -288,20 +290,16 @@ class AppSettings: ObservableObject {
     }
 
     private func updateLaunchAtLogin() {
-        if #available(macOS 13.0, *) {
-            do {
-                if launchAtLogin {
-                    if SMAppService.mainApp.status == .enabled { return }
-                    try SMAppService.mainApp.register()
-                } else {
-                    if SMAppService.mainApp.status == .notRegistered { return }
-                    try SMAppService.mainApp.unregister()
-                }
-            } catch {
-                print("Failed to update launch at login: \(error)")
-                // Revert toggle if failed? 
-                // For now just log it.
+        do {
+            if launchAtLogin {
+                if SMAppService.mainApp.status == .enabled { return }
+                try SMAppService.mainApp.register()
+            } else {
+                if SMAppService.mainApp.status == .notRegistered { return }
+                try SMAppService.mainApp.unregister()
             }
+        } catch {
+            print("Failed to update launch at login: \(error)")
         }
     }
 }

@@ -38,6 +38,14 @@ struct TablePreviewPresentation {
 }
 
 struct DateTimePreviewPresentation {
+    /// Numeric timestamps: values above 1e11 are milliseconds (13-digit epochs,
+    /// which `ContentDetectionService` routes here), otherwise seconds. 1e11 s is
+    /// year 5138, so no real seconds value crosses it.
+    static func unixDate(from string: String) -> Date? {
+        guard let value = Double(string.trimmingCharacters(in: .whitespaces)) else { return nil }
+        return Date(timeIntervalSince1970: value >= 1e11 ? value / 1000 : value)
+    }
+
     static var title: String { title() }
     static var copyISOButtonTitle: String { copyISOButtonTitle() }
     static var copyUnixButtonTitle: String { copyUnixButtonTitle() }
@@ -76,6 +84,14 @@ struct DateTimePreviewPresentation {
 }
 
 struct FilePreviewPresentation {
+    /// One ByteCountFormatter configuration for every preview (file list, single file, image info).
+    static func fileSizeString(_ bytes: Int64) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useKB, .useMB, .useGB]
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: bytes)
+    }
+
     static var missingBadge: String { missingBadge() }
     static var detailsTitle: String { detailsTitle() }
     static var sizeLabel: String { sizeLabel() }

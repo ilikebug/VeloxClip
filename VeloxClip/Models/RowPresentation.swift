@@ -62,8 +62,9 @@ enum RowPresentation {
 
     // MARK: - File paths
 
-    /// Non-empty path lines from a `file` item's content. Shared by the subtitle
-    /// (parent dir) and the row title (file name) so they parse identically.
+    /// Non-empty path lines from a `file` item's content — the single parser for
+    /// row title/subtitle, the file preview and pasting file URLs. Never trimmed:
+    /// a file name may legitimately begin or end with a space.
     static func filePaths(from content: String) -> [String] {
         content.components(separatedBy: .newlines).filter { !$0.isEmpty }
     }
@@ -71,6 +72,9 @@ enum RowPresentation {
     // MARK: - Subtitle (content metadata)
 
     /// The second row line: content-specific metadata, never the source app.
+    /// Above this size the JSON subtitle is the plain "JSON" label.
+    static let jsonSubtitleParseLimit = 64 * 1024
+
     static func subtitle(type: String,
                          content: String?,
                          tags: [String],
@@ -116,7 +120,8 @@ enum RowPresentation {
             return "\(code) · \(L10n.format("row.unit.lines", lines.count, language: language))"
 
         case .json:
-            guard let content else { return "JSON" }
+            // Row bodies re-render on every hover — never parse a huge document for a subtitle
+            guard let content, content.utf8.count <= jsonSubtitleParseLimit else { return "JSON" }
             let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
             guard let data = trimmed.data(using: .utf8),
                   let obj = try? JSONSerialization.jsonObject(with: data) else { return "JSON" }

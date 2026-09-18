@@ -8,12 +8,18 @@ class ScreenshotService {
     private var isWaitingForScreenshot = false
     private var previousChangeCount: Int = 0
     private var monitoringTimer: Timer?
+    private var timeoutTask: Task<Void, Never>?
     
     private init() {}
     
     // Capture area screenshot using macOS built-in tool
     // This will trigger the system screenshot UI and copy to clipboard
     func captureArea() {
+        // The press that raises the permission dialog must not also start a
+        // capture — its mouse grab would make the dialog unclickable. Every
+        // later press runs regardless of the (stale until relaunch) preflight.
+        guard !ScreenCapturePermission.promptIfNeeded() else { return }
+
         let pasteboard = NSPasteboard.general
         previousChangeCount = pasteboard.changeCount
         
@@ -33,13 +39,14 @@ class ScreenshotService {
             // Start monitoring clipboard to detect when screenshot is complete
             startClipboardMonitoring()
             
-            // Set a timeout to stop monitoring
-            Task {
+            // Timeout tied to THIS capture — a stale one from an earlier, cancelled
+            // capture must not tear down the monitoring of a later one
+            timeoutTask?.cancel()
+            timeoutTask = Task {
                 try? await Task.sleep(nanoseconds: 15_000_000_000) // 15 seconds timeout
-                if isWaitingForScreenshot {
-                    stopClipboardMonitoring()
-                    isWaitingForScreenshot = false
-                }
+                guard !Task.isCancelled, isWaitingForScreenshot else { return }
+                stopClipboardMonitoring()
+                isWaitingForScreenshot = false
             }
         } catch {
             print("Failed to launch screenshot tool: \(error)")
@@ -85,12 +92,13 @@ class ScreenshotService {
            let _ = NSImage(data: imageData) {
             // Screenshot detected, open main window to show history
             stopClipboardMonitoring()
+            timeoutTask?.cancel()
             isWaitingForScreenshot = false
             
             // Open main window after a short delay to ensure image is saved to history
             Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 second delay
-                WindowManager.shared.toggleWindow()
+                WindowManager.shared.showOverlay()   // never toggle — it would hide an open overlay
             }
         }
     }

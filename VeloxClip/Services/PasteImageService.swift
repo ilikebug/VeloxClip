@@ -111,11 +111,16 @@ class PasteImageService {
         
         eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self = self else { return event }
-            // Only consume ESC when a window was actually closed — the monitor
-            // outlives the last window briefly (fade-out + task hop), and must
-            // not swallow ESC presses meant for the rest of the app
-            if event.keyCode == 53, // ESC key
-               let topWindow = self.pasteImageWindows.first(where: { $0.isKeyWindow || $0.isMainWindow }) ?? self.pasteImageWindows.first {
+            // This is an app-wide monitor. The image windows are borderless and
+            // never become key, so ESC closes one only when no OTHER window of
+            // ours (history overlay, settings) is key — otherwise the overlay's
+            // ESC used to be swallowed whenever a floating image was on screen
+            let keyWindow = NSApp.keyWindow
+            let anotherWindowIsKey = keyWindow.map { !self.pasteImageWindows.contains($0) } ?? false
+            // orderedWindows is front-to-back; pasteImageWindows is a Set with no
+            // order, so picking `.first` closed an arbitrary image window
+            if event.keyCode == 53, !anotherWindowIsKey, // ESC key
+               let topWindow = NSApp.orderedWindows.first(where: { self.pasteImageWindows.contains($0) }) {
                 self.closePasteImageWindow(topWindow)
                 return nil
             }
@@ -124,6 +129,9 @@ class PasteImageService {
     }
     
     private func closePasteImageWindow(_ window: NSWindow) {
+        // Leave the set immediately: a fading window is still ordered in, so a
+        // second ESC would otherwise re-target it and be swallowed
+        pasteImageWindows.remove(window)
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.15
             window.animator().alphaValue = 0.0
@@ -132,7 +140,6 @@ class PasteImageService {
             Task { @MainActor in
                 window.orderOut(nil)
                 window.close()
-                self.pasteImageWindows.remove(window)
                 
                 // Remove event monitor if no windows left
                 if self.pasteImageWindows.isEmpty {
@@ -143,17 +150,6 @@ class PasteImageService {
                 }
             }
         }
-    }
-    
-    func closeAllPasteImages() {
-        let windowsToClose = Array(pasteImageWindows)
-        for window in windowsToClose {
-            closePasteImageWindow(window)
-        }
-    }
-    
-    func isShowing() -> Bool {
-        return !pasteImageWindows.isEmpty && pasteImageWindows.contains(where: { $0.isVisible })
     }
     
     func setWindowOpacity(_ opacity: Double, for window: NSWindow) {
