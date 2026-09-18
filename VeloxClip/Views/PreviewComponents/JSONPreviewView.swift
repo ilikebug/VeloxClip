@@ -11,7 +11,9 @@ struct JSONPreviewView: View {
     @State private var isValidJSON = false
     @State private var validationError: String?
     @State private var viewMode: ViewMode = .formatted
-    @State private var showTreeView = false
+    // Parsed once per item for tree mode — re-parsing inside body ran on every
+    // layout pass and store publish (multi-second hangs on large documents)
+    @State private var jsonObject: Any?
     
     enum ViewMode {
         case formatted, minified, tree
@@ -38,7 +40,12 @@ struct JSONPreviewView: View {
             }
         }
         .task(id: jsonString) {
+            jsonObject = nil
             await validateAndFormatAsync()
+            if viewMode == .tree { jsonObject = parseJSON() }
+        }
+        .onChange(of: viewMode) { _, mode in
+            if mode == .tree, jsonObject == nil { jsonObject = parseJSON() }
         }
     }
     
@@ -120,7 +127,9 @@ struct JSONPreviewView: View {
 
     private func formattedView(availableWidth: CGFloat) -> some View {
         let c = DSColors(scheme: scheme)
-        return VStack(alignment: .leading, spacing: 0) {
+        // Lazy: a pretty-printed multi-MB document has hundreds of thousands of
+        // lines; instantiating a Text for each up front froze the overlay
+        return LazyVStack(alignment: .leading, spacing: 0) {
             let lines = formattedJSON.components(separatedBy: .newlines)
             ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
                 Text(line)
@@ -133,7 +142,6 @@ struct JSONPreviewView: View {
             }
         }
         .padding(12)
-        .fixedSize(horizontal: true, vertical: false)
         .frame(minWidth: availableWidth, alignment: .topLeading)
     }
 
@@ -152,7 +160,7 @@ struct JSONPreviewView: View {
 
     private func treeView(availableWidth: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            if let jsonObject = parseJSON() {
+            if let jsonObject {
                 JSONTreeView(jsonObject: jsonObject, level: 0)
             }
         }
@@ -234,8 +242,7 @@ struct JSONPreviewView: View {
     
     private func copyJSON() {
         let text = viewMode == .minified ? minifiedJSONText : formattedJSON
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
+        PasteboardSelfWriteGate.shared.write(text)
     }
 }
 

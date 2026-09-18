@@ -113,9 +113,8 @@ struct DateTimePreviewView: View {
             }
         }
         
-        // Try Unix timestamp
-        if let timestamp = Double(dateString.trimmingCharacters(in: .whitespaces)) {
-            let date = Date(timeIntervalSince1970: timestamp)
+        // Try Unix timestamp (seconds or milliseconds)
+        if let date = DateTimePreviewPresentation.unixDate(from: dateString) {
             parsedDate = date
             generateFormats(date: date)
             return
@@ -168,9 +167,7 @@ struct DateTimePreviewView: View {
     }
     
     private func copyFormat(_ value: String) {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(value, forType: .string)
+        PasteboardSelfWriteGate.shared.write(value)
     }
     
     private func copyUnixTimestamp() {

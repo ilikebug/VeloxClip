@@ -31,7 +31,12 @@
 "settings.shortcut.textCapture" = "Screen Text";
 "settings.shortcut.pasteImage" = "Paste Image";
 "settings.clearCache" = "Clear Cache";
+"textCapture.noText" = "No text found";
+"textCapture.noTextNoPermission" = "No text found — Screen Recording permission may be missing";
+"textCapture.recognized" = "OCR recognized %d characters";
 "settings.clearHistory" = "Clear History";
+"settings.clearHistory.confirm" = "Delete all non-favorite items?";
+"settings.clearHistory.confirm.yes" = "Delete";
 
 "preview.table.delimiter" = "Delimiter";
 "preview.table.search" = "Search...";

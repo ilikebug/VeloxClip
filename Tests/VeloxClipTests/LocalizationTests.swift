@@ -39,12 +39,9 @@ final class LocalizationTests: XCTestCase {
 
     @MainActor
     func testSettingsLanguageCacheUpdatesBeforeObjectWillChange() {
-        let settings = AppSettings.shared
-        let originalLanguage = settings.appLanguage
-        defer {
-            settings.appLanguage = originalLanguage
-            L10n.updateCurrentLanguage(originalLanguage)
-        }
+        let settings = AppSettings(dbManager: DatabaseManager(databaseURL: TestSupport.makeDatabaseURL(#function)), autoLoad: false)
+        let originalLanguage = L10n.currentLanguage
+        defer { L10n.updateCurrentLanguage(originalLanguage) }
 
         settings.appLanguage = .en
         var languageObservedDuringChange: String?

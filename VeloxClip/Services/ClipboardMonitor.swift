@@ -93,7 +93,7 @@ class ClipboardMonitor: ObservableObject {
             }
             // 2. Check for Text
             else if let text = stringContent {
-                if self.isColor(text) {
+                if ClipboardIngestion.isColor(text) {
                     await self.saveItemAsync(type: "color", content: text, sourceApp: sourceApp)
                 } else {
                     await self.saveItemAsync(type: "text", content: text, sourceApp: sourceApp)
@@ -105,9 +105,20 @@ class ClipboardMonitor: ObservableObject {
             }
             // 4. Check for Images
             else if let rawImageData = pngData ?? tiffData {
+                // Header-only pixel check BEFORE any decode — a decompression bomb
+                // on the pasteboard must not take the app down on a poll tick
+                guard ClipboardIngestion.imageDimensionsWithinLimit(rawImageData) else {
+                    print("⚠️ Skipping pasteboard image with implausible dimensions")
+                    return
+                }
                 // TIFF from the pasteboard is uncompressed (tens of MB per screenshot);
                 // normalize to PNG before storing
                 let imageData = Self.normalizedImageData(rawImageData) ?? rawImageData
+                // Size check on what would actually be stored, not on the raw TIFF
+                guard ClipboardIngestion.imageStorable(imageData) else {
+                    print("⚠️ Skipping oversized image (\(imageData.count) bytes after normalization)")
+                    return
+                }
                 let newItem = await self.saveItemAsync(type: "image", data: imageData, sourceApp: sourceApp)
 
                 // Perform OCR in background
@@ -139,14 +150,10 @@ class ClipboardMonitor: ObservableObject {
 
         // Deduplication check on MainActor
         return await MainActor.run {
-            let now = Date()
-            let recentItemsSnapshot = Array(ClipboardStore.shared.items.prefix(10))
-
-            for recentItem in recentItemsSnapshot {
-                if recentItem.type == type && recentItem.content == content && recentItem.dataHash == incomingHash {
-                    let timeDiff = now.timeIntervalSince(recentItem.createdAt)
-                    if timeDiff < 5.0 { return recentItem }
-                }
+            if let duplicate = ClipboardIngestion.recentDuplicate(
+                in: ClipboardStore.shared.items, type: type, content: content, dataHash: incomingHash, now: Date()
+            ) {
+                return duplicate
             }
 
             let newItem = ClipboardItem(type: type, content: content, data: data, sourceApp: sourceApp)
@@ -161,7 +168,7 @@ class ClipboardMonitor: ObservableObject {
                 var detectedEmbedding: Data?
 
                 if let text = capturedContent {
-                    detectedTags = self.detectTags(in: text)
+                    detectedTags = ClipboardIngestion.detectTags(in: text)
                     
                     if text.count >= 3 && text.count <= 2000 {
                         if let vector = await AIService.shared.generateEmbedding(for: text) {
@@ -171,7 +178,7 @@ class ClipboardMonitor: ObservableObject {
                     
                     // Update item with tags and embedding if changed
                     if !detectedTags.isEmpty || detectedEmbedding != nil {
-                        await ClipboardStore.shared.updateMetadata(
+                        await ClipboardStore.shared.applyDetectedMetadata(
                             id: capturedItemID,
                             tags: detectedTags,
                             embedding: detectedEmbedding
@@ -182,59 +189,5 @@ class ClipboardMonitor: ObservableObject {
             
             return newItem
         }
-    }
-    
-    private func updateItemContent(id: UUID, content: String) {
-        ClipboardStore.shared.updateItem(id: id, content: content)
-    }
-    
-    nonisolated private func detectTags(in text: String) -> [String] {
-        var tags: [String] = []
-        
-        // URL detection
-        if let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) {
-            let matches = detector.matches(in: text, range: NSRange(text.startIndex..., in: text))
-            if !matches.isEmpty {
-                tags.append("URL")
-            }
-        }
-        
-        // Email detection
-        if text.contains("@") && text.contains(".") {
-            let emailPattern = "[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,64}"
-            if let _ = text.range(of: emailPattern, options: .regularExpression) {
-                tags.append("Email")
-            }
-        }
-        
-        // Phone number detection (simple pattern)
-        let phonePattern = "\\b\\d{3}[-.]?\\d{3,4}[-.]?\\d{4}\\b"
-        if let _ = text.range(of: phonePattern, options: .regularExpression) {
-            tags.append("Phone")
-        }
-        
-        // Code detection (contains common programming keywords or symbols)
-        let codeIndicators = ["func ", "class ", "def ", "import ", "const ", "let ", "var ", "function ", "=>", "->", "public ", "private "]
-        if codeIndicators.contains(where: { text.contains($0) }) {
-            tags.append("Code")
-        }
-        
-        // JSON detection
-        if (text.hasPrefix("{") && text.hasSuffix("}")) || (text.hasPrefix("[") && text.hasSuffix("]")) {
-            if let _ = try? JSONSerialization.jsonObject(with: Data(text.utf8)) {
-                tags.append("JSON")
-            }
-        }
-        
-        return tags
-    }
-    
-    nonisolated private func isColor(_ text: String) -> Bool {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let hexPattern = "^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3}|[A-Fa-f0-9]{8})$"
-        let rgbPattern = #"^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)$"#
-        
-        return trimmed.range(of: hexPattern, options: .regularExpression) != nil ||
-               trimmed.range(of: rgbPattern, options: .regularExpression) != nil
     }
 }

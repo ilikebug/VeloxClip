@@ -223,27 +223,8 @@ class ScreenshotEditorService: NSObject, NSWindowDelegate {
     private func copyToClipboard(_ image: NSImage) {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-
-        // Primary method: Write NSImage object directly (most compatible)
-        let writeSuccess = pasteboard.writeObjects([image])
-        print("✅ Edited image copied to clipboard: \(writeSuccess)")
-
-        // Backup: Also set TIFF representation for compatibility
-        if let tiffData = image.tiffRepresentation {
-            pasteboard.setData(tiffData, forType: .tiff)
-
-            // Convert to PNG properly
-            if let bitmapRep = NSBitmapImageRep(data: tiffData),
-               let pngData = bitmapRep.representation(using: .png, properties: [:]) {
-                pasteboard.setData(pngData, forType: .png)
-            }
-        }
-
+        ClipboardItem.writeImage(image, encoded: nil, to: pasteboard)
         // Intentionally NOT gated as a self-write: the edited image is new
         // content and should be picked up by ClipboardMonitor into history
-    }
-
-    func isShowing() -> Bool {
-        return editorWindow != nil && editorWindow?.isVisible == true
     }
 }

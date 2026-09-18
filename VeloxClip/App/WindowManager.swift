@@ -87,11 +87,12 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
 
     private var window: OverlayWindow?
     private var lastActiveApp: NSRunningApplication?
-    // True while selectAndPaste is mid-flight. Hiding the overlay during that
+    // Number of selectAndPaste calls mid-flight. Hiding the overlay during that
     // window (didResignActive fires when the target app activates) must NOT
     // start a staged paste stack — its pre-write would clobber the pasteboard
-    // before the injected Cmd+V reads it, pasting the wrong item.
-    private var pasteInFlight = false
+    // before the injected Cmd+V reads it, pasting the wrong item. A counter,
+    // not a Bool: the first paste finishing must not unguard a second one.
+    private var pastesInFlight = 0
 
     private var ownProcessID: pid_t {
         ProcessInfo.processInfo.processIdentifier
@@ -138,10 +139,20 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
     // Central hide path: closing the overlay (by any means) is what arms a
     // staged paste stack
     func hideOverlay() {
-        window?.orderOut(nil)
-        guard !pasteInFlight else { return } // selectAndPaste starts the stack itself
+        if let window, window.isVisible { window.orderOut(nil) }
+        // Also runs on every app deactivation with the overlay already hidden —
+        // that is the retry path for items staged while Accessibility was missing
+        // (the service prompts once, so this no longer re-opens the system dialog)
+        guard pastesInFlight == 0 else { return } // selectAndPaste starts the stack itself
         Task { @MainActor in
             await PasteStackService.shared.startIfStaged()
+        }
+    }
+
+    /// Bring the overlay up if it isn't already (idempotent, unlike toggleWindow).
+    func showOverlay() {
+        if !(window?.isVisible ?? false) {
+            showWindow()
         }
     }
 
@@ -255,13 +266,21 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
             preferredApps: [lastActiveApp, frontmostApp]
         )
 
-        pasteInFlight = true
+        pastesInFlight += 1
         Task { @MainActor in
-            defer { self.pasteInFlight = false }
+            defer { self.pastesInFlight -= 1 }
             // 2. Copy to clipboard — blobs are lazy-loaded, fetch if needed
             var fullItem = item
             if fullItem.data == nil, fullItem.type == "image" || fullItem.type == "rtf" {
                 fullItem.data = await ClipboardStore.shared.loadData(for: item.id)
+            }
+            // Row deleted since it was selected → nothing to paste. Still dismiss
+            // the overlay (and arm any staged stack) so ⏎ doesn't look dead, but
+            // leave the clipboard and the target app alone.
+            guard fullItem.hasPasteablePayload else {
+                self.window?.orderOut(nil)
+                await PasteStackService.shared.startIfStaged()
+                return
             }
             fullItem.copyToPasteboard()
 

@@ -6,17 +6,26 @@ class ClipboardStore: ObservableObject {
     @Published var items: [ClipboardItem] = []
     @Published var favoriteItems: [ClipboardItem] = []
     private let dbManager: DatabaseManager
-    
+    private let settings: AppSettings
+
     static let shared = ClipboardStore()
-    
-    init(dbManager: DatabaseManager = DatabaseManager.shared, shouldLoad: Bool = true) {
+
+    init(dbManager: DatabaseManager = DatabaseManager.shared,
+         settings: AppSettings = AppSettings.shared,
+         shouldLoad: Bool = true) {
         self.dbManager = dbManager
+        self.settings = settings
+
+        // Shrinking the limit takes effect immediately, not on the next copy
+        settings.onHistoryLimitChanged = { [weak self] in
+            self?.enforceHistoryLimit()
+        }
 
         if shouldLoad {
             load()
         }
     }
-    
+
     func addItem(_ item: ClipboardItem) {
         // Content-based Deduplication: Check if an item with the same content/data already exists.
         // Blobs are compared via dataHash so this never touches multi-megabyte Data values.
@@ -33,7 +42,7 @@ class ClipboardStore: ObservableObject {
             // UI Update: Move to start of array
             self.items.remove(at: existingIndex)
             self.items.insert(existingItem, at: 0)
-            
+
             // Sync favorites list if needed
             if existingItem.isFavorite {
                 if let favIndex = favoriteItems.firstIndex(where: { $0.id == existingItem.id }) {
@@ -50,7 +59,7 @@ class ClipboardStore: ObservableObject {
             }
             return
         }
-        
+
         // Optimistic UI update for better UX
         self.items.insert(item, at: 0)
 
@@ -82,14 +91,15 @@ class ClipboardStore: ObservableObject {
             }
         }
     }
-    
+
     // Trim non-favorite items beyond the configured limit (favorites never count).
     // Guarded on settingsLoaded: during the launch window historyLimit still
     // holds its default, and trimming against it could mass-delete history.
+    // A non-positive limit is invalid (AppSettings rejects it on load) and means "don't trim".
     func enforceHistoryLimit() {
-        guard AppSettings.shared.settingsLoaded else { return }
-        // Floor of 1: a corrupted/tampered limit of 0 must never wipe history
-        let limit = max(1, AppSettings.shared.historyLimit)
+        guard settings.settingsLoaded else { return }
+        let limit = settings.historyLimit
+        guard limit > 0 else { return }
 
         let regularCount = items.lazy.filter { !$0.isFavorite }.count
         guard regularCount > limit else { return }
@@ -99,13 +109,12 @@ class ClipboardStore: ObservableObject {
         for item in items.reversed() where !item.isFavorite && itemsToRemove.count < excessCount {
             itemsToRemove.append(item)
         }
-        let idsToRemove = Set(itemsToRemove.map(\.id))
-        items.removeAll { idsToRemove.contains($0.id) }
+        let idsToRemove = itemsToRemove.map(\.id)
+        let removeSet = Set(idsToRemove)
+        items.removeAll { removeSet.contains($0.id) }
 
         Task {
-            for id in idsToRemove {
-                try? await dbManager.deleteClipboardItem(id: id)
-            }
+            try? await dbManager.deleteClipboardItems(ids: idsToRemove)
         }
     }
 
@@ -137,9 +146,10 @@ class ClipboardStore: ObservableObject {
         }
     }
 
+    /// OCR result for an image item: sets the text and adds the "OCR" tag.
     func updateItem(id: UUID, content: String) {
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
-        
+
         var updatedItem = items[index]
         let originalItem = items[index] // Backup for rollback
 
@@ -157,10 +167,12 @@ class ClipboardStore: ObservableObject {
             favoriteItems[favIndex] = updatedItem
         }
 
-        // Persist to database
+        // Persist only the columns that changed — a full-row write from this
+        // snapshot could undo a favorite toggle that landed meanwhile
+        let newTags = updatedItem.tags
         Task {
             do {
-                try await dbManager.updateClipboardItem(updatedItem)
+                try await dbManager.updateContent(id: id, content: content, tags: newTags)
             } catch {
                 print("Failed to update item: \(error)")
                 // Rollback to original state if database update failed
@@ -177,19 +189,20 @@ class ClipboardStore: ObservableObject {
             }
         }
     }
-    
+
     func updateTags(id: UUID, tags: [String]) {
         Task {
             await updateMetadata(id: id, tags: tags)
         }
     }
 
+    /// Replaces the tag list and/or embedding (user tag edits pass the full list).
     func updateMetadata(id: UUID, tags: [String]? = nil, embedding: Data? = nil) async {
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
-        
+
         var updatedItem = items[index]
         let originalItem = items[index] // Backup for rollback
-        
+
         if let tags {
             updatedItem.tags = tags
         }
@@ -197,18 +210,18 @@ class ClipboardStore: ObservableObject {
         if let embedding {
             updatedItem.embedding = embedding
         }
-        
+
         // Optimistic UI update
         self.items[index] = updatedItem
-        
+
         // Update favoriteItems if it's a favorite
         if updatedItem.isFavorite, let favIndex = favoriteItems.firstIndex(where: { $0.id == id }) {
             favoriteItems[favIndex] = updatedItem
         }
-        
-        // Persist to database
+
+        // Persist only tags/embedding — never the favorite columns from this snapshot
         do {
-            try await dbManager.updateClipboardItem(updatedItem)
+            try await dbManager.updateDetectedMetadata(id: id, tags: updatedItem.tags, embedding: embedding)
         } catch {
             print("Failed to update metadata: \(error)")
             // Rollback to original state if database update failed
@@ -222,7 +235,19 @@ class ClipboardStore: ObservableObject {
             ErrorHandler.shared.handle(error)
         }
     }
-    
+
+    /// Background analysis result (auto-tags + embedding). Auto-tags are MERGED into
+    /// whatever tags the item has by now, so a tag the user added while the analysis
+    /// was running is kept.
+    func applyDetectedMetadata(id: UUID, tags detected: [String], embedding: Data?) async {
+        guard let index = items.firstIndex(where: { $0.id == id }) else { return }
+        var merged = items[index].tags
+        for tag in detected where !merged.contains(tag) {
+            merged.append(tag)
+        }
+        await updateMetadata(id: id, tags: merged, embedding: embedding)
+    }
+
     func addTag(_ tag: String, to item: ClipboardItem) {
         var updatedTags = item.tags
         if !updatedTags.contains(tag) {
@@ -230,13 +255,13 @@ class ClipboardStore: ObservableObject {
             updateTags(id: item.id, tags: updatedTags)
         }
     }
-    
+
     func removeTag(_ tag: String, from item: ClipboardItem) {
         var updatedTags = item.tags
         updatedTags.removeAll { $0 == tag }
         updateTags(id: item.id, tags: updatedTags)
     }
-    
+
     func deleteItems(at offsets: IndexSet, in visibleItems: [ClipboardItem]) async {
         let idsToDelete: Set<UUID> = Set(offsets.compactMap { index in
             guard visibleItems.indices.contains(index) else { return nil }
@@ -245,51 +270,40 @@ class ClipboardStore: ObservableObject {
 
         guard !idsToDelete.isEmpty else { return }
 
-        var deletedIDs: Set<UUID> = []
-
-        for id in idsToDelete {
-            do {
-                try await dbManager.deleteClipboardItem(id: id)
-                deletedIDs.insert(id)
-            } catch {
-                print("Failed to delete item \(id): \(error)")
-                ErrorHandler.shared.handle(error)
-            }
+        do {
+            try await dbManager.deleteClipboardItems(ids: Array(idsToDelete))
+        } catch {
+            print("Failed to delete items: \(error)")
+            ErrorHandler.shared.handle(error)
+            return
         }
 
-        items.removeAll { deletedIDs.contains($0.id) }
-        favoriteItems.removeAll { deletedIDs.contains($0.id) }
+        items.removeAll { idsToDelete.contains($0.id) }
+        favoriteItems.removeAll { idsToDelete.contains($0.id) }
     }
-    
-    func clearAll() {
-        Task {
-            do {
-                try await dbManager.deleteAllClipboardItems()
 
-                // Then clear local arrays — favorites are wiped from the DB too
-                await MainActor.run {
-                    self.items.removeAll()
-                    self.favoriteItems.removeAll()
-                }
-            } catch {
-                print("Failed to clear all items: \(error)")
-                Task { @MainActor in
-                    ErrorHandler.shared.handle(error)
-                }
-            }
+    /// Deletes every non-favorite item. Favorites are a separate collection the
+    /// user curated; "clear history" must not take them down with it.
+    func clearHistory() async {
+        do {
+            try await dbManager.deleteNonFavoriteItems()
+            items.removeAll { !$0.isFavorite }
+        } catch {
+            print("Failed to clear history: \(error)")
+            ErrorHandler.shared.handle(error)
         }
     }
-    
+
     func toggleFavorite(for item: ClipboardItem) {
         let itemId = item.id
-        
+
         // Optimistic UI update
         if let index = items.firstIndex(where: { $0.id == itemId }) {
             var updatedItem = items[index]
             updatedItem.isFavorite.toggle()
             updatedItem.favoritedAt = updatedItem.isFavorite ? Date() : nil
             items[index] = updatedItem
-            
+
             // Update favoriteItems list
             if updatedItem.isFavorite {
                 if !favoriteItems.contains(where: { $0.id == itemId }) {
@@ -299,7 +313,7 @@ class ClipboardStore: ObservableObject {
                 favoriteItems.removeAll(where: { $0.id == itemId })
             }
         }
-        
+
         // Persist to database
         Task {
             do {
@@ -313,7 +327,7 @@ class ClipboardStore: ObservableObject {
                         revertedItem.isFavorite = item.isFavorite
                         revertedItem.favoritedAt = item.favoritedAt
                         self.items[index] = revertedItem
-                        
+
                         // Update favoriteItems list
                         if revertedItem.isFavorite {
                             if !self.favoriteItems.contains(where: { $0.id == itemId }) {
@@ -328,7 +342,7 @@ class ClipboardStore: ObservableObject {
             }
         }
     }
-    
+
     func loadFavorites() {
         Task {
             do {
@@ -337,15 +351,16 @@ class ClipboardStore: ObservableObject {
                     self.favoriteItems = loadedFavorites
                 }
             } catch {
+                // Keep whatever is on screen — a transient read failure must not
+                // blank the favorites list
                 print("Failed to load favorites: \(error)")
                 Task { @MainActor in
                     ErrorHandler.shared.handle(error)
-                    self.favoriteItems = []
                 }
             }
         }
     }
-    
+
     private func load() {
         Task {
             do {
@@ -360,8 +375,6 @@ class ClipboardStore: ObservableObject {
                 print("Failed to load items: \(error)")
                 Task { @MainActor in
                     ErrorHandler.shared.handle(error)
-                    self.items = []
-                    self.favoriteItems = []
                 }
             }
         }

@@ -350,6 +350,14 @@ struct DSColors {
 }
 
 extension Color {
+    /// Swatch color for a `color` clipboard item — every form ClipboardMonitor
+    /// accepts (3/6/8-digit hex, rgb()/rgba()), parsed once via ColorFormatting.
+    init?(clipboardColor content: String) {
+        guard let c = ColorFormatting.components(from: content) else { return nil }
+        self.init(.sRGB, red: Double(c.r) / 255.0, green: Double(c.g) / 255.0, blue: Double(c.b) / 255.0, opacity: c.a)
+    }
+
+    /// Design-token literals only (`#RRGGBB` / `#RRGGBBAA`).
     init?(hex: String) {
         var hexSanitized = hex.trimmingCharacters(in: .whitespacesAndNewlines)
         hexSanitized = hexSanitized.replacingOccurrences(of: "#", with: "")

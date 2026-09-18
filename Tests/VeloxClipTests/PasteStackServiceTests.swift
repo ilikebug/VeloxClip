@@ -39,12 +39,16 @@ final class FakePasteboardWriter: PasteboardWriting {
     private(set) var restoredCount = 0
     var snapshotToCapture: PasteboardSnapshot? =
         PasteboardSnapshot(typedData: [(.string, Data("before".utf8))])
+    private(set) var capturedCount = 0
 
     func write(_ item: ClipboardItem) {
         written.append(item)
         changeCount += 1
     }
-    func capture() -> PasteboardSnapshot? { snapshotToCapture }
+    func capture() -> PasteboardSnapshot? {
+        capturedCount += 1
+        return snapshotToCapture
+    }
     func restore(_ snapshot: PasteboardSnapshot) {
         restoredCount += 1
         changeCount += 1
@@ -64,6 +68,84 @@ final class PasteStackServiceTests: XCTestCase {
             permissionCheck: { true },
             installsKeyMonitor: false
         )
+    }
+
+    // MARK: Observed-paste coalescing
+
+    func testRapidDoubleCommandVAdvancesOnlyOnce() async throws {
+        for item in makeItems(3) { service.toggleStaged(item) }
+        await service.startIfStaged()
+
+        // Two Cmd+V key events inside the settle delay (a "double paste")
+        service.noteObservedPaste()
+        service.noteObservedPaste()
+        try await Task.sleep(nanoseconds: 400_000_000)
+
+        XCTAssertEqual(service.cursor, 1, "second key event must coalesce into the pending advance")
+        XCTAssertEqual(service.phase, .active)
+    }
+
+    func testStagedItemsAreKeptWhenEveryItemTurnsOutToBeAGhost() async {
+        // Blob deleted from history after staging: nothing can be pasted, so the
+        // stack must not start — and must not silently throw the staging away
+        var ghost = ClipboardItem(type: "image", data: Data([1, 2, 3]))
+        ghost.data = nil
+        service.toggleStaged(ghost)
+
+        await service.startIfStaged()
+
+        XCTAssertEqual(service.phase, .idle)
+        XCTAssertEqual(service.staged.count, 1)
+    }
+
+    func testConcurrentStartsDoNotRestartTheStack() async {
+        // A blob load really suspends (DB actor hop), which is the window the
+        // second caller used to slip through
+        let slowLoader: @Sendable (UUID) async -> Data? = { _ in
+            try? await Task.sleep(nanoseconds: 20_000_000)
+            return Data([1, 2, 3])
+        }
+        service = PasteStackService(
+            writer: writer,
+            permissionCheck: { true },
+            loadBlob: slowLoader,
+            installsKeyMonitor: false
+        )
+        for index in 0..<3 {
+            var image = ClipboardItem(type: "image", data: Data([UInt8(index)]))
+            image.data = nil   // lazy-loaded, like a list item
+            service.toggleStaged(image)
+        }
+
+        // Two hideOverlay paths can fire in one runloop turn; the second must not
+        // re-capture the snapshot (over the stack's own write) or reset the cursor
+        let firstStart = Task { @MainActor [service] in await service!.startIfStaged() }
+        let secondStart = Task { @MainActor [service] in await service!.startIfStaged() }
+        await firstStart.value
+        await secondStart.value
+
+        XCTAssertEqual(service.phase, .active)
+        XCTAssertEqual(service.queue.count, 3)
+        XCTAssertEqual(writer.written.count, 1, "the stack must be written exactly once")
+        XCTAssertEqual(writer.capturedCount, 1, "a second capture would snapshot our own write")
+    }
+
+    func testMissingAccessibilityPromptsOnlyOnce() async {
+        var promptCount = 0
+        let denied = PasteStackService(
+            writer: writer,
+            permissionCheck: { promptCount += 1; return false },
+            quietPermissionCheck: { false },
+            installsKeyMonitor: false
+        )
+        denied.toggleStaged(makeItems(1)[0])
+
+        await denied.startIfStaged()
+        await denied.startIfStaged()
+        await denied.startIfStaged()
+
+        XCTAssertEqual(promptCount, 1, "every overlay close re-triggered the system dialog")
+        XCTAssertEqual(denied.staged.count, 1, "staged items are kept for when permission is granted")
     }
 
     private func makeItems(_ count: Int) -> [ClipboardItem] {

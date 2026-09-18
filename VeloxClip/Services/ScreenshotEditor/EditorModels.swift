@@ -16,11 +16,7 @@ enum EditorTool: String, CaseIterable, Identifiable {
     
     var id: String { rawValue }
 
-    /// User-facing name for the tool (used for hover tooltips). Defaults to Chinese for legacy callers.
-    var displayName: String {
-        displayName(language: .zhHans)
-    }
-
+    /// User-facing name for the tool (used for hover tooltips).
     func displayName(language: AppLanguage) -> String {
         switch self {
         case .pen: return L10n.string("screenshot.tool.pen", language: language)

@@ -13,8 +13,6 @@ struct ClipboardItem: Identifiable, Codable, Hashable, Equatable {
 
     // AI Metadata
     var tags: [String] = []
-    var summary: String?
-    var isSensitive: Bool = false
     var embedding: Data?
 
     // Favorite Metadata
@@ -25,9 +23,12 @@ struct ClipboardItem: Identifiable, Codable, Hashable, Equatable {
         Self.decodeVector(embedding)
     }
 
-    /// User-facing name for the clipboard type. Defaults to Chinese for legacy tests and callers.
-    var localizedTypeName: String {
-        localizedTypeName(language: .zhHans)
+    /// False for an image/RTF whose blob is gone (row deleted after it was
+    /// selected, or not yet lazy-loaded). Pasting such a ghost used to clear the
+    /// clipboard and write nothing — or, for an OCR'd image, paste the OCR text.
+    var hasPasteablePayload: Bool {
+        if type == "image" || type == "rtf" { return data != nil }
+        return content != nil || data != nil
     }
 
     func localizedTypeName(language: AppLanguage) -> String {
@@ -79,7 +80,6 @@ struct ClipboardItem: Identifiable, Codable, Hashable, Equatable {
         lhs.dataHash == rhs.dataHash &&
         lhs.sourceApp == rhs.sourceApp &&
         lhs.tags == rhs.tags &&
-        lhs.summary == rhs.summary &&
         lhs.isFavorite == rhs.isFavorite &&
         lhs.favoritedAt == rhs.favoritedAt
     }
@@ -93,34 +93,26 @@ import AppKit
 
 extension ClipboardItem {
     @MainActor
-    func copyToPasteboard() {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        defer { PasteboardSelfWriteGate.shared.recordSelfWrite() }
+    func copyToPasteboard(_ pasteboard: NSPasteboard = .general) {
+        guard hasPasteablePayload else { return }
 
-        if type == "image", let d = data {
-            // Try to create NSImage from data
-            guard let nsImage = NSImage(data: d) else {
+        // Decode before clearing: a blob NSImage can't decode must leave the
+        // user's clipboard intact, not empty (which the paste stack would then
+        // record as its own successful write and silently skip the item)
+        var decodedImage: NSImage?
+        if type == "image" {
+            guard let d = data, let nsImage = NSImage(data: d) else {
                 print("❌ Failed to create NSImage from data")
                 return
             }
+            decodedImage = nsImage
+        }
 
-            // Primary method: Write NSImage object directly (most compatible)
-            let writeSuccess = pasteboard.writeObjects([nsImage])
-            print("✅ Image copied to pasteboard: \(writeSuccess)")
+        pasteboard.clearContents()
+        defer { if pasteboard == NSPasteboard.general { PasteboardSelfWriteGate.shared.recordSelfWrite() } }
 
-            // Backup: Also set TIFF representation for compatibility
-            if let tiffData = nsImage.tiffRepresentation {
-                pasteboard.setData(tiffData, forType: .tiff)
-            }
-
-            // Backup: Also try PNG format
-            if let tiffData = nsImage.tiffRepresentation,
-               let bitmapRep = NSBitmapImageRep(data: tiffData),
-               let pngData = bitmapRep.representation(using: .png, properties: [:]) {
-                pasteboard.setData(pngData, forType: .png)
-            }
-
+        if let decodedImage, let d = data {
+            Self.writeImage(decodedImage, encoded: d, to: pasteboard)
             return
         }
 
@@ -132,8 +124,8 @@ extension ClipboardItem {
         if type == "file", let c = content {
             // Write real file URLs so pasting into Finder reproduces the files;
             // fall back to the plain paths if none of them still exist
-            let urls = c.components(separatedBy: .newlines)
-                .filter { !$0.isEmpty && FileManager.default.fileExists(atPath: $0) }
+            let urls = RowPresentation.filePaths(from: c)
+                .filter { FileManager.default.fileExists(atPath: $0) }
                 .map { URL(fileURLWithPath: $0) as NSURL }
             if !urls.isEmpty, pasteboard.writeObjects(urls) {
                 return
@@ -152,6 +144,24 @@ extension ClipboardItem {
     }
 }
 
+extension ClipboardItem {
+    /// Writes the NSImage object (consumers get TIFF on demand) plus the encoded
+    /// bytes as an explicit representation. Stored blobs are PNG (normalized on
+    /// ingest) and go out byte-for-byte — the previous path re-encoded a full
+    /// TIFF twice and a PNG once per paste, on the main thread.
+    @MainActor
+    static func writeImage(_ image: NSImage, encoded: Data?, to pasteboard: NSPasteboard) {
+        pasteboard.writeObjects([image])   // TIFF promise for every consumer
+        if let encoded, encoded.starts(with: [0x89, 0x50, 0x4E, 0x47]) {
+            pasteboard.setData(encoded, forType: .png)
+        } else if let tiff = image.tiffRepresentation,
+                  let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
+            // Legacy JPEG/TIFF blobs: one PNG encode (never declare foreign bytes as TIFF)
+            pasteboard.setData(png, forType: .png)
+        }
+    }
+}
+
 // Tracks pasteboard writes made by the app itself so ClipboardMonitor
 // doesn't re-ingest them as new history items.
 @MainActor
@@ -164,6 +174,15 @@ final class PasteboardSelfWriteGate {
 
     func recordSelfWrite() {
         lastSelfWriteChangeCount = NSPasteboard.general.changeCount
+    }
+
+    /// Clear + set a plain string + record the self-write, in one step. Every
+    /// "copy X" button must go through here, or the monitor records the copy as
+    /// a brand-new history item.
+    func write(_ string: String, to pasteboard: NSPasteboard = .general) {
+        pasteboard.clearContents()
+        pasteboard.setString(string, forType: .string)
+        if pasteboard == NSPasteboard.general { recordSelfWrite() }
     }
 
     func isSelfWrite(changeCount: Int) -> Bool {

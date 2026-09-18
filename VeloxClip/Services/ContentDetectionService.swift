@@ -53,8 +53,7 @@ actor ContentDetectionService {
     }
     
     private func isCode(_ content: String) -> Bool {
-        let codeIndicators = ["func ", "class ", "def ", "import ", "const ", "let ", "var ", "function ", "=>", "->", "public ", "private "]
-        return codeIndicators.filter { content.contains($0) }.count >= 2
+        return ClipboardIngestion.codeIndicators.filter { content.contains($0) }.count >= 2
     }
     
     private func isTableData(_ content: String) -> Bool {

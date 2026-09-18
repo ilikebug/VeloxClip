@@ -150,11 +150,23 @@ final class PasteStackHUDController {
         panel?.orderOut(nil)
     }
 
+    private var persistOriginTask: Task<Void, Never>?
+
     private func panelDidMove() {
         guard !isRepositioningProgrammatically, let panel, panel.isVisible else { return }
         let origin = panel.frame.origin
-        AppSettings.shared.pasteStackHUDCustomOrigin = "\(Int(origin.x)),\(Int(origin.y))"
-        AppSettings.shared.pasteStackHUDPosition = "custom"
+        // didMove fires ~60×/s during a drag; each settings write is an fsync'd
+        // DB transaction plus a publish that re-renders every row — persist once
+        // the drag settles
+        persistOriginTask?.cancel()
+        persistOriginTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            guard !Task.isCancelled else { return }
+            AppSettings.shared.pasteStackHUDCustomOrigin = "\(Int(origin.x)),\(Int(origin.y))"
+            if AppSettings.shared.pasteStackHUDPosition != "custom" {
+                AppSettings.shared.pasteStackHUDPosition = "custom"
+            }
+        }
     }
 
     private func targetOrigin(for size: NSSize) -> NSPoint {

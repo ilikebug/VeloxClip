@@ -5,6 +5,7 @@ import SwiftUI
 struct CommandPaletteView: View {
     @Environment(\.colorScheme) private var scheme
     let item: ClipboardItem?
+    var isDetailPresented: Bool = false
     let onExecute: (Command) -> Void
     let onClose: () -> Void
 
@@ -12,9 +13,17 @@ struct CommandPaletteView: View {
     @State private var filter: String = ""
     @State private var selectedIndex: Int = 0
     @FocusState private var fieldFocused: Bool
+    // Last hover sample (window coords). The palette appears centred, usually
+    // under a resting cursor; only real movement may re-target the highlight.
+    @State private var lastHoverLocation: CGPoint?
 
     private var allCommands: [Command] {
-        CommandResolver.commands(for: item, language: settings.appLanguage)
+        CommandResolver.commands(for: item, isDetailPresented: isDetailPresented, language: settings.appLanguage)
+    }
+
+    // While an input method is composing (marked text), ⏎/Esc belong to it
+    private var isComposingText: Bool {
+        (NSApp.keyWindow?.firstResponder as? NSTextView)?.hasMarkedText() ?? false
     }
 
     private var filteredCommands: [Command] {
@@ -24,9 +33,8 @@ struct CommandPaletteView: View {
 
     /// Parsed color for a color item (from its hex `content`); nil otherwise.
     private var itemColor: Color? {
-        guard item?.type == "color", let content = item?.content,
-              let hex = ColorFormatting.hex(from: content) else { return nil }
-        return Color(hex: hex)
+        guard item?.type == "color", let content = item?.content else { return nil }
+        return Color(clipboardColor: content)
     }
 
     var body: some View {
@@ -67,12 +75,14 @@ struct CommandPaletteView: View {
             return .handled
         }
         .onKeyPress(.return) {
+            if isComposingText { return .ignored }
             if filteredCommands.indices.contains(selectedIndex) {
                 onExecute(filteredCommands[selectedIndex])
             }
             return .handled
         }
         .onKeyPress(.escape) {
+            if isComposingText { return .ignored }
             onClose()
             return .handled
         }
@@ -148,6 +158,16 @@ struct CommandPaletteView: View {
                         .padding(.vertical, 4)
                 }
                 commandRow(cmd, isSelected: index == selectedIndex, c: c)
+                    // Mouse movement moves the highlight just like ↑↓ do, so ⏎ and
+                    // click agree. The first sample (palette appearing under the
+                    // cursor) is ignored, or an immediate ⏎ could hit e.g. Delete.
+                    .onContinuousHover(coordinateSpace: .global) { phase in
+                        guard case .active(let location) = phase else { return }
+                        if let last = lastHoverLocation, last != location {
+                            selectedIndex = index
+                        }
+                        lastHoverLocation = location
+                    }
                     .onTapGesture { onExecute(cmd) }
             }
         }

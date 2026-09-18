@@ -25,17 +25,31 @@ final class PasteStackService: ObservableObject {
 
     private let writer: any PasteboardWriting
     private let permissionCheck: () -> Bool
+    private let quietPermissionCheck: () -> Bool
+    private let loadBlob: (UUID) async -> Data?
     private let installsKeyMonitor: Bool
     private var keyMonitor: Any?
     private var lastWriteChangeCount: Int = -1
     private var initialSnapshot: PasteboardSnapshot?
     private var userWroteDuringStack = false
+    private var pendingAdvance: Task<Void, Never>?
+    private var accessibilityPromptShown = false
+    // Loading blobs suspends, and `staged`/`phase` only change after it — without
+    // this a second caller (two hideOverlay paths in one runloop turn) would slip
+    // through the guard and restart the stack over its own pasteboard write
+    private var isStarting = false
 
+    /// `permissionCheck` may show the system dialog; `quietPermissionCheck` never does
+    /// and is used for every retry after the first denial.
     init(writer: any PasteboardWriting,
          permissionCheck: @escaping () -> Bool = PasteStackService.checkAccessibilityPrompting,
+         quietPermissionCheck: @escaping () -> Bool = { AXIsProcessTrusted() },
+         loadBlob: @escaping (UUID) async -> Data? = { await ClipboardStore.shared.loadData(for: $0) },
          installsKeyMonitor: Bool = true) {
         self.writer = writer
         self.permissionCheck = permissionCheck
+        self.quietPermissionCheck = quietPermissionCheck
+        self.loadBlob = loadBlob
         self.installsKeyMonitor = installsKeyMonitor
     }
 
@@ -75,25 +89,33 @@ final class PasteStackService: ObservableObject {
 
     // Called when the overlay hides. No-op unless something is staged.
     func startIfStaged() async {
-        guard phase == .idle, !staged.isEmpty else { return }
-        guard permissionCheck() else {
-            // Keep the staged items — once the user grants permission, closing
-            // the overlay again retries without re-staging
+        guard phase == .idle, !staged.isEmpty, !isStarting else { return }
+        isStarting = true
+        defer { isStarting = false }
+        // Keep the staged items when permission is missing — once the user
+        // grants it, closing the overlay again retries without re-staging.
+        // The prompting check runs once per session; hideOverlay fires on every
+        // app deactivation and used to re-open the system dialog each time.
+        if accessibilityPromptShown {
+            guard quietPermissionCheck() else { return }
+        } else if !permissionCheck() {
+            accessibilityPromptShown = true
             return
         }
 
         var items = staged
-        staged.removeAll()
         // Blobs are lazy-loaded from the DB; queue items must be self-contained
         for index in items.indices where items[index].data == nil
             && (items[index].type == "image" || items[index].type == "rtf") {
-            items[index].data = await ClipboardStore.shared.loadData(for: items[index].id)
+            items[index].data = await loadBlob(items[index].id)
         }
-        // Drop items whose blob no longer exists (deleted from history after
+        // Drop items with nothing to paste (blob deleted from history after
         // staging) — pasting them would silently re-paste the previous item
-        items.removeAll { ($0.type == "image" || $0.type == "rtf") && $0.data == nil }
+        items.removeAll { !$0.hasPasteablePayload }
+        // Nothing left: keep the staging rather than discarding it silently
         guard !items.isEmpty else { return }
 
+        staged.removeAll()
         queue = items
         cursor = 0
         userWroteDuringStack = false
@@ -121,6 +143,20 @@ final class PasteStackService: ObservableObject {
     }
 
     // MARK: - Advancing
+
+    // The global monitor saw Cmd+V. A second key event before the settle delay
+    // elapses (a quick double paste) joins the pending advance instead of
+    // scheduling another — two independent advances skipped an item.
+    func noteObservedPaste() {
+        guard phase == .active, pendingAdvance == nil else { return }
+        pendingAdvance = Task { @MainActor in
+            // Give the target app time to read the pasteboard before swapping
+            try? await Task.sleep(nanoseconds: 150_000_000)
+            guard !Task.isCancelled else { return }   // finish() ran meanwhile
+            self.pendingAdvance = nil
+            self.advanceAfterObservedPaste()
+        }
+    }
 
     // Called (after a small delay) when the global monitor observes Cmd+V.
     func advanceAfterObservedPaste() {
@@ -164,6 +200,8 @@ final class PasteStackService: ObservableObject {
         if !userWroteDuringStack, let snapshot = initialSnapshot {
             writer.restore(snapshot)
         }
+        pendingAdvance?.cancel()
+        pendingAdvance = nil
         queue = []
         cursor = 0
         initialSnapshot = nil
@@ -187,10 +225,7 @@ final class PasteStackService: ObservableObject {
                 && !event.isARepeat
             guard isCommandV else { return }
             Task { @MainActor in
-                guard PasteStackService.shared.phase == .active else { return }
-                // Give the target app time to read the pasteboard before swapping
-                try? await Task.sleep(nanoseconds: 150_000_000)
-                PasteStackService.shared.advanceAfterObservedPaste()
+                PasteStackService.shared.noteObservedPaste()
             }
         }
     }

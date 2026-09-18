@@ -2,18 +2,6 @@ import XCTest
 @testable import VeloxClip
 
 final class MainKeyRoutingPolicyTests: XCTestCase {
-    func testSpaceNeverStages() {
-        XCTAssertFalse(MainKeyRoutingPolicy.shouldStageOnSpace(
-            isComposingText: false
-        ))
-    }
-
-    func testSpaceStillDoesNotStageWhileInputMethodIsComposing() {
-        XCTAssertFalse(MainKeyRoutingPolicy.shouldStageOnSpace(
-            isComposingText: true
-        ))
-    }
-
     func testCommandReturnStagesWhenInputMethodIsNotComposing() {
         XCTAssertTrue(MainKeyRoutingPolicy.shouldStageOnCommandReturn(
             isComposingText: false
@@ -84,31 +72,11 @@ final class MainKeyRoutingPolicyTests: XCTestCase {
         XCTAssertFalse(MainKeyRoutingPolicy.shouldSwitchTabsOnTab(isComposingText: true))
     }
 
-    func testListInteractionKeepsSearchFocused() {
-        XCTAssertFalse(MainFocusRoutingPolicy.shouldBlurSearchOnListInteraction(hasSelectableItems: true))
-    }
-
     func testRestoresSearchFocusAfterListSelectionWhenListIsVisible() {
         XCTAssertTrue(MainFocusRoutingPolicy.shouldRestoreSearchFocus(
             isDetailPresented: false,
             isCommandPalettePresented: false
         ))
-    }
-
-    func testRestoresSearchFocusAfterRowControlInteraction() {
-        XCTAssertTrue(MainFocusRoutingPolicy.shouldRestoreSearchFocusAfterListInteraction(.rowControl))
-    }
-
-    func testRestoresSearchFocusAfterRowSelection() {
-        XCTAssertTrue(MainFocusRoutingPolicy.shouldRestoreSearchFocusAfterListInteraction(.rowSelection))
-    }
-
-    func testRestoresSearchFocusAfterKeyboardSelection() {
-        XCTAssertTrue(MainFocusRoutingPolicy.shouldRestoreSearchFocusAfterListInteraction(.keyboardSelection))
-    }
-
-    func testClearsSearchFocusWhenOpeningDetail() {
-        XCTAssertTrue(MainFocusRoutingPolicy.shouldClearSearchFocusWhenPresentingDetail())
     }
 
     func testDoesNotRestoreSearchFocusWhileDetailIsPresented() {
@@ -123,15 +91,5 @@ final class MainKeyRoutingPolicyTests: XCTestCase {
             isDetailPresented: false,
             isCommandPalettePresented: true
         ))
-    }
-
-    func testClosesCommandPaletteWhenOverlayWillShow() {
-        XCTAssertTrue(MainCommandPaletteLifecyclePolicy.shouldClosePaletteOnOverlayWillShow(isPresented: true))
-        XCTAssertFalse(MainCommandPaletteLifecyclePolicy.shouldClosePaletteOnOverlayWillShow(isPresented: false))
-    }
-
-    func testClosesCommandPaletteWhenOverlayResignsKey() {
-        XCTAssertTrue(MainCommandPaletteLifecyclePolicy.shouldClosePaletteOnOverlayResignKey(isPresented: true))
-        XCTAssertFalse(MainCommandPaletteLifecyclePolicy.shouldClosePaletteOnOverlayResignKey(isPresented: false))
     }
 }

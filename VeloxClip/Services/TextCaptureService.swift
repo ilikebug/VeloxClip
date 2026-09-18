@@ -15,11 +15,18 @@ final class TextCaptureService {
     // Keep the running screencapture process alive until it terminates —
     // relying on NSTask's implicit self-retention is undocumented behavior
     private var captureProcess: Process?
+    /// Set once a capture really produced text — proof the permission is in place
+    /// even while the per-process preflight still reports false.
+    private static var hasRecognizedTextThisSession = false
 
     private init() {}
 
     func captureText() {
         guard !isCapturing else { return }
+        // The press that raises the permission dialog must not also start a
+        // capture — its mouse grab would make the dialog unclickable. Every
+        // later press runs regardless of the (stale until relaunch) preflight.
+        guard !ScreenCapturePermission.promptIfNeeded() else { return }
         isCapturing = true
 
         let tmpURL = FileManager.default.temporaryDirectory
@@ -76,9 +83,18 @@ final class TextCaptureService {
         }.value
 
         guard let content else {
-            showToast(message: "No text found", isSuccess: false)
+            // Without Screen Recording the capture is a wallpaper crop — say so
+            // instead of a misleading "no text found". `isGranted` stays false
+            // until relaunch after a grant, so a capture that already produced
+            // text this session is the better signal.
+            let permissionLikelyMissing = !ScreenCapturePermission.isGranted && !Self.hasRecognizedTextThisSession
+            showToast(
+                message: L10n.string(permissionLikelyMissing ? "textCapture.noTextNoPermission" : "textCapture.noText"),
+                isSuccess: false
+            )
             return
         }
+        Self.hasRecognizedTextThisSession = true
 
         // Clipboard write is gated so ClipboardMonitor doesn't re-ingest it;
         // the history entry is added directly with a recognizable source
@@ -93,7 +109,7 @@ final class TextCaptureService {
             ClipboardItem(type: "text", content: content, sourceApp: "Text Capture")
         )
 
-        showToast(message: "OCR recognized \(content.count) characters", isSuccess: true)
+        showToast(message: L10n.format("textCapture.recognized", content.count), isSuccess: true)
     }
 
     // Runs text + barcode recognition on the captured region (background thread)

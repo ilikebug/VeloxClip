@@ -49,19 +49,6 @@ final class MenuBarDashboardPresentationTests: XCTestCase {
         XCTAssertEqual(presentation.statusText(language: .en), "Paste Stack paused")
     }
 
-    func testDashboardDoesNotExposeConfigurableShortcutDefaults() {
-        let presentation = MenuBarDashboardPresentation(
-            historyCount: 0,
-            favoriteCount: 0,
-            stagedCount: 0,
-            queueCount: 0,
-            cursor: 0,
-            phase: .idle
-        )
-
-        XCTAssertNil(presentation.footerShortcutHint)
-    }
-
     func testDashboardActionsThatLeaveMenuContextDismissThePanel() {
         XCTAssertTrue(MenuBarDashboardAction.openClipboard.dismissesPanel)
         XCTAssertTrue(MenuBarDashboardAction.pasteImage.dismissesPanel)

@@ -12,10 +12,6 @@ final class ThumbnailProvider {
 
     private init() {}
 
-    func cachedThumbnail(for id: UUID) -> NSImage? {
-        cache[id]
-    }
-
     func thumbnail(for id: UUID) async -> NSImage? {
         if let cached = cache[id] {
             return cached

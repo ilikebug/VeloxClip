@@ -39,7 +39,6 @@ struct MenuBarDashboardPresentation: Equatable {
 
     var historyValue: String { "\(historyCount)" }
     var favoriteValue: String { "\(favoriteCount)" }
-    var footerShortcutHint: String? { nil }
 
     var queueValue: String {
         switch phase {

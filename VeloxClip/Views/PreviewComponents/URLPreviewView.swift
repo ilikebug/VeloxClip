@@ -114,8 +114,7 @@ struct URLPreviewView: View {
     }
 
     private func copyURL() {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(urlString, forType: .string)
+        PasteboardSelfWriteGate.shared.write(urlString)
     }
 
     private func qrImage(from string: String, size: CGFloat) -> NSImage? {
@@ -130,7 +129,8 @@ struct URLPreviewView: View {
     }
     
     private func validateURL() {
-        guard let url = URL(string: urlString) else {
+        // Only http(s) gets the Open button / QR — ContentDetection also routes file:// here
+        guard let url = URL(string: urlString), WebURL.isOpenable(url) else {
             urlInfo = URLInfo(url: URL(string: "about:blank")!, title: nil, description: nil, isValid: false)
             return
         }
@@ -149,6 +149,7 @@ struct URLPreviewView: View {
     }
     
     private func openURL(_ url: URL) {
+        guard WebURL.isOpenable(url) else { return }
         NSWorkspace.shared.open(url)
     }
 }

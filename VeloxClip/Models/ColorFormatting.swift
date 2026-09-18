@@ -53,9 +53,13 @@ enum ColorFormatting {
         }
     }
 
+    private static let rgbRegex = try? NSRegularExpression(
+        pattern: #"rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)"#,
+        options: .caseInsensitive
+    )
+
     private static func parseRGBFunction(_ string: String) -> (r: Int, g: Int, b: Int, a: Double)? {
-        let pattern = #"rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)"#
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
+        guard let regex = rgbRegex,
               let match = regex.firstMatch(in: string, range: NSRange(string.startIndex..., in: string)),
               let rRange = Range(match.range(at: 1), in: string),
               let gRange = Range(match.range(at: 2), in: string),
@@ -70,6 +74,7 @@ enum ColorFormatting {
            let aRange = Range(match.range(at: 4), in: string) {
             alpha = Double(string[aRange]) ?? 1.0
         }
-        return (r, g, b, alpha)
+        // CSS clamps out-of-range channels; without this "rgb(300,0,0)" formats as 7 hex digits
+        return (min(max(r, 0), 255), min(max(g, 0), 255), min(max(b, 0), 255), min(max(alpha, 0), 1))
     }
 }

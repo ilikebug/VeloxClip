@@ -50,6 +50,9 @@ enum L10n {
     private static let languageLock = NSLock()
     // Access is serialized through languageLock.
     nonisolated(unsafe) private static var cachedLanguage: AppLanguage = .system
+    // Resolved .lproj bundles by resource name — every row label used to do a
+    // Bundle.main.path(forResource:) lookup per call. Guarded by languageLock.
+    nonisolated(unsafe) private static var bundleCache: [String: Bundle] = [:]
 
     static func string(_ key: String, language: AppLanguage = currentLanguage) -> String {
         bundle(for: language).localizedString(forKey: key, value: key, table: nil)
@@ -82,7 +85,15 @@ enum L10n {
         guard let resourceName = language.resourceName else {
             return Bundle.module
         }
+        if let cached = languageLock.withLock({ bundleCache[resourceName] }) {
+            return cached
+        }
+        let resolved = resolveBundle(resourceName: resourceName)
+        languageLock.withLock { bundleCache[resourceName] = resolved }
+        return resolved
+    }
 
+    private static func resolveBundle(resourceName: String) -> Bundle {
         if let path = Bundle.main.path(forResource: resourceName, ofType: "lproj"),
            let bundle = Bundle(path: path) {
             return bundle
