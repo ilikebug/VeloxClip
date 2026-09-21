@@ -197,10 +197,9 @@ if [ -f "$APPLICATIONS_ICON_PATH" ]; then
     cp "$APPLICATIONS_ICON_PATH" "$DMG_TEMP_DIR/.ApplicationsIcon.icns" 2>/dev/null || true
 fi
 
-# Create installation instructions as a hidden file that will be shown in DMG
-cat > "$DMG_TEMP_DIR/.DS_Store" <<'EOF'
-# This will be created by Finder
-EOF
+# Note: .DS_Store must NOT be hand-written here. Finder writes the real one
+# (icon positions, window bounds) while the image is mounted read-write, and a
+# placeholder file would just be a 33-byte text file masquerading as a layout.
 
 # Create installation instructions file
 cat > "$DMG_TEMP_DIR/Installation Instructions.txt" <<'INSTRUCTIONS'
@@ -226,14 +225,20 @@ rm -f "$DMG_TEMP" "$DMG_NAME"
 APP_SIZE=$(du -sk "$DMG_TEMP_DIR" | cut -f1)
 echo "[Size] App size: $((APP_SIZE / 1024))MB"
 
-# Create temporary DMG (hdiutil will auto-calculate size from srcfolder).
-# On some macOS versions `hdiutil create` fails with "Resource busy" for any
-# source at all; makehybrid needs no writable device and still produces a
-# mountable HFS+ image, so fall back to it (losing only the Finder window
-# layout below, which needs a read-write image to set).
+# Create the writable staging image.
+#
+# `hdiutil create -srcfolder ...` fails with "Resource busy" on macOS 26 for any
+# source folder, which used to drop us into the makehybrid fallback — that makes
+# a read-only image, so the Finder layout below never ran and the DMG opened as a
+# bare window with no install guidance. Instead, create a blank sized image and
+# copy the payload in after mounting; that path works and stays writable.
 USED_HYBRID_FALLBACK=0
-if ! hdiutil create -srcfolder "$DMG_TEMP_DIR" -volname "$DMG_VOLUME_NAME" \
-    -fs HFS+ -fsargs "-c c=64,a=16,e=16" -format UDRW "$DMG_TEMP"; then
+
+# Size the image from the payload plus headroom for HFS+ metadata and .DS_Store.
+DMG_SIZE_MB=$(( APP_SIZE / 1024 + 80 ))
+
+if ! hdiutil create -size "${DMG_SIZE_MB}m" -volname "$DMG_VOLUME_NAME" \
+    -fs HFS+ -layout SPUD -type UDIF "$DMG_TEMP"; then
     echo "[Warn] hdiutil create failed; falling back to makehybrid (no custom window layout)"
     rm -f "$DMG_NAME"
     if ! hdiutil makehybrid -hfs -hfs-volume-name "$DMG_VOLUME_NAME" -o "$DMG_NAME" "$DMG_TEMP_DIR"; then
@@ -253,6 +258,20 @@ DEVICE=$(hdiutil attach -readwrite -noverify -noautoopen "$DMG_TEMP" | \
 
 # Wait for mount
 sleep 2
+
+# Copy the payload into the mounted image (the blank image starts empty).
+if [ ! -d "$MOUNT_DIR" ]; then
+    echo "[Error] Staging image did not mount at $MOUNT_DIR"
+    rm -rf "$DMG_TEMP_DIR"
+    rm -f "$DMG_TEMP"
+    exit 1
+fi
+echo "[Package] Copying payload into mounted image..."
+cp -R "$DMG_TEMP_DIR/$APP_BUNDLE" "$MOUNT_DIR/"
+cp "$DMG_TEMP_DIR/Installation Instructions.txt" "$MOUNT_DIR/"
+[ -f "$DMG_TEMP_DIR/.ApplicationsIcon.icns" ] && \
+    cp "$DMG_TEMP_DIR/.ApplicationsIcon.icns" "$MOUNT_DIR/"
+ln -sf /Applications "$MOUNT_DIR/Applications"
 
 # Set DMG window properties and fix Applications icon
 if [ -d "$MOUNT_DIR" ]; then
