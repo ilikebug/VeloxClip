@@ -212,9 +212,11 @@ final class MainKeyRouterTests: XCTestCase {
         XCTAssertEqual(MainKeyRouter.route(ctx(keyCode: MainKeyRouter.downArrow, detail: true)), .passThrough)
     }
 
-    func testCommandKOpensThePaletteInBothModes() {
+    func testCommandKOpensThePaletteInListModeOnly() {
         XCTAssertEqual(MainKeyRouter.route(ctx(characters: "k", command: true)), .openPalette)
-        XCTAssertEqual(MainKeyRouter.route(ctx(characters: "k", command: true, detail: true)), .openPalette)
+        // The detail pane is full of selectable text and a tag field; the
+        // action palette belongs to the list, so ⌘K falls through here.
+        XCTAssertEqual(MainKeyRouter.route(ctx(characters: "k", command: true, detail: true)), .passThrough)
     }
 }
 

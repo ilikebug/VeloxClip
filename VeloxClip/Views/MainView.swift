@@ -402,8 +402,10 @@ struct MainView: View {
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.primary.opacity(0.04))
-        // Right-click anywhere on the preview → actions for the previewed item.
-        .overlay(RightClickCatcher { showCommandPalette = true })
+        // No RightClickCatcher here on purpose: the preview is full of
+        // selectable text and a tag field, and the catcher swallows every
+        // right-click in its bounds — which stole macOS's own Copy / Look Up /
+        // Cut-Paste menus. The action palette belongs to the list.
     }
 
     private func executeSelection() {

@@ -81,7 +81,6 @@ enum MainKeyRouter {
             // keys must reach the field editor — otherwise adding a tag or
             // selecting preview text is impossible.
             if ctx.isEditingText { return .passThrough }
-            if ctx.isCommandPressed, ctx.characters == "k" { return .openPalette }
 
             if (ctx.keyCode == leftArrow && ctx.isCommandPressed) || ctx.keyCode == escape {
                 return .closeDetail
