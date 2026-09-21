@@ -50,6 +50,8 @@ class ScreenshotService {
             }
         } catch {
             print("Failed to launch screenshot tool: \(error)")
+            // The user pressed F1 and nothing happened — surface it
+            ErrorHandler.shared.handle(error)
         }
     }
     

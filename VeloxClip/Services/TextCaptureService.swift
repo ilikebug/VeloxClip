@@ -50,6 +50,8 @@ final class TextCaptureService {
         } catch {
             isCapturing = false
             print("Failed to launch screencapture for text capture: \(error)")
+            // The user pressed F2 and nothing happened — surface it
+            ErrorHandler.shared.handle(error)
         }
     }
 

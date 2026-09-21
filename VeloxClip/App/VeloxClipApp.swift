@@ -305,6 +305,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Apply the saved appearance (defaults to light) before any window shows
         AppSettings.shared.applyAppearance()
 
+        // View caches announce themselves so CacheManager can clear them
+        // without Services naming a SwiftUI view type
+        ViewCaches.registerAll()
+
         // Register all global shortcuts
         ShortcutManager.shared.registerAllShortcuts()
         WindowManager.shared.startTrackingTargetApps()

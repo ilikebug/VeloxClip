@@ -1,5 +1,5 @@
 import Foundation
-import SwiftUI
+import Combine
 
 @MainActor
 class ErrorHandler: ObservableObject {
@@ -52,31 +52,5 @@ struct AppError: Identifiable {
     let title: String
     let message: String
     let details: String
-}
-
-// Error view modifier
-struct ErrorAlertModifier: ViewModifier {
-    @ObservedObject var errorHandler = ErrorHandler.shared
-    
-    func body(content: Content) -> some View {
-        content
-            .alert(
-                errorHandler.currentError?.title ?? "Error",
-                isPresented: $errorHandler.showError,
-                presenting: errorHandler.currentError
-            ) { error in
-                Button("OK") {
-                    errorHandler.clear()
-                }
-            } message: { error in
-                Text(error.message)
-            }
-    }
-}
-
-extension View {
-    func errorAlert() -> some View {
-        self.modifier(ErrorAlertModifier())
-    }
 }
 

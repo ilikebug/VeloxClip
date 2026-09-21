@@ -130,7 +130,21 @@ class ShortcutManager {
         if status == noErr {
             hotKeyRefs[id] = ref
         } else {
+            // The user configured this shortcut in Preferences and it silently
+            // did nothing — they must be told, not just the console.
             print("Failed to register hotkey \(id) with shortcut \(shortcutString), status: \(status)")
+            ErrorHandler.shared.handle(ShortcutError.registrationFailed(shortcut: shortcutString, status: status))
+        }
+    }
+}
+
+enum ShortcutError: LocalizedError {
+    case registrationFailed(shortcut: String, status: OSStatus)
+
+    var errorDescription: String? {
+        switch self {
+        case .registrationFailed(let shortcut, let status):
+            return "Could not register the shortcut \(shortcut) (error \(status)). Another app may already be using it."
         }
     }
 }

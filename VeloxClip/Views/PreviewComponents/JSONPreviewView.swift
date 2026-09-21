@@ -29,7 +29,8 @@ struct JSONPreviewView: View {
     
     @State private var isLoading = true
     
-    // Static cache for processed JSON to persist across view updates
+    // Static cache for processed JSON to persist across view updates.
+    // Cleared via CacheRegistry (see ViewCaches.registerAll).
     @MainActor
     static var jsonCache = FIFOCache<String, (formatted: String, minified: String, isValid: Bool, error: String?)>(maxEntries: 100)
     var body: some View {

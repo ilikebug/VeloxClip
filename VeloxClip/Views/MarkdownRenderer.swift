@@ -30,7 +30,9 @@ struct MarkdownView: View {
     @State private var loadMoreTask: Task<Void, Never>?
     @State private var isLoadingMore = false
     
-    // Static cache for parsed chunks to persist across view updates
+    // Static cache for parsed chunks to persist across view updates.
+    // Cleared via CacheRegistry (see ViewCaches.registerAll) so CacheManager
+    // does not have to name this view type.
     @MainActor
     static var chunksCache = FIFOCache<String, [MarkdownChunk]>(maxEntries: 100)
     

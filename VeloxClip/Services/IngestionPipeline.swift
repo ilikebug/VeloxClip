@@ -95,7 +95,12 @@ actor IngestionPipeline {
         switch kind {
         case .image(let raw):
             guard let prepared = Self.prepareImage(raw) else {
+                // A copy the user made just vanished — say so rather than
+                // leaving them to wonder why it never reached history.
                 print("⚠️ Skipping pasteboard image: implausible dimensions or oversized after normalization")
+                await MainActor.run {
+                    ErrorHandler.shared.handle(IngestionError.imageRejected)
+                }
                 return
             }
             await insert(.image(prepared), payload.sourceApp)
@@ -104,5 +109,13 @@ actor IngestionPipeline {
         default:
             await insert(kind, payload.sourceApp)
         }
+    }
+}
+
+enum IngestionError: LocalizedError {
+    case imageRejected
+
+    var errorDescription: String? {
+        "That image was too large to save to clipboard history."
     }
 }
