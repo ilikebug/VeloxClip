@@ -12,10 +12,11 @@ concurrency:
 
 jobs:
   build-and-test:
-    # macos-15 ships Xcode 16. macos-14's default toolchain is Swift 5.10,
-    # which cannot open a swift-tools-version:6.0 package at all — it fails
-    # before compiling a single file.
-    runs-on: macos-15
+    # Must match the toolchain that builds the shipped DMG (Xcode 26 / Swift 6.2).
+    # Older images are not merely "stricter" — they carry an older SDK where
+    # NSImage is not Sendable, so AppKit types cannot cross an actor boundary
+    # and the app genuinely does not compile there.
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
 
