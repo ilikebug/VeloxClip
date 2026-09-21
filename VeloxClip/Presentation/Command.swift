@@ -1,4 +1,4 @@
-import SwiftUI
+import Foundation
 
 struct Command: Identifiable, Equatable {
     let id: String
