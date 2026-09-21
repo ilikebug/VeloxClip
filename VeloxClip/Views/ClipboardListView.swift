@@ -65,6 +65,7 @@ struct ClipboardListView: View {
                         index: index,
                         isSelected: selectedItem?.id == item.id,
                         stagedIndex: pasteStack.stagedIndex(of: item.id),
+                        language: settings.appLanguage,
                         onSelect: {
                             selectedItem = item
                             onUserInteract()
@@ -112,13 +113,17 @@ struct ClipboardItemRow: View {
     let index: Int
     let isSelected: Bool
     let stagedIndex: Int?
+    /// Passed as a value, not observed. Observing AppSettings here meant every
+    /// visible row was invalidated by any of its 11 publishers — dragging the
+    /// paste-stack HUD re-rendered the whole list. The row needs the language
+    /// and nothing else.
+    let language: AppLanguage
     let onSelect: () -> Void
     let onDoubleClick: () -> Void
     let onToggleStage: () -> Void
     let onRightClick: () -> Void
 
     @Environment(\.colorScheme) private var scheme
-    @ObservedObject private var settings = AppSettings.shared
     @State private var isHovering = false
 
     var body: some View {
@@ -141,7 +146,7 @@ struct ClipboardItemRow: View {
             Text(RowPresentation.relativeTime(
                 item.lastUsedAt ?? item.createdAt,
                 now: Date(),
-                language: settings.appLanguage
+                language: language
             ))
                 .font(.system(size: 11))
                 .foregroundColor(isSelected ? Color.white.opacity(0.75) : c.text3)
@@ -156,7 +161,7 @@ struct ClipboardItemRow: View {
                         .foregroundColor(.white)
                 }
                 .onTapGesture { onToggleStage() }
-                .help(L10n.string("list.stage.removeHelp", language: settings.appLanguage))
+                .help(L10n.string("list.stage.removeHelp", language: language))
             } else if isHovering {
                 Button(action: onToggleStage) {
                     Image(systemName: "plus.circle")
@@ -164,7 +169,7 @@ struct ClipboardItemRow: View {
                         .foregroundColor(isSelected ? .white : c.text2)
                 }
                 .buttonStyle(.plain)
-                .help(L10n.string("list.stage.addHelp", language: settings.appLanguage))
+                .help(L10n.string("list.stage.addHelp", language: language))
             } else if isSelected {
                 DSKeyBadge(label: "⏎", role: .onAccent)
             } else if index < 9 {
@@ -248,7 +253,7 @@ struct ClipboardItemRow: View {
                 type: item.type,
                 content: item.content,
                 tags: item.tags,
-                language: settings.appLanguage
+                language: language
             ))
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -288,13 +293,13 @@ struct ClipboardItemRow: View {
     private func displayContent(for item: ClipboardItem) -> String {
         if item.type == "color" {
             return ColorFormatting.hex(from: item.content ?? "")
-                ?? (item.content ?? L10n.string("list.display.colorFallback", language: settings.appLanguage))
+                ?? (item.content ?? L10n.string("list.display.colorFallback", language: language))
         }
         if item.type == "file", let content = item.content {
             let paths = RowPresentation.filePaths(from: content)
             let firstName = URL(fileURLWithPath: paths.first ?? content).lastPathComponent
             if paths.count > 1 {
-                return L10n.format("list.display.files", paths.count, firstName, language: settings.appLanguage)
+                return L10n.format("list.display.files", paths.count, firstName, language: language)
             }
             return firstName
         }
@@ -302,12 +307,12 @@ struct ClipboardItemRow: View {
             return content.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         if item.type == "image" {
-            return L10n.string("list.display.imageData", language: settings.appLanguage)
+            return L10n.string("list.display.imageData", language: language)
         }
         if item.type == "rtf" {
-            return L10n.string("list.display.richText", language: settings.appLanguage)
+            return L10n.string("list.display.richText", language: language)
         }
-        return L10n.string("row.type.unknownContent", language: settings.appLanguage)
+        return L10n.string("row.type.unknownContent", language: language)
     }
 }
 

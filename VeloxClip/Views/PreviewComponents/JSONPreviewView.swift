@@ -162,7 +162,7 @@ struct JSONPreviewView: View {
     private func treeView(availableWidth: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             if let jsonObject {
-                JSONTreeView(jsonObject: jsonObject, level: 0)
+                JSONTreeView(jsonObject: jsonObject, level: 0, language: settings.appLanguage)
             }
         }
         .padding(12)
@@ -254,7 +254,10 @@ struct JSONTreeView: View {
     let jsonObject: Any
     let level: Int
     let key: String?
-    @ObservedObject private var settings = AppSettings.shared
+    /// Passed down the recursion as a value. This view recurses once per JSON
+    /// node, so observing AppSettings installed one observer per node — a
+    /// 5000-node document meant 5000 observers all invalidated together.
+    let language: AppLanguage
     @State private var isExpanded = true
 
     private let indent: CGFloat = 20
@@ -265,10 +268,11 @@ struct JSONTreeView: View {
     private let numberColor = Color(hex: "#986801")!  // Orange/Brown
     private let keywordColor = Color(hex: "#0184BC")! // Blue
 
-    init(jsonObject: Any, level: Int = 0, key: String? = nil) {
+    init(jsonObject: Any, level: Int = 0, key: String? = nil, language: AppLanguage) {
         self.jsonObject = jsonObject
         self.level = level
         self.key = key
+        self.language = language
     }
 
     private var bracketColor: Color { DSColors(scheme: scheme).text2 }
@@ -277,13 +281,13 @@ struct JSONTreeView: View {
         let c = DSColors(scheme: scheme)
         VStack(alignment: .leading, spacing: 2) {
             if let dict = jsonObject as? [String: Any] {
-                collectionHeader(label: "{", count: dict.count, type: L10n.string("preview.json.keys", language: settings.appLanguage))
+                collectionHeader(label: "{", count: dict.count, type: L10n.string("preview.json.keys", language: language))
                 if isExpanded {
                     dictionaryContent(dict)
                     Text("}").foregroundColor(bracketColor).font(.dsMonoBody)
                 }
             } else if let array = jsonObject as? [Any] {
-                collectionHeader(label: "[", count: array.count, type: L10n.string("preview.json.items", language: settings.appLanguage))
+                collectionHeader(label: "[", count: array.count, type: L10n.string("preview.json.items", language: language))
                 if isExpanded {
                     arrayContent(array)
                     Text("]").foregroundColor(bracketColor).font(.dsMonoBody)
@@ -353,7 +357,7 @@ struct JSONTreeView: View {
         VStack(alignment: .leading, spacing: 2) {
             let sortedKeys = dict.keys.sorted()
             ForEach(sortedKeys, id: \.self) { key in
-                JSONTreeView(jsonObject: dict[key]!, level: level + 1, key: key)
+                JSONTreeView(jsonObject: dict[key]!, level: level + 1, key: key, language: language)
             }
         }
     }
@@ -361,7 +365,7 @@ struct JSONTreeView: View {
     private func arrayContent(_ array: [Any]) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             ForEach(Array(array.enumerated()), id: \.offset) { index, item in
-                JSONTreeView(jsonObject: item, level: level + 1)
+                JSONTreeView(jsonObject: item, level: level + 1, language: language)
             }
         }
     }
