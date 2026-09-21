@@ -41,7 +41,7 @@ class AppSettings: ObservableObject {
                     try? await dbManager.setSetting(key: "globalShortcut", value: globalShortcut)
                 }
             }
-            ShortcutManager.shared.updateShortcut(globalShortcut)
+            ShortcutManager.shared.update(globalShortcut, for: .windowToggle)
         }
     }
 
@@ -52,7 +52,7 @@ class AppSettings: ObservableObject {
                     try? await dbManager.setSetting(key: "screenshotShortcut", value: screenshotShortcut)
                 }
             }
-            ShortcutManager.shared.updateScreenshotShortcut(screenshotShortcut)
+            ShortcutManager.shared.update(screenshotShortcut, for: .screenshot)
         }
     }
 
@@ -63,7 +63,7 @@ class AppSettings: ObservableObject {
                     try? await dbManager.setSetting(key: "pasteImageShortcut", value: pasteImageShortcut)
                 }
             }
-            ShortcutManager.shared.updatePasteImageShortcut(pasteImageShortcut)
+            ShortcutManager.shared.update(pasteImageShortcut, for: .pasteImage)
         }
     }
 
@@ -74,7 +74,7 @@ class AppSettings: ObservableObject {
                     try? await dbManager.setSetting(key: "textCaptureShortcut", value: textCaptureShortcut)
                 }
             }
-            ShortcutManager.shared.updateTextCaptureShortcut(textCaptureShortcut)
+            ShortcutManager.shared.update(textCaptureShortcut, for: .textCapture)
         }
     }
 

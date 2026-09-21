@@ -60,8 +60,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // without Services naming a SwiftUI view type
         ViewCaches.registerAll()
 
-        // Register all global shortcuts
-        ShortcutManager.shared.registerAllShortcuts()
+        // Register all global shortcuts. The App layer owns the mapping from
+        // shortcut to behaviour; ShortcutManager only knows how to register keys.
+        registerShortcuts()
         WindowManager.shared.startTrackingTargetApps()
 
         // Only now may this process read the pasteboard or write the database
@@ -85,6 +86,29 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Removed auto-show on launch to avoid interrupting user workflow
     }
     
+    /// Wires each global shortcut to what it should do.
+    ///
+    /// This mapping belongs to the App layer. It used to be a hardcoded
+    /// if/else over magic integers inside ShortcutManager's Carbon callback,
+    /// which gave Services compile-time knowledge of WindowManager and three
+    /// sibling services.
+    @MainActor
+    private func registerShortcuts() {
+        let settings = AppSettings.shared
+        ShortcutManager.shared.register(settings.globalShortcut, for: .windowToggle) {
+            WindowManager.shared.toggleWindow()
+        }
+        ShortcutManager.shared.register(settings.screenshotShortcut, for: .screenshot) {
+            ScreenshotService.shared.captureArea()
+        }
+        ShortcutManager.shared.register(settings.pasteImageShortcut, for: .pasteImage) {
+            PasteImageService.shared.showPasteImage()
+        }
+        ShortcutManager.shared.register(settings.textCaptureShortcut, for: .textCapture) {
+            TextCaptureService.shared.captureText()
+        }
+    }
+
     private func activateExistingInstance() {
         let bundleIdentifier = Bundle.main.bundleIdentifier ?? "com.antigravity.veloxclip"
         let runningApps = NSWorkspace.shared.runningApplications
