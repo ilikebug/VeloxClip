@@ -262,9 +262,58 @@ actor DatabaseManager {
         do {
             await ensureInitialized()
             try backfillDataHashesIfNeeded()
+            _ = try await vacuumIfNeeded()
         } catch {
             print("Deferred maintenance failed: \(error)")
         }
+    }
+
+    /// Fraction of the file that must be free pages before a rewrite is worth it.
+    private static let vacuumFreePageThreshold = 0.25
+    /// Below this there is nothing meaningful to reclaim, whatever the ratio.
+    private static let vacuumMinimumFreeBytes = 8 * 1_024 * 1_024
+
+    /// Returns freed pages to the filesystem.
+    ///
+    /// SQLite marks pages free on DELETE and reuses them, but never shrinks the
+    /// file. History-limit trimming and "clear history" delete constantly, so
+    /// the database only ever grew: a real install reached 444 MB while holding
+    /// 12 MB of data — 97% free pages.
+    ///
+    /// VACUUM rewrites the whole file, so it is gated on there being something
+    /// substantial to reclaim; otherwise every launch would pay a full rewrite.
+    @discardableResult
+    func vacuumIfNeeded() async throws -> Bool {
+        await ensureInitialized()
+        guard let db = db else { throw DatabaseError.connectionFailed }
+
+        // Fold the WAL back in first, or its pages look "in use" and the
+        // freelist reads far smaller than it really is.
+        _ = try? db.scalar("PRAGMA wal_checkpoint(TRUNCATE)")
+
+        let pageCount = Int(try db.scalar("PRAGMA page_count") as? Int64 ?? 0)
+        let freeCount = Int(try db.scalar("PRAGMA freelist_count") as? Int64 ?? 0)
+        let pageSize = Int(try db.scalar("PRAGMA page_size") as? Int64 ?? 0)
+        guard pageCount > 0, pageSize > 0 else { return false }
+
+        let freeBytes = freeCount * pageSize
+        let ratio = Double(freeCount) / Double(pageCount)
+        guard ratio >= Self.vacuumFreePageThreshold, freeBytes >= Self.vacuumMinimumFreeBytes else {
+            return false
+        }
+
+        try db.run("VACUUM")
+        // VACUUM rebuilds the file; make sure it comes back in WAL mode, which
+        // is what keeps readers from blocking the writer.
+        try db.run("PRAGMA journal_mode=WAL")
+        // And checkpoint again: in WAL mode the rebuilt pages land in the WAL,
+        // so without this the main file keeps its old size and nothing is
+        // actually returned to the filesystem.
+        _ = try? db.scalar("PRAGMA wal_checkpoint(TRUNCATE)")
+
+        let reclaimed = Double(freeBytes) / 1_048_576
+        print("🧹 Reclaimed \(String(format: "%.0f", reclaimed)) MB of free pages")
+        return true
     }
 
     private func backfillDataHashesIfNeeded() throws {
