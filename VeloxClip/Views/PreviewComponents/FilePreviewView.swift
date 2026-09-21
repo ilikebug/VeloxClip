@@ -26,7 +26,7 @@ struct MultiFilePreview: View {
     let paths: [String]
     @State private var entries: [FileEntry] = []
 
-    struct FileEntry: Identifiable {
+    struct FileEntry: Identifiable, Sendable {
         let id = UUID()
         let path: String
         let name: String
@@ -69,8 +69,14 @@ struct MultiFilePreview: View {
             .background(Color.secondary.opacity(0.05))
             .cornerRadius(12)
         }
-        .onAppear {
-            loadEntries()
+        .task(id: paths) {
+            // stat() on a path pointing at an unmounted share or a sleeping
+            // external disk blocks until it times out; on the main thread that
+            // freezes the overlay AND its key monitor. Clipboard history is
+            // exactly where stale paths accumulate.
+            entries = await Task.detached(priority: .userInitiated) { [paths] in
+                Self.readEntries(paths)
+            }.value
         }
     }
 
@@ -137,9 +143,9 @@ struct MultiFilePreview: View {
         .padding(.vertical, 8)
     }
 
-    private func loadEntries() {
+    nonisolated static func readEntries(_ paths: [String]) -> [FileEntry] {
         let fileManager = FileManager.default
-        entries = paths.map { path in
+        return paths.map { path in
             var isDirectory: ObjCBool = false
             let exists = fileManager.fileExists(atPath: path, isDirectory: &isDirectory)
             var size: Int64 = 0
@@ -181,7 +187,7 @@ struct SingleFilePreview: View {
     let filePath: String
     @State private var fileInfo: FileInfo?
 
-    struct FileInfo {
+    struct FileInfo: Sendable {
         let name: String
         let path: String
         let size: Int64
@@ -275,8 +281,12 @@ struct SingleFilePreview: View {
                     .frame(maxWidth: .infinity, alignment: .center)
             }
         }
-        .onAppear {
-            loadFileInfo()
+        .task(id: filePath) {
+            // Same reason as the multi-file loader: a stale path on an
+            // unmounted volume must not block the main thread.
+            fileInfo = await Task.detached(priority: .userInitiated) { [filePath] in
+                Self.readFileInfo(at: filePath)
+            }.value
         }
     }
     
@@ -291,7 +301,7 @@ struct SingleFilePreview: View {
         }
     }
     
-    private func loadFileInfo() {
+    nonisolated static func readFileInfo(at filePath: String) -> FileInfo {
         let url = URL(fileURLWithPath: filePath)
         let name = url.lastPathComponent
         let path = url.path
@@ -322,7 +332,7 @@ struct SingleFilePreview: View {
             }
         }
         
-        fileInfo = FileInfo(
+        return FileInfo(
             name: name,
             path: path,
             size: size,

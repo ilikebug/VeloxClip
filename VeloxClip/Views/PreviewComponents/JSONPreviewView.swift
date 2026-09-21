@@ -14,6 +14,10 @@ struct JSONPreviewView: View {
     // Parsed once per item for tree mode — re-parsing inside body ran on every
     // layout pass and store publish (multi-second hangs on large documents)
     @State private var jsonObject: Any?
+    /// Split once per document. Splitting inside `body` re-allocated the whole
+    /// line array on every body evaluation (scheme change, settings publish,
+    /// viewMode toggle), not just when the document changed.
+    @State private var formattedLines: [String] = []
     
     enum ViewMode {
         case formatted, minified, tree
@@ -42,11 +46,8 @@ struct JSONPreviewView: View {
         }
         .task(id: jsonString) {
             jsonObject = nil
+            formattedLines = []
             await validateAndFormatAsync()
-            if viewMode == .tree { jsonObject = parseJSON() }
-        }
-        .onChange(of: viewMode) { _, mode in
-            if mode == .tree, jsonObject == nil { jsonObject = parseJSON() }
         }
     }
     
@@ -131,8 +132,7 @@ struct JSONPreviewView: View {
         // Lazy: a pretty-printed multi-MB document has hundreds of thousands of
         // lines; instantiating a Text for each up front froze the overlay
         return LazyVStack(alignment: .leading, spacing: 0) {
-            let lines = formattedJSON.components(separatedBy: .newlines)
-            ForEach(Array(lines.enumerated()), id: \.offset) { i, line in
+            ForEach(Array(formattedLines.enumerated()), id: \.offset) { i, line in
                 Text(line)
                     .font(.dsMonoBody)
                     .foregroundColor(c.text)
@@ -194,6 +194,18 @@ struct JSONPreviewView: View {
             self.isValidJSON = cached.isValid
             self.validationError = cached.error
             self.isLoading = false
+            // The cache holds strings only; re-derive the line split off the
+            // main thread rather than inside body.
+            if cached.isValid {
+                let formatted = cached.formatted
+                self.formattedLines = await Task.detached(priority: .userInitiated) {
+                    formatted.components(separatedBy: .newlines)
+                }.value
+                // JSONSerialization returns `Any`, which can't cross an actor
+                // boundary; parse here rather than in body.
+                self.jsonObject = input.data(using: .utf8)
+                    .flatMap { try? JSONSerialization.jsonObject(with: $0) }
+            }
             return
         }
         
@@ -215,11 +227,17 @@ struct JSONPreviewView: View {
                 let formatted = String(data: formattedData, encoding: .utf8) ?? ""
                 let minified = String(data: minifiedData, encoding: .utf8) ?? ""
                 
+                let lines = formatted.components(separatedBy: .newlines)
+
                 await MainActor.run {
                     Self.jsonCache[input] = (formatted, minified, true, nil)
 
                     self.formattedJSON = formatted
+                    self.formattedLines = lines
                     self.minifiedJSONText = minified
+                    // Reuse the object this pass already produced — it used to
+                    // be discarded and re-parsed on the main thread for tree mode
+                    self.jsonObject = jsonObject
                     self.isValidJSON = true
                     self.validationError = nil
                     self.isLoading = false
@@ -234,11 +252,6 @@ struct JSONPreviewView: View {
                 }
             }
         }.value
-    }
-    
-    private func parseJSON() -> Any? {
-        guard let data = jsonString.data(using: .utf8) else { return nil }
-        return try? JSONSerialization.jsonObject(with: data)
     }
     
     private func copyJSON() {

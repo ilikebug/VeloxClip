@@ -8,7 +8,9 @@ struct URLPreviewView: View {
     let urlString: String
     @ObservedObject private var settings = AppSettings.shared
     @State private var urlInfo: URLInfo?
-    @State private var isLoading = false
+    /// Cached: the QR is a pure function of the URL, but generating it inside
+    /// `body` re-ran a full Core Image render on every body pass.
+    @State private var qrCode: NSImage?
 
     struct URLInfo {
         let url: URL
@@ -70,19 +72,10 @@ struct URLPreviewView: View {
                     .padding(12)
                     .background(RoundedRectangle(cornerRadius: 8).fill(Color.orange.opacity(0.1)))
                 }
-            } else if isLoading {
-                HStack {
-                    ProgressView()
-                        .scaleEffect(0.7)
-                    Text(L10n.string("preview.url.loading", language: settings.appLanguage))
-                        .font(.system(size: 11))
-                        .foregroundColor(c.text2)
-                }
-                .padding(12)
             }
 
             // QR code (white plate so it scans in both light and dark)
-            if let url = urlInfo?.url, urlInfo?.isValid == true, let qr = qrImage(from: url.absoluteString, size: 148) {
+            if urlInfo?.isValid == true, let qr = qrCode {
                 Image(nsImage: qr)
                     .interpolation(.none)
                     .resizable()
@@ -117,7 +110,7 @@ struct URLPreviewView: View {
         PasteboardService.shared.write(text: urlString)
     }
 
-    private func qrImage(from string: String, size: CGFloat) -> NSImage? {
+    nonisolated static func qrImage(from string: String, size: CGFloat) -> NSImage? {
         let filter = CIFilter.qrCodeGenerator()
         filter.message = Data(string.utf8)
         filter.correctionLevel = "M"
@@ -136,15 +129,14 @@ struct URLPreviewView: View {
         }
         
         urlInfo = URLInfo(url: url, title: nil, description: nil, isValid: true)
-        
-        // Try to fetch URL metadata (simplified - in production would use proper HTML parsing)
-        isLoading = true
+
+        // Render the QR once, off the main thread
+        let absolute = url.absoluteString
         Task {
-            // Basic validation - in a real app, you'd fetch and parse HTML
-            // For now, just validate the URL structure
-            await MainActor.run {
-                isLoading = false
-            }
+            let image = await Task.detached(priority: .userInitiated) {
+                Self.qrImage(from: absolute, size: 148)
+            }.value
+            qrCode = image
         }
     }
     

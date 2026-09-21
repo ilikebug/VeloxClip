@@ -131,6 +131,33 @@ struct FilePreviewPresentation {
 }
 
 struct TextSummaryPresentation {
+    /// The four header counts, computed once instead of four full string walks
+    /// per body pass. This view is routed for `.longtext`, i.e. exactly the
+    /// largest items in history.
+    struct Stats: Equatable {
+        var words: Int
+        var characters: Int
+        var lines: Int
+        var paragraphs: Int
+
+        static let empty = Stats(words: 0, characters: 0, lines: 0, paragraphs: 0)
+    }
+
+    static func stats(for text: String) -> Stats {
+        Stats(
+            words: text.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.count,
+            characters: text.count,
+            lines: text.components(separatedBy: .newlines).count,
+            paragraphs: paragraphs(in: text).count
+        )
+    }
+
+    /// Non-empty paragraphs, the unit the preview pages through.
+    static func paragraphs(in text: String) -> [String] {
+        text.components(separatedBy: "\n\n")
+            .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+    }
+
     static var wordsLabel: String { wordsLabel() }
     static var charactersLabel: String { charactersLabel() }
     static var linesLabel: String { linesLabel() }
