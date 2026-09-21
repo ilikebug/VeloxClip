@@ -6,9 +6,15 @@ class ClipboardMonitor: ObservableObject {
     private var timer: AnyCancellable?
     private let pasteboard = NSPasteboard.general
     private var lastChangeCount: Int
-    
+    private var pipeline: IngestionPipeline!
+
     init() {
         self.lastChangeCount = pasteboard.changeCount
+        // Serialises every ingest: one item fully persisted before the next
+        // starts, so history order always matches copy order.
+        self.pipeline = IngestionPipeline { [weak self] kind, sourceApp in
+            await self?.persist(kind, sourceApp: sourceApp)
+        }
     }
 
     /// Starts the poll loop. Deliberately NOT called from `init`: the app must
@@ -95,111 +101,95 @@ class ClipboardMonitor: ObservableObject {
         let pngData = (hasFiles || stringContent != nil || rtfData != nil) ? nil : pasteboard.data(forType: .png)
         let tiffData = (hasFiles || stringContent != nil || rtfData != nil || pngData != nil) ? nil : pasteboard.data(forType: .tiff)
 
-        Task.detached(priority: .userInitiated) {
-            // 1. Check for Files FIRST — Finder also puts the file name on the
-            // pasteboard as plain text, so checking text first would shadow
-            // every file copy and record it as a text item
-            if let urls = fileURLs, !urls.isEmpty {
-                let paths = urls.map { $0.path }.joined(separator: "\n")
-                await self.saveItemAsync(type: "file", content: paths, sourceApp: sourceApp)
-            }
-            // 2. Check for Text
-            else if let text = stringContent {
-                if ClipboardIngestion.isColor(text) {
-                    await self.saveItemAsync(type: "color", content: text, sourceApp: sourceApp)
-                } else {
-                    await self.saveItemAsync(type: "text", content: text, sourceApp: sourceApp)
-                }
-            }
-            // 3. Check for RTF
-            else if let data = rtfData {
-                await self.saveItemAsync(type: "rtf", data: data, sourceApp: sourceApp)
-            }
-            // 4. Check for Images
-            else if let rawImageData = pngData ?? tiffData {
-                // Header-only pixel check BEFORE any decode — a decompression bomb
-                // on the pasteboard must not take the app down on a poll tick
-                guard ClipboardIngestion.imageDimensionsWithinLimit(rawImageData) else {
-                    print("⚠️ Skipping pasteboard image with implausible dimensions")
-                    return
-                }
-                // TIFF from the pasteboard is uncompressed (tens of MB per screenshot);
-                // normalize to PNG before storing
-                let imageData = Self.normalizedImageData(rawImageData) ?? rawImageData
-                // Size check on what would actually be stored, not on the raw TIFF
-                guard ClipboardIngestion.imageStorable(imageData) else {
-                    print("⚠️ Skipping oversized image (\(imageData.count) bytes after normalization)")
-                    return
-                }
-                let newItem = await self.saveItemAsync(type: "image", data: imageData, sourceApp: sourceApp)
+        let payload = PasteboardPayload(
+            filePaths: hasFiles ? fileURLs?.map(\.path).joined(separator: "\n") : nil,
+            text: stringContent,
+            rtf: rtfData,
+            image: pngData ?? tiffData,
+            sourceApp: sourceApp
+        )
 
-                // Perform OCR in background
-                let itemID = newItem.id
-                AIService.shared.performOCR(on: imageData) { text in
-                    if let text = text, !text.isEmpty {
-                        Task { @MainActor in
-                            if ClipboardStore.shared.items.contains(where: { $0.id == itemID }) {
-                                ClipboardStore.shared.updateItem(id: itemID, content: text)
-                            }
+        // One ordered hand-off. Previously this spawned an independent
+        // Task.detached per tick; those are unordered and the image branch's
+        // decode outlives the 0.5s poll interval, so a later text copy could
+        // land above an earlier image copy in history.
+        Task { [pipeline] in
+            await pipeline.submit(payload)
+        }
+    }
+
+    /// Persists one classified payload and kicks off its background analysis.
+    /// Runs serialised by `IngestionPipeline`, one item at a time, in copy order.
+    @MainActor
+    private func persist(_ kind: IngestKind, sourceApp: String?) async {
+        switch kind {
+        case .file(let paths):
+            saveItem(type: "file", content: paths, sourceApp: sourceApp)
+        case .color(let text):
+            saveItem(type: "color", content: text, sourceApp: sourceApp)
+        case .text(let text):
+            saveItem(type: "text", content: text, sourceApp: sourceApp)
+        case .rtf(let data):
+            saveItem(type: "rtf", data: data, sourceApp: sourceApp)
+        case .image(let data):
+            let newItem = saveItem(type: "image", data: data, sourceApp: sourceApp)
+            let itemID = newItem.id
+            AIService.shared.performOCR(on: data) { text in
+                if let text = text, !text.isEmpty {
+                    Task { @MainActor in
+                        if ClipboardStore.shared.items.contains(where: { $0.id == itemID }) {
+                            ClipboardStore.shared.updateItem(id: itemID, content: text)
                         }
                     }
                 }
             }
+        case .none:
+            break
         }
     }
     
-    nonisolated private static func normalizedImageData(_ raw: Data) -> Data? {
-        // Already PNG? Keep as-is
-        if raw.starts(with: [0x89, 0x50, 0x4E, 0x47]) { return raw }
-        guard let rep = NSBitmapImageRep(data: raw) else { return nil }
-        return rep.representation(using: .png, properties: [:])
-    }
-
     @discardableResult
-    private func saveItemAsync(type: String, content: String? = nil, data: Data? = nil, sourceApp: String? = nil) async -> ClipboardItem {
+    private func saveItem(type: String, content: String? = nil, data: Data? = nil, sourceApp: String? = nil) -> ClipboardItem {
         // Compare blobs via hash to avoid byte-by-byte Data comparisons
         let incomingHash = data.map(ClipboardItem.hash(of:))
 
-        // Deduplication check on MainActor
-        return await MainActor.run {
-            if let duplicate = ClipboardIngestion.recentDuplicate(
-                in: ClipboardStore.shared.items, type: type, content: content, dataHash: incomingHash, now: Date()
-            ) {
-                return duplicate
-            }
+        if let duplicate = ClipboardIngestion.recentDuplicate(
+            in: ClipboardStore.shared.items, type: type, content: content, dataHash: incomingHash, now: Date()
+        ) {
+            return duplicate
+        }
 
-            let newItem = ClipboardItem(type: type, content: content, data: data, sourceApp: sourceApp)
-            ClipboardStore.shared.addItem(newItem)
-            
-            // Heavy background analysis
-            let capturedContent = content // Capturing for the task below
-            let capturedItemID = newItem.id
-            
-            Task.detached(priority: .background) {
-                var detectedTags: [String] = []
-                var detectedEmbedding: Data?
+        let newItem = ClipboardItem(type: type, content: content, data: data, sourceApp: sourceApp)
+        ClipboardStore.shared.addItem(newItem)
 
-                if let text = capturedContent {
-                    detectedTags = ClipboardIngestion.detectTags(in: text)
-                    
-                    if text.count >= 3 && text.count <= 2000 {
-                        if let vector = await AIService.shared.generateEmbedding(for: text) {
-                            detectedEmbedding = ClipboardItem.encodeVector(vector)
-                        }
-                    }
-                    
-                    // Update item with tags and embedding if changed
-                    if !detectedTags.isEmpty || detectedEmbedding != nil {
-                        await ClipboardStore.shared.applyDetectedMetadata(
-                            id: capturedItemID,
-                            tags: detectedTags,
-                            embedding: detectedEmbedding
-                        )
+        // Heavy background analysis
+        let capturedContent = content
+        let capturedItemID = newItem.id
+
+        Task.detached(priority: .background) {
+            var detectedTags: [String] = []
+            var detectedEmbedding: Data?
+
+            if let text = capturedContent {
+                detectedTags = ClipboardIngestion.detectTags(in: text)
+
+                if text.count >= 3 && text.count <= 2000 {
+                    if let vector = await AIService.shared.generateEmbedding(for: text) {
+                        detectedEmbedding = ClipboardItem.encodeVector(vector)
                     }
                 }
+
+                // Update item with tags and embedding if changed
+                if !detectedTags.isEmpty || detectedEmbedding != nil {
+                    await ClipboardStore.shared.applyDetectedMetadata(
+                        id: capturedItemID,
+                        tags: detectedTags,
+                        embedding: detectedEmbedding
+                    )
+                }
             }
-            
-            return newItem
         }
+
+        return newItem
     }
 }
