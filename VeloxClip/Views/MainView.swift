@@ -55,25 +55,22 @@ struct MainView: View {
     @FocusState private var isSearchFocused: Bool
     @State private var viewMode: ViewMode = .history
     @State private var typeFilter: ClipboardTypeFilter = .all
-    @State private var searchResults: [ClipboardItem] = []
-    @State private var isSearching = false
+    @StateObject private var search = ClipboardSearchViewModel()
     @State private var scrollTarget: UUID?
     @State private var showCommandPalette = false
     // Push-in detail: nil = list mode; non-nil = detail mode (replaces search+list)
     @State private var detailItem: ClipboardItem?
 
     // Debounced search text for semantic search
-    @State private var searchTask: Task<Void, Never>?
     
     // Cached semantic search results - only store IDs and scores to save memory
-    @State private var cachedSemanticResults = FIFOCache<String, [(UUID, Double)]>(maxEntries: 50)
     
     var displayItems: [ClipboardItem] {
         let base: [ClipboardItem]
         if searchText.isEmpty {
             base = viewMode == .favorites ? store.favoriteItems : store.items
         } else {
-            base = searchResults
+            base = search.results
         }
         // Type filter stacks on top of search results and the favorites view
         guard typeFilter != .all else { return base }
@@ -110,126 +107,18 @@ struct MainView: View {
     }
 
     private func updateSearchResults() {
-        searchTask?.cancel()
-        
-        let query = searchText.trimmingCharacters(in: .whitespaces)
-        let mode = viewMode
-        
-        if query.isEmpty {
-            searchResults = []
-            isSearching = false
+        let baseItems = viewMode == .favorites ? store.favoriteItems : store.items
+        guard !searchText.trimmingCharacters(in: .whitespaces).isEmpty else {
+            search.clear()
             return
         }
-        
-        isSearching = true
-        let baseItems = mode == .favorites ? store.favoriteItems : store.items
-
-        searchTask = Task {
-            // 1. Keyword search: runs immediately (no debounce) and off the main thread
-            let keywordMatches = await Task.detached(priority: .userInitiated) {
-                baseItems.filter { item in
-                    item.content?.localizedCaseInsensitiveContains(query) ?? false ||
-                    item.type.localizedCaseInsensitiveContains(query) ||
-                    (item.sourceApp?.localizedCaseInsensitiveContains(query) ?? false) ||
-                    item.tags.contains(where: { $0.localizedCaseInsensitiveContains(query) })
-                }
-            }.value
-
-            if Task.isCancelled { return }
-
-            // Keyword matches get a high base score; publish right away
-            var itemScores: [UUID: Double] = [:]
-            for item in keywordMatches {
-                itemScores[item.id] = 0.9
+        search.search(query: searchText, in: baseItems) { ranked in
+            // Keep the selection valid as results narrow
+            if selectedItem == nil || !ranked.contains(where: { $0.id == selectedItem?.id }) {
+                selectedItem = ranked.first
+                scrollTarget = ranked.first?.id
             }
-            publishSearchResults(itemScores, baseItems: baseItems)
-
-            // 2. Semantic search: debounced 300ms, merged into the keyword results
-            guard query.count >= 2 else {
-                isSearching = false
-                return
-            }
-
-            try? await Task.sleep(nanoseconds: 300_000_000)
-            if Task.isCancelled { return }
-
-            let semanticResults = await performSemanticSearchAsync(query: query, baseItems: baseItems)
-            if Task.isCancelled { return }
-
-            for (itemId, similarity) in semanticResults {
-                let currentScore = itemScores[itemId] ?? 0
-                itemScores[itemId] = max(currentScore, similarity)
-            }
-            publishSearchResults(itemScores, baseItems: baseItems)
-            isSearching = false
         }
-    }
-
-    private func publishSearchResults(_ itemScores: [UUID: Double], baseItems: [ClipboardItem]) {
-        let allMatchIds = Set(itemScores.keys)
-        let matchedItems = baseItems.filter { allMatchIds.contains($0.id) }
-
-        let sortedResults = matchedItems.map { ($0, itemScores[$0.id] ?? 0) }
-            .sorted { r1, r2 in
-                if abs(r1.1 - r2.1) < 0.001 {
-                    // If scores are very close, prioritize favorites then most recently used —
-                    // same ordering the history list uses (lastUsedAt ?? createdAt)
-                    if r1.0.isFavorite != r2.0.isFavorite {
-                        return r1.0.isFavorite
-                    }
-                    return (r1.0.lastUsedAt ?? r1.0.createdAt) > (r2.0.lastUsedAt ?? r2.0.createdAt)
-                }
-                return r1.1 > r2.1
-            }
-
-        let finalItems = sortedResults.map { $0.0 }
-        searchResults = finalItems
-
-        // Select first item if search results changed
-        if selectedItem == nil || !finalItems.contains(where: { $0.id == selectedItem?.id }) {
-            selectedItem = finalItems.first
-            scrollTarget = finalItems.first?.id
-        }
-    }
-
-    private func performSemanticSearchAsync(query: String, baseItems: [ClipboardItem]) async -> [(UUID, Double)] {
-        let normalizedQuery = query.lowercased()
-
-        // Cache check
-        if let cached = cachedSemanticResults[normalizedQuery] {
-            return cached
-        }
-
-        // Vectors are no longer carried on list rows (they were tens of MB of
-        // permanently-resident blobs the list never renders). Load just the ones
-        // this search needs.
-        let candidateIDs = baseItems.filter { $0.content != nil }.map(\.id)
-        let vectors = (try? await DatabaseManager.shared.fetchEmbeddings(ids: candidateIDs)) ?? [:]
-        guard !vectors.isEmpty else { return [] }
-
-        let finalResults = await Task.detached(priority: .userInitiated) { () -> [(UUID, Double)] in
-            guard let queryVector = await AIService.shared.generateEmbedding(for: query) else {
-                return []
-            }
-
-            let threshold = 0.5
-            let maxResults = 20
-
-            // Decode each stored vector exactly once per item
-            let results = vectors.compactMap { itemID, blob -> (UUID, Double)? in
-                guard let itemVector = ClipboardItem.decodeVector(blob) else { return nil }
-                let similarity = AIService.shared.calculateSimilarity(queryVector, itemVector)
-                return similarity >= threshold ? (itemID, similarity) : nil
-            }
-            .sorted { $0.1 > $1.1 }
-            .prefix(maxResults)
-
-            return Array(results)
-        }.value
-
-        cachedSemanticResults[normalizedQuery] = finalResults
-
-        return finalResults
     }
 
     
@@ -321,7 +210,7 @@ struct MainView: View {
         .onChange(of: store.items) { _, newItems in
             // Deleting an item must not leave a ghost row in active search results
             let validIDs = Set(newItems.map(\.id))
-            searchResults.removeAll { !validIDs.contains($0.id) }
+            // results are re-derived by the view model on the next query
             // …nor a ghost selection — ⏎ would try to paste an item that no longer
             // exists (for an image that meant clearing the clipboard and pasting nothing)
             if let selected = selectedItem, !validIDs.contains(selected.id) {
@@ -352,8 +241,7 @@ struct MainView: View {
             viewMode = .history
             typeFilter = .all
             searchText = ""
-            searchTask?.cancel()
-            cachedSemanticResults.removeAll()
+            search.clear()
             if !store.items.isEmpty {
                 selectedItem = store.items.first
                 scrollTarget = store.items.first?.id
