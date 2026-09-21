@@ -52,7 +52,7 @@ struct JSONPreviewView: View {
     }
     
     private var header: some View {
-        HStack {
+        HStack(spacing: 10) {
             validationStatus
             
             Spacer()
@@ -64,7 +64,6 @@ struct JSONPreviewView: View {
                             .dsButton(viewMode == mode ? .prominent : .secondary, small: true)
                     }
                 }
-                .padding(.trailing, 30) // Move it a little bit to the left relative to the Copy button
 
                 Button(action: copyJSON) {
                     Label(L10n.string("command.copy", language: settings.appLanguage), systemImage: "doc.on.doc")
