@@ -157,8 +157,35 @@ actor DatabaseManager {
         }
     }
 
+    /// Highest schema this binary understands. Bump it when adding a migration.
+    static let currentSchemaVersion = 1
+
+    /// Refuses to open a database written by a newer build.
+    ///
+    /// Without this, an older binary opened a newer DB, silently ignored the
+    /// columns it didn't know about, and wrote rows the newer build would later
+    /// read with defaults — data loss with no warning. Additive column migrations
+    /// stay driven by `PRAGMA table_info` (idempotent and self-healing); the
+    /// version is the guard rail for everything that isn't additive.
+    private func applySchemaVersion() throws {
+        guard let db = db else { return }
+
+        let existing = Int(try db.scalar("PRAGMA user_version") as? Int64 ?? 0)
+
+        if existing > Self.currentSchemaVersion {
+            throw DatabaseError.schemaTooNew(found: existing, supported: Self.currentSchemaVersion)
+        }
+
+        if existing < Self.currentSchemaVersion {
+            try db.run("PRAGMA user_version = \(Self.currentSchemaVersion)")
+        }
+    }
+
     private func createTables() throws {
         guard let db = db else { return }
+
+        // Version check first: refuse a newer schema before touching anything.
+        try applySchemaVersion()
 
         // Create clipboard_items table
         try db.run(clipboardItems.create(ifNotExists: true) { t in
@@ -521,4 +548,7 @@ actor DatabaseManager {
 
 enum DatabaseError: Error {
     case connectionFailed
+    /// The file was written by a newer build; writing to it would corrupt data
+    /// the current binary doesn't understand.
+    case schemaTooNew(found: Int, supported: Int)
 }
