@@ -318,6 +318,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         Task { @MainActor in
             PasteStackHUDController.shared.activate()
         }
+
+        // One-time schema maintenance, deliberately after launch: it scans every
+        // blob, so running it inside the DB actor's initializer blocked the first
+        // history load behind it.
+        Task.detached(priority: .utility) {
+            await DatabaseManager.shared.runDeferredMaintenance()
+        }
         
         // Note: Window will be shown when user presses the shortcut or clicks menu item
         // Removed auto-show on launch to avoid interrupting user workflow

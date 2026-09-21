@@ -72,22 +72,8 @@ actor DatabaseManager {
 
         if !fileManager.fileExists(atPath: dbPath.path) {
             for legacyDB in legacyDatabaseURLs where fileManager.fileExists(atPath: legacyDB.path) {
-                do {
-                    try fileManager.createDirectory(at: targetDirectory, withIntermediateDirectories: true)
-                    try fileManager.moveItem(at: legacyDB, to: dbPath)
-                    // A WAL-mode database keeps un-checkpointed rows in its sidecars;
-                    // leaving them behind would silently drop the newest history
-                    for suffix in ["-wal", "-shm"] {
-                        let sidecar = URL(fileURLWithPath: legacyDB.path + suffix)
-                        if fileManager.fileExists(atPath: sidecar.path) {
-                            try fileManager.moveItem(at: sidecar, to: URL(fileURLWithPath: dbPath.path + suffix))
-                        }
-                    }
-                    print("✅ Migrated database from \(legacyDB.lastPathComponent) to \(dbPath.path)")
-                    try? fileManager.removeItem(at: legacyDB.deletingLastPathComponent())
+                if migrateLegacyDatabase(from: legacyDB, to: dbPath, fileManager: fileManager) {
                     break
-                } catch {
-                    print("⚠️ Migration failed from \(legacyDB.path): \(error)")
                 }
             }
         }
@@ -95,6 +81,54 @@ actor DatabaseManager {
         if !fileManager.fileExists(atPath: targetDirectory.path) {
             try? fileManager.createDirectory(at: targetDirectory, withIntermediateDirectories: true)
         }
+    }
+
+    /// Moves a legacy database and its WAL sidecars, all-or-nothing.
+    ///
+    /// The sidecars move FIRST. A WAL-mode database keeps un-checkpointed rows
+    /// in them, so a half-done move that lands the main file without its WAL
+    /// silently drops the newest history — and the previous version did exactly
+    /// that, because a throw on the sidecar came after the main file had already
+    /// moved and the only handling was a `print`. On any failure everything is
+    /// moved back and the legacy path is left intact.
+    private static func migrateLegacyDatabase(from legacyDB: URL, to dbPath: URL, fileManager: FileManager) -> Bool {
+        let suffixes = ["-wal", "-shm"]
+        var completed: [(from: URL, to: URL)] = []
+
+        func rollback() {
+            for move in completed.reversed() {
+                try? fileManager.moveItem(at: move.to, to: move.from)
+            }
+        }
+
+        do {
+            try fileManager.createDirectory(at: dbPath.deletingLastPathComponent(), withIntermediateDirectories: true)
+
+            for suffix in suffixes {
+                let source = URL(fileURLWithPath: legacyDB.path + suffix)
+                guard fileManager.fileExists(atPath: source.path) else { continue }
+                let destination = URL(fileURLWithPath: dbPath.path + suffix)
+                try fileManager.moveItem(at: source, to: destination)
+                completed.append((from: source, to: destination))
+            }
+
+            try fileManager.moveItem(at: legacyDB, to: dbPath)
+            completed.append((from: legacyDB, to: dbPath))
+        } catch {
+            print("⚠️ Migration failed from \(legacyDB.path): \(error) — rolling back")
+            rollback()
+            return false
+        }
+
+        print("✅ Migrated database from \(legacyDB.lastPathComponent) to \(dbPath.path)")
+
+        // Remove only what we migrated. This used to delete the whole legacy
+        // directory, taking any other files the previous version kept there.
+        let legacyDirectory = legacyDB.deletingLastPathComponent()
+        if let remaining = try? fileManager.contentsOfDirectory(atPath: legacyDirectory.path), remaining.isEmpty {
+            try? fileManager.removeItem(at: legacyDirectory)
+        }
+        return true
     }
 
     // Initialize database on first access (lazy initialization). A failed open or
@@ -185,27 +219,56 @@ actor DatabaseManager {
         for column in requiredColumns where !existingColumns.contains(column.name) {
             try db.run("ALTER TABLE clipboard_items ADD COLUMN \(column.name) \(column.definition)")
         }
-
-        try backfillDataHashesIfNeeded()
     }
 
     // One-time backfill so hash-based dedup also covers rows created before the dataHash column existed.
     // Guarded by a settings flag — new rows always get a hash on insert, so once this has run
     // there is nothing left to scan on subsequent launches.
+    //
+    // Deliberately NOT part of ensureInitialized: on the first launch after an
+    // upgrade with a large image history this reads every blob and used to issue
+    // one auto-committed UPDATE (one fsync) per row, blocking every other caller
+    // of the actor — settings load, history load, inserts — behind it. The app
+    // looked hung with an empty history. Call `runDeferredMaintenance()` after
+    // the first successful load instead.
+    func runDeferredMaintenance() async {
+        do {
+            await ensureInitialized()
+            try backfillDataHashesIfNeeded()
+        } catch {
+            print("Deferred maintenance failed: \(error)")
+        }
+    }
+
     private func backfillDataHashesIfNeeded() throws {
         guard let db = db else { return }
 
         let backfillFlag = "dataHashBackfillDone"
         if try db.pluck(appSettings.filter(key == backfillFlag)) != nil { return }
 
+        // Hash outside the write so the transaction is short, then apply every
+        // UPDATE in ONE commit — this used to be one auto-committed write (one
+        // fsync) per row.
         let pending = clipboardItems.select(id, data).filter(dataHash == nil && data != nil)
+        var hashes: [(rowID: String, hash: String)] = []
         for row in try db.prepare(pending) {
             guard let blob = row[data] else { continue }
-            let hash = ClipboardItem.hash(of: blob)
-            try db.run(clipboardItems.filter(id == row[id]).update(dataHash <- hash))
+            hashes.append((rowID: row[id], hash: ClipboardItem.hash(of: blob)))
         }
 
-        try db.run(appSettings.insert(or: .replace, key <- backfillFlag, value <- "1"))
+        let items = clipboardItems
+        let idColumn = id
+        let hashColumn = dataHash
+        let settingsTable = appSettings
+        let keyColumn = key
+        let valueColumn = value
+
+        try db.transaction {
+            for entry in hashes {
+                try db.run(items.filter(idColumn == entry.rowID).update(hashColumn <- entry.hash))
+            }
+            try db.run(settingsTable.insert(or: .replace, keyColumn <- backfillFlag, valueColumn <- "1"))
+        }
     }
 
     private func encodeTags(_ tags: [String]) throws -> String {
