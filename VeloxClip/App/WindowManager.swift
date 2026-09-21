@@ -300,8 +300,10 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
             app.activate(options: .activateIgnoringOtherApps)
 
             // 5. Event injection requires Accessibility permission; without it
-            // postToPid silently does nothing — prompt the user instead
-            guard Self.ensureAccessibilityPermission() else { return }
+            // postToPid silently does nothing — prompt the user instead.
+            // Prompting is once-per-session (AccessibilityPermission owns that
+            // policy); this path used to re-open the dialog on every failed paste.
+            guard AccessibilityPermission.promptIfNeeded() else { return }
 
             // Targeted Event Injection (PID-based) — the "Alfred Way".
             // Some apps (especially Electron-based) need time to process focus events
@@ -322,17 +324,6 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
             try? await Task.sleep(nanoseconds: 300_000_000)
             await PasteStackService.shared.startIfStaged()
         }
-    }
-
-    // Returns true when the app may inject keyboard events; otherwise shows
-    // the system prompt guiding the user to System Settings > Accessibility
-    private static func ensureAccessibilityPermission() -> Bool {
-        if AXIsProcessTrusted() { return true }
-        // kAXTrustedCheckOptionPrompt is a mutable global the Swift 6 checker rejects;
-        // its value is the literal below
-        let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
-        AXIsProcessTrustedWithOptions(options)
-        return false
     }
 
     private func rememberPotentialTargetApp(_ app: NSRunningApplication?) {
