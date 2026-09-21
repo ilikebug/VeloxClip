@@ -27,8 +27,12 @@ struct PreviewView: View {
     
     var body: some View {
         Group {
-            if let item = debouncedItem {
-                let displayItem = currentItem ?? item
+            if let snapshot = debouncedItem {
+                // One resolved item for the whole pane. The header used to read
+                // the live store row while the content and toolbar read the
+                // snapshot, so background updates (OCR write-back) never
+                // reached the parts that matter.
+                let displayItem = DetailItemReconciliation.merge(snapshot: snapshot, live: currentItem)
                 VStack(alignment: .leading, spacing: 0) {
                     // Header
                     headerView(for: displayItem)
@@ -39,12 +43,12 @@ struct PreviewView: View {
                     Divider()
                     
                     // Main Preview Content
-                    previewScrollContent(for: item)
+                    previewScrollContent(for: displayItem)
                     
                     Divider()
                     
                     // Bottom Actions Toolbar
-                    actionsToolbar(for: item)
+                    actionsToolbar(for: displayItem)
                 }
             } else {
                 ContentUnavailableView(
