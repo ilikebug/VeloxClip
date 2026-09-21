@@ -3,7 +3,6 @@ import SwiftUI
 @main
 struct VeloxClipApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @StateObject private var monitor = ClipboardMonitor()
     @StateObject private var settings = AppSettings.shared
     
     @Environment(\.openWindow) var openWindow
@@ -280,21 +279,40 @@ struct MenuBarLabel: View {
 }
 
 class AppDelegate: NSObject, NSApplicationDelegate {
-    func applicationDidFinishLaunching(_ notification: Notification) {
-        // Check if another instance is already running
-        if isAnotherInstanceRunning() {
+    /// Owned here, not by the App struct: SwiftUI builds App-level `@StateObject`s
+    /// before/independently of the launch callbacks, so a monitor created there
+    /// would start polling before the single-instance claim had run.
+    @MainActor private var monitor: ClipboardMonitor?
+
+    private var ownsInstanceLock = false
+
+    // Claim the lock as early as AppKit will let us — before
+    // applicationDidFinishLaunching, and before any window or timer exists.
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        ownsInstanceLock = SingleInstanceGuard.claim()
+        if !ownsInstanceLock {
             print("⚠️ Another instance of VeloxClip is already running. Activating it and quitting this instance.")
             activateExistingInstance()
             NSApplication.shared.terminate(nil)
-            return
         }
-        
+    }
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // terminate(nil) is asynchronous, so willFinishLaunching's exit may not
+        // have taken effect yet. Do no work in the losing process.
+        guard ownsInstanceLock else { return }
+
         // Apply the saved appearance (defaults to light) before any window shows
         AppSettings.shared.applyAppearance()
 
         // Register all global shortcuts
         ShortcutManager.shared.registerAllShortcuts()
         WindowManager.shared.startTrackingTargetApps()
+
+        // Only now may this process read the pasteboard or write the database
+        let monitor = ClipboardMonitor()
+        self.monitor = monitor
+        monitor.start()
 
         // Paste stack HUD reacts to PasteStackService phase changes
         Task { @MainActor in
@@ -303,23 +321,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         // Note: Window will be shown when user presses the shortcut or clicks menu item
         // Removed auto-show on launch to avoid interrupting user workflow
-    }
-    
-    private func isAnotherInstanceRunning() -> Bool {
-        let bundleIdentifier = Bundle.main.bundleIdentifier ?? "com.antigravity.veloxclip"
-        let runningApps = NSWorkspace.shared.runningApplications
-        
-        var instanceCount = 0
-        for app in runningApps {
-            if app.bundleIdentifier == bundleIdentifier {
-                // Don't count the current instance
-                if app.processIdentifier != ProcessInfo.processInfo.processIdentifier {
-                    instanceCount += 1
-                }
-            }
-        }
-        
-        return instanceCount > 0
     }
     
     private func activateExistingInstance() {

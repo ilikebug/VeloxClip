@@ -9,7 +9,19 @@ class ClipboardMonitor: ObservableObject {
     
     init() {
         self.lastChangeCount = pasteboard.changeCount
+    }
+
+    /// Starts the poll loop. Deliberately NOT called from `init`: the app must
+    /// win the single-instance claim before this process touches the pasteboard
+    /// or the shared database. Safe to call twice.
+    func start() {
+        guard timer == nil else { return }
         startMonitoring()
+    }
+
+    func stop() {
+        timer?.cancel()
+        timer = nil
     }
     
     private func startMonitoring() {
