@@ -61,14 +61,17 @@ struct CodePreviewView: View {
                 codeScrollView(availableWidth: geo.size.width)
             }
         }
-        .onAppear {
-            detectLanguage()
+        // Detection scans the whole document ~250 times; keep it off the main
+        // thread like every sibling preview does.
+        .task(id: code) {
+            let detected = await Task.detached(priority: .userInitiated) { [code] in
+                Self.detectLanguage(in: code)
+            }.value
+            detectedLanguage = detected
         }
-        .onChange(of: detectedLanguage) { _, _ in Self.globalHighlightCache.removeAll() }
-        .onChange(of: fontSize) { _, _ in Self.globalHighlightCache.removeAll() }
-        .onChange(of: code) { _, _ in
-            detectLanguage()
-        }
+        // No cache wipes here: `language` and `fontSize` are both already part
+        // of the cache key. Wiping on language change is what made a cache
+        // documented as persisting "between item switches" unable to do so.
     }
     
     private var toolbar: some View {
@@ -177,32 +180,36 @@ struct CodePreviewView: View {
     }
 
 
-    private func detectLanguage() {
+    /// Pure language detection, so it can run off the main thread and be tested.
+    ///
+    /// Scans the whole document once per keyword across 15 languages (~250
+    /// substring scans). It used to run synchronously in `.onAppear`, which
+    /// hung the overlay on a large paste.
+    nonisolated static func detectLanguage(in code: String) -> String {
         let lower = code.lowercased()
         var bestMatch: (lang: String, score: Int) = ("Plain Text", 0)
-        
-        for (lang, keywords) in Self.languageKeywords {
+
+        for (lang, keywords) in languageKeywords {
             let score = keywords.filter { lower.contains($0.lowercased()) }.count
             if score > bestMatch.score { bestMatch = (lang, score) }
         }
-        
+
         if bestMatch.score > 0 {
-            detectedLanguage = bestMatch.lang
-        } else {
-            // Fallback rules
-            let trimmed = lower.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmed.hasPrefix("{") || trimmed.hasPrefix("[") {
-                detectedLanguage = "JSON"
-            } else if lower.contains("<!doctype") || (lower.contains("<html") && lower.contains("</html>")) {
-                detectedLanguage = "HTML"
-            } else if lower.contains("body {") || lower.contains(".class {") {
-                detectedLanguage = "CSS"
-            } else if lower.hasPrefix("./") || lower.hasPrefix("/") || lower.contains("rm -rf") || lower.contains("sudo ") || lower.contains("build") {
-                detectedLanguage = "Shell"
-            } else {
-                detectedLanguage = "Plain Text"
-            }
+            return bestMatch.lang
         }
+
+        // Fallback rules
+        let trimmed = lower.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("{") || trimmed.hasPrefix("[") {
+            return "JSON"
+        } else if lower.contains("<!doctype") || (lower.contains("<html") && lower.contains("</html>")) {
+            return "HTML"
+        } else if lower.contains("body {") || lower.contains(".class {") {
+            return "CSS"
+        } else if lower.hasPrefix("./") || lower.hasPrefix("/") || lower.contains("rm -rf") || lower.contains("sudo ") || lower.contains("build") {
+            return "Shell"
+        }
+        return "Plain Text"
     }
     
     @ViewBuilder
@@ -282,7 +289,7 @@ struct CodePreviewView: View {
             if trimmed.hasSuffix("{") || trimmed.hasSuffix("[") { indent += 1 }
         }
         
-        PasteboardSelfWriteGate.shared.write(formatted.joined(separator: "\n"))
+        PasteboardService.shared.write(text: formatted.joined(separator: "\n"))
     }
 }
 

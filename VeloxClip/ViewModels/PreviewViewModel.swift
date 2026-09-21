@@ -28,11 +28,11 @@ class PreviewViewModel: ObservableObject {
     }
     
     func copyTransformedText(_ text: String) {
-        PasteboardSelfWriteGate.shared.write(text)
+        PasteboardService.shared.write(text: text)
     }
     
     func copyToClipboard(_ item: ClipboardItem) {
-        item.copyToPasteboard()
+        PasteboardService.shared.write(item: item)
         ClipboardStore.shared.markUsed(item.id)
     }
 }

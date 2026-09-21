@@ -348,7 +348,13 @@ class ClipboardStore: ObservableObject {
             do {
                 let loadedFavorites = try await dbManager.fetchFavoriteItems()
                 await MainActor.run {
-                    self.favoriteItems = loadedFavorites
+                    // Merge for the same reason load() does: this runs on every
+                    // overlay/menu-bar appearance, and a favorite toggled while
+                    // the read was in flight must not be clobbered by the snapshot.
+                    let loadedIDs = Set(loadedFavorites.map(\.id))
+                    let liveOnly = self.favoriteItems.filter { !loadedIDs.contains($0.id) }
+                    self.favoriteItems = (loadedFavorites + liveOnly)
+                        .sorted { ($0.favoritedAt ?? $0.createdAt) > ($1.favoritedAt ?? $1.createdAt) }
                 }
             } catch {
                 // Keep whatever is on screen — a transient read failure must not
@@ -366,9 +372,15 @@ class ClipboardStore: ObservableObject {
             do {
                 let loadedItems = try await dbManager.fetchAllClipboardItems()
                 await MainActor.run {
-                    self.items = loadedItems
-                    // Load favorites from items
-                    self.favoriteItems = loadedItems.filter { $0.isFavorite }
+                    // Merge, never replace. `shared` is created lazily — often by
+                    // the monitor's first ingest — so items can be inserted while
+                    // this read is in flight. Replacing the array wholesale threw
+                    // them away: still in SQLite, gone from the UI until relaunch.
+                    let loadedIDs = Set(loadedItems.map(\.id))
+                    let liveOnly = self.items.filter { !loadedIDs.contains($0.id) }
+                    self.items = (loadedItems + liveOnly)
+                        .sorted { ($0.lastUsedAt ?? $0.createdAt) > ($1.lastUsedAt ?? $1.createdAt) }
+                    self.favoriteItems = self.items.filter { $0.isFavorite }
                         .sorted { ($0.favoritedAt ?? $0.createdAt) > ($1.favoritedAt ?? $1.createdAt) }
                 }
             } catch {

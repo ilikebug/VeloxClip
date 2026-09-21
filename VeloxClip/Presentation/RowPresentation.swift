@@ -66,7 +66,7 @@ enum RowPresentation {
     /// row title/subtitle, the file preview and pasting file URLs. Never trimmed:
     /// a file name may legitimately begin or end with a space.
     static func filePaths(from content: String) -> [String] {
-        content.components(separatedBy: .newlines).filter { !$0.isEmpty }
+        ClipboardItem.filePaths(from: content)
     }
 
     // MARK: - Subtitle (content metadata)

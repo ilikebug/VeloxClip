@@ -50,6 +50,8 @@ final class TextCaptureService {
         } catch {
             isCapturing = false
             print("Failed to launch screencapture for text capture: \(error)")
+            // The user pressed F2 and nothing happened — surface it
+            ErrorHandler.shared.handle(error)
         }
     }
 
@@ -98,10 +100,7 @@ final class TextCaptureService {
 
         // Clipboard write is gated so ClipboardMonitor doesn't re-ingest it;
         // the history entry is added directly with a recognizable source
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(content, forType: .string)
-        PasteboardSelfWriteGate.shared.recordSelfWrite()
+        PasteboardService.shared.write(text: content)
         // An active paste stack must yield immediately, not on the next poll
         PasteStackService.shared.noteClipboardChange()
 

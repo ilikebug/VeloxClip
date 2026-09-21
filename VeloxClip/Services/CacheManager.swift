@@ -13,12 +13,10 @@ class CacheManager {
             
             // Clear ContentDetectionService cache
             await ContentDetectionService.shared.clearCache()
-            
-            // Clear MarkdownView static cache
-            MarkdownView.chunksCache.removeAll()
-            
-            // Clear JSONPreviewView static cache
-            JSONPreviewView.jsonCache.removeAll()
+
+            // View-layer caches register themselves (see Views/ViewCaches.swift)
+            // so this service never has to name a SwiftUI view type
+            CacheRegistry.clearAll()
 
             // Clear list thumbnails
             ThumbnailProvider.shared.clear()

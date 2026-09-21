@@ -7,30 +7,6 @@ struct MainSearchBarLayout {
     static let verticalPadding: CGFloat = 14
 }
 
-struct MainKeyRoutingPolicy {
-    static func shouldStageOnCommandReturn(isComposingText: Bool) -> Bool {
-        !isComposingText
-    }
-
-    static func shouldOpenDetailOnRightArrow(isCommandPressed: Bool,
-                                             isComposingText: Bool) -> Bool {
-        isCommandPressed && !isComposingText
-    }
-
-    static func shouldPasteOnReturn(isCommandPressed: Bool,
-                                    isComposingText: Bool) -> Bool {
-        !isCommandPressed && !isComposingText
-    }
-
-    static func shouldHandleEscape(isComposingText: Bool) -> Bool {
-        !isComposingText
-    }
-
-    static func shouldSwitchTabsOnTab(isComposingText: Bool) -> Bool {
-        !isComposingText
-    }
-}
-
 struct MainFocusRoutingPolicy {
     static func shouldRestoreSearchFocus(isDetailPresented: Bool,
                                          isCommandPalettePresented: Bool) -> Bool {
@@ -55,25 +31,22 @@ struct MainView: View {
     @FocusState private var isSearchFocused: Bool
     @State private var viewMode: ViewMode = .history
     @State private var typeFilter: ClipboardTypeFilter = .all
-    @State private var searchResults: [ClipboardItem] = []
-    @State private var isSearching = false
+    @StateObject private var search = ClipboardSearchViewModel()
     @State private var scrollTarget: UUID?
     @State private var showCommandPalette = false
     // Push-in detail: nil = list mode; non-nil = detail mode (replaces search+list)
     @State private var detailItem: ClipboardItem?
 
     // Debounced search text for semantic search
-    @State private var searchTask: Task<Void, Never>?
     
     // Cached semantic search results - only store IDs and scores to save memory
-    @State private var cachedSemanticResults = FIFOCache<String, [(UUID, Double)]>(maxEntries: 50)
     
     var displayItems: [ClipboardItem] {
         let base: [ClipboardItem]
         if searchText.isEmpty {
             base = viewMode == .favorites ? store.favoriteItems : store.items
         } else {
-            base = searchResults
+            base = search.results
         }
         // Type filter stacks on top of search results and the favorites view
         guard typeFilter != .all else { return base }
@@ -110,119 +83,18 @@ struct MainView: View {
     }
 
     private func updateSearchResults() {
-        searchTask?.cancel()
-        
-        let query = searchText.trimmingCharacters(in: .whitespaces)
-        let mode = viewMode
-        
-        if query.isEmpty {
-            searchResults = []
-            isSearching = false
+        let baseItems = viewMode == .favorites ? store.favoriteItems : store.items
+        guard !searchText.trimmingCharacters(in: .whitespaces).isEmpty else {
+            search.clear()
             return
         }
-        
-        isSearching = true
-        let baseItems = mode == .favorites ? store.favoriteItems : store.items
-
-        searchTask = Task {
-            // 1. Keyword search: runs immediately (no debounce) and off the main thread
-            let keywordMatches = await Task.detached(priority: .userInitiated) {
-                baseItems.filter { item in
-                    item.content?.localizedCaseInsensitiveContains(query) ?? false ||
-                    item.type.localizedCaseInsensitiveContains(query) ||
-                    (item.sourceApp?.localizedCaseInsensitiveContains(query) ?? false) ||
-                    item.tags.contains(where: { $0.localizedCaseInsensitiveContains(query) })
-                }
-            }.value
-
-            if Task.isCancelled { return }
-
-            // Keyword matches get a high base score; publish right away
-            var itemScores: [UUID: Double] = [:]
-            for item in keywordMatches {
-                itemScores[item.id] = 0.9
+        search.search(query: searchText, in: baseItems) { ranked in
+            // Keep the selection valid as results narrow
+            if selectedItem == nil || !ranked.contains(where: { $0.id == selectedItem?.id }) {
+                selectedItem = ranked.first
+                scrollTarget = ranked.first?.id
             }
-            publishSearchResults(itemScores, baseItems: baseItems)
-
-            // 2. Semantic search: debounced 300ms, merged into the keyword results
-            guard query.count >= 2 else {
-                isSearching = false
-                return
-            }
-
-            try? await Task.sleep(nanoseconds: 300_000_000)
-            if Task.isCancelled { return }
-
-            let semanticResults = await performSemanticSearchAsync(query: query, baseItems: baseItems)
-            if Task.isCancelled { return }
-
-            for (itemId, similarity) in semanticResults {
-                let currentScore = itemScores[itemId] ?? 0
-                itemScores[itemId] = max(currentScore, similarity)
-            }
-            publishSearchResults(itemScores, baseItems: baseItems)
-            isSearching = false
         }
-    }
-
-    private func publishSearchResults(_ itemScores: [UUID: Double], baseItems: [ClipboardItem]) {
-        let allMatchIds = Set(itemScores.keys)
-        let matchedItems = baseItems.filter { allMatchIds.contains($0.id) }
-
-        let sortedResults = matchedItems.map { ($0, itemScores[$0.id] ?? 0) }
-            .sorted { r1, r2 in
-                if abs(r1.1 - r2.1) < 0.001 {
-                    // If scores are very close, prioritize favorites then most recently used —
-                    // same ordering the history list uses (lastUsedAt ?? createdAt)
-                    if r1.0.isFavorite != r2.0.isFavorite {
-                        return r1.0.isFavorite
-                    }
-                    return (r1.0.lastUsedAt ?? r1.0.createdAt) > (r2.0.lastUsedAt ?? r2.0.createdAt)
-                }
-                return r1.1 > r2.1
-            }
-
-        let finalItems = sortedResults.map { $0.0 }
-        searchResults = finalItems
-
-        // Select first item if search results changed
-        if selectedItem == nil || !finalItems.contains(where: { $0.id == selectedItem?.id }) {
-            selectedItem = finalItems.first
-            scrollTarget = finalItems.first?.id
-        }
-    }
-
-    private func performSemanticSearchAsync(query: String, baseItems: [ClipboardItem]) async -> [(UUID, Double)] {
-        let normalizedQuery = query.lowercased()
-
-        // Cache check
-        if let cached = cachedSemanticResults[normalizedQuery] {
-            return cached
-        }
-
-        let finalResults = await Task.detached(priority: .userInitiated) { () -> [(UUID, Double)] in
-            guard let queryVector = await AIService.shared.generateEmbedding(for: query) else {
-                return []
-            }
-
-            let threshold = 0.5
-            let maxResults = 20
-
-            // Decode each stored vector exactly once per item
-            let results = baseItems.compactMap { item -> (UUID, Double)? in
-                guard item.content != nil, let itemVector = item.vector else { return nil }
-                let similarity = AIService.shared.calculateSimilarity(queryVector, itemVector)
-                return similarity >= threshold ? (item.id, similarity) : nil
-            }
-            .sorted { $0.1 > $1.1 }
-            .prefix(maxResults)
-
-            return Array(results)
-        }.value
-
-        cachedSemanticResults[normalizedQuery] = finalResults
-
-        return finalResults
     }
 
     
@@ -314,7 +186,7 @@ struct MainView: View {
         .onChange(of: store.items) { _, newItems in
             // Deleting an item must not leave a ghost row in active search results
             let validIDs = Set(newItems.map(\.id))
-            searchResults.removeAll { !validIDs.contains($0.id) }
+            // results are re-derived by the view model on the next query
             // …nor a ghost selection — ⏎ would try to paste an item that no longer
             // exists (for an image that meant clearing the clipboard and pasting nothing)
             if let selected = selectedItem, !validIDs.contains(selected.id) {
@@ -345,8 +217,7 @@ struct MainView: View {
             viewMode = .history
             typeFilter = .all
             searchText = ""
-            searchTask?.cancel()
-            cachedSemanticResults.removeAll()
+            search.clear()
             if !store.items.isEmpty {
                 selectedItem = store.items.first
                 scrollTarget = store.items.first?.id
@@ -379,124 +250,73 @@ struct MainView: View {
     // Focus-independent key routing for the overlay. Installed via `KeyMonitor` as a
     // local NSEvent monitor; return true to consume the event, false to let it fall
     // through to the focused field (so plain typing reaches search / tag / palette).
+    //
+    // The decision itself lives in MainKeyRouter (pure, unit-tested); this reads
+    // the AppKit state and performs the side effects.
     private func handleKeyDown(_ event: NSEvent) -> Bool {
-        // Only handle when OUR overlay is the key window (don't hijack Settings/other windows).
-        guard event.window is OverlayWindow else { return false }
-        // While the command palette is open, let it handle its own keys (typing + ↑↓/⏎/Esc).
-        if showCommandPalette { return false }
-
-        let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        let isCmd = mods.contains(.command)
-        let key = event.keyCode
-
         // True when the caret is inside an editable text field or a
         // .textSelection(.enabled) preview (the field editor is an NSTextView). In
         // that case text-editing keys (⌘C copy-selection, ← / → cursor movement)
         // must fall through to the responder chain rather than being hijacked for
         // copy-item / open-detail.
         let editingText = event.window?.firstResponder is NSTextView
-        let isComposingText = (event.window?.firstResponder as? NSTextView)?.hasMarkedText() ?? false
 
-        // ⌘C copies the detail/selected item with its full payload (works in both
-        // list and detail mode) — makes the palette's `⌘C` hint truthful. But when
-        // a text field / selectable preview holds focus, let native copy-selection win.
-        if isCmd, event.charactersIgnoringModifiers?.lowercased() == "c" {
-            // In list mode the search field is the permanent first responder, so
-            // `editingText` is always true; honoring it blindly would route ⌘C to
-            // the (usually empty) search field instead of copying the item. Only let
-            // native copy-selection win when the focused text view actually has a
-            // non-empty selection (e.g. the user selected search text or tag text).
-            if editingText, hasTextSelection(in: event.window) { return false }
-            if let i = detailItem ?? selectedItem { copyItem(i) }
-            return true
-        }
+        let context = MainKeyContext(
+            keyCode: event.keyCode,
+            characters: event.charactersIgnoringModifiers?.lowercased(),
+            isCommandPressed: event.modifierFlags
+                .intersection(.deviceIndependentFlagsMask)
+                .contains(.command),
+            isOverlayKeyWindow: event.window is OverlayWindow,
+            isPalettePresented: showCommandPalette,
+            isDetailPresented: detailItem != nil,
+            isEditingText: editingText,
+            hasTextSelection: hasTextSelection(in: event.window),
+            isComposingText: (event.window?.firstResponder as? NSTextView)?.hasMarkedText() ?? false,
+            hasSelection: (detailItem ?? selectedItem) != nil,
+            isSearchTextEmpty: searchText.isEmpty,
+            visibleItemCount: displayItems.count
+        )
 
-        // Key codes: left=123 right=124 down=125 up=126 return=36 keypadEnter=76 esc=53 tab=48 space=49
-        if detailItem != nil {
-            // While editing a tag (or any focused text field) in detail mode, let
-            // editing keys reach the field editor. Hijacking them here would make
-            // adding a tag or selecting preview text impossible.
-            if editingText { return false }
-            // ⌘K → palette for the previewed item (the palette is detail-aware)
-            if isCmd, event.charactersIgnoringModifiers?.lowercased() == "k" {
-                showCommandPalette = true; return true
-            }
-            switch key {
-            case 123 where isCmd, 53: // ⌘← or Esc → back to list
-                withAnimation(.easeInOut(duration: 0.18)) { detailItem = nil }
-                return true
-            case 36 where isCmd, 76 where isCmd: // ⌘⏎ → stage, as advertised by the palette
-                if let item = detailItem { PasteStackService.shared.toggleStaged(item) }
-                return true
-            case 36, 76: // ⏎ → paste
-                if !MainKeyRoutingPolicy.shouldPasteOnReturn(
-                    isCommandPressed: isCmd,
-                    isComposingText: isComposingText
-                ) { return false }
-                executeSelection()
-                return true
-            default:
-                return false // let ScrollView etc. handle (↑↓ scroll detail)
-            }
-        }
-
-        // LIST mode
-        // ⌘K opens palette
-        if isCmd, event.charactersIgnoringModifiers?.lowercased() == "k" {
-            showCommandPalette = true; return true
-        }
-        // ⌘⏎ toggles paste-stack staging for the selected row.
-        if isCmd, (key == 36 || key == 76) {
-            if MainKeyRoutingPolicy.shouldStageOnCommandReturn(isComposingText: isComposingText),
-               let item = selectedItem {
-                PasteStackService.shared.toggleStaged(item)
-                return true
-            }
+        switch MainKeyRouter.route(context) {
+        case .passThrough:
             return false
-        }
-        // ⌘→ opens detail. Plain → belongs to the search field for caret movement.
-        if key == 124 {
-            if !MainKeyRoutingPolicy.shouldOpenDetailOnRightArrow(
-                isCommandPressed: isCmd,
-                isComposingText: isComposingText
-            ) { return false }
+        case .copySelection:
+            if let item = detailItem ?? selectedItem { copyItem(item) }
+            return true
+        case .openPalette:
+            showCommandPalette = true
+            return true
+        case .closeDetail:
+            withAnimation(.easeInOut(duration: 0.18)) { detailItem = nil }
+            return true
+        case .stageSelection:
+            if let item = detailItem ?? selectedItem { PasteStackService.shared.toggleStaged(item) }
+            return true
+        case .pasteSelection:
+            executeSelection()
+            return true
+        case .moveSelection(let delta):
+            moveSelection(direction: delta)
+            return true
+        case .openDetail:
             if let item = selectedItem { openDetail(item) }
-            return selectedItem != nil
-        }
-        // ⌘1–9 pastes the Nth row
-        if isCmd, let ch = event.charactersIgnoringModifiers, let n = Int(ch), n >= 1, n <= 9,
-           displayItems.indices.contains(n - 1) {
-            WindowManager.shared.selectAndPaste(displayItems[n - 1]); return true
-        }
-        switch key {
-        case 126:
-            if isComposingText { return false }
-            moveSelection(direction: -1); return true          // ↑
-        case 125:
-            if isComposingText { return false }
-            moveSelection(direction: 1); return true           // ↓
-        case 36, 76:
-            if !MainKeyRoutingPolicy.shouldPasteOnReturn(
-                isCommandPressed: isCmd,
-                isComposingText: isComposingText
-            ) { return false }
-            executeSelection(); return true                    // ⏎ paste
-        case 53:                                               // Esc: clear query first, else close overlay
-            if !MainKeyRoutingPolicy.shouldHandleEscape(isComposingText: isComposingText) {
-                return false
-            }
-            if !searchText.isEmpty { searchText = ""; return true }
-            WindowManager.shared.toggleWindow(); return true
-        case 48:                                               // Tab switch tabs
-            if !MainKeyRoutingPolicy.shouldSwitchTabsOnTab(isComposingText: isComposingText) {
-                return false
-            }
-            withAnimation(.easeInOut(duration: 0.2)) { viewMode = (viewMode == .history ? .favorites : .history) }
             return true
-        case 49:                                               // Space always belongs to text input / IME
-            return false
-        default:
-            return false   // all other keys (typing) fall through to the focused field
+        case .pasteRow(let index):
+            guard displayItems.indices.contains(index) else { return false }
+            WindowManager.shared.selectAndPaste(displayItems[index])
+            return true
+        case .clearSearch:
+            searchText = ""
+            return true
+        case .closeOverlay:
+            WindowManager.shared.toggleWindow()
+            return true
+        case .switchTab:
+            withAnimation(.easeInOut(duration: 0.2)) {
+                viewMode = (viewMode == .history ? .favorites : .history)
+            }
+            return true
         }
     }
 
@@ -582,8 +402,10 @@ struct MainView: View {
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.primary.opacity(0.04))
-        // Right-click anywhere on the preview → actions for the previewed item.
-        .overlay(RightClickCatcher { showCommandPalette = true })
+        // No RightClickCatcher here on purpose: the preview is full of
+        // selectable text and a tag field, and the catcher swallows every
+        // right-click in its bounds — which stole macOS's own Copy / Look Up /
+        // Cut-Paste menus. The action palette belongs to the list.
     }
 
     private func executeSelection() {
@@ -599,44 +421,44 @@ struct MainView: View {
     
     private func executeCommand(_ cmd: Command) {
         let item = paletteItem
-        switch cmd.id {
-        case "paste":
+        // Exhaustive over CommandKind: adding a command is now a compiler error
+        // here until it is handled, instead of silently doing nothing.
+        switch cmd.kind {
+        case .paste:
             if let i = item { WindowManager.shared.selectAndPaste(i) }
-        case "copy":
+        case .copy:
             if let i = item { copyItem(i) }
-        case "detail":
+        case .detail:
             if let i = item, detailItem == nil { openDetail(i) }
-        case "copyHex":
+        case .copyHex:
             if let content = item?.content {
                 copyString(ColorFormatting.hex(from: content) ?? content)
             }
-        case "copyRgb":
+        case .copyRgb:
             if let content = item?.content {
                 copyString(ColorFormatting.rgb(from: content) ?? content)
             }
-        case "editImage":
+        case .editImage:
             if let i = item { editImage(i) }
-        case "openURL":
+        case .openURL:
             if let content = item?.content { openURL(content) }
-        case "revealInFinder":
+        case .revealInFinder:
             if let content = item?.content { revealFilesInFinder(content) }
-        case "copyPath":
+        case .copyPath:
             if let content = item?.content { copyString(content) }
-        case "favorite":
+        case .favorite:
             if let i = item { ClipboardStore.shared.toggleFavorite(for: i) }
-        case "stack":
+        case .stack:
             if let i = item { PasteStackService.shared.toggleStaged(i) }
-        case "delete":
+        case .delete:
             if let i = item, let idx = displayItems.firstIndex(where: { $0.id == i.id }) {
                 let items = displayItems
                 // onChange(of: store.items) drops the selection / detail pane for the removed row
                 Task { await ClipboardStore.shared.deleteItems(at: IndexSet(integer: idx), in: items) }
             }
-        default:
-            break
         }
         // Paste dismisses the overlay itself; everything else just closes the palette.
-        if cmd.id != "paste" {
+        if cmd.kind != .paste {
             showCommandPalette = false
         }
     }
@@ -650,13 +472,13 @@ struct MainView: View {
             if full.data == nil, full.type == "image" || full.type == "rtf" {
                 full.data = await ClipboardStore.shared.loadData(for: item.id)
             }
-            full.copyToPasteboard()
+            PasteboardService.shared.write(item: full)
         }
     }
 
     // Copy a plain string (used by copyHex/copyRgb — hex/rgb are text values).
     private func copyString(_ string: String) {
-        PasteboardSelfWriteGate.shared.write(string)
+        PasteboardService.shared.write(text: string)
     }
 
     private func editImage(_ item: ClipboardItem) {

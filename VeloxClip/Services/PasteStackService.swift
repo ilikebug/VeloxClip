@@ -43,7 +43,7 @@ final class PasteStackService: ObservableObject {
     /// and is used for every retry after the first denial.
     init(writer: any PasteboardWriting,
          permissionCheck: @escaping () -> Bool = PasteStackService.checkAccessibilityPrompting,
-         quietPermissionCheck: @escaping () -> Bool = { AXIsProcessTrusted() },
+         quietPermissionCheck: @escaping () -> Bool = { AccessibilityPermission.isGranted },
          loadBlob: @escaping (UUID) async -> Data? = { await ClipboardStore.shared.loadData(for: $0) },
          installsKeyMonitor: Bool = true) {
         self.writer = writer
@@ -75,16 +75,11 @@ final class PasteStackService: ObservableObject {
 
     // MARK: - Lifecycle
 
-    // Same prompt flow as screenshot/paste injection: when the permission is
-    // missing, macOS shows its own dialog guiding the user to System Settings →
-    // Privacy & Security → Accessibility
+    // Accessibility prompting policy lives in AccessibilityPermission, shared
+    // with WindowManager's paste-injection path. This used to be a byte-for-byte
+    // duplicate of that code, and only this copy had the once-per-session guard.
     nonisolated static func checkAccessibilityPrompting() -> Bool {
-        if AXIsProcessTrusted() { return true }
-        // kAXTrustedCheckOptionPrompt is a mutable global the Swift 6 checker rejects;
-        // its value is the literal below
-        let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
-        AXIsProcessTrustedWithOptions(options)
-        return false
+        MainActor.assumeIsolated { AccessibilityPermission.promptIfNeeded() }
     }
 
     // Called when the overlay hides. No-op unless something is staged.
@@ -219,13 +214,16 @@ final class PasteStackService: ObservableObject {
 
     private func installKeyMonitorIfNeeded() {
         guard installsKeyMonitor, keyMonitor == nil else { return }
-        keyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { event in
+        // Route through `self`, not `.shared`: any non-shared instance built
+        // with installsKeyMonitor: true used to drive the singleton's state
+        // machine instead of its own.
+        keyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
             let isCommandV = event.keyCode == 0x09
                 && event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command
                 && !event.isARepeat
             guard isCommandV else { return }
             Task { @MainActor in
-                PasteStackService.shared.noteObservedPaste()
+                self?.noteObservedPaste()
             }
         }
     }

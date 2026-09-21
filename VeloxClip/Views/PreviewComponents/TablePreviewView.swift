@@ -8,6 +8,12 @@ struct TablePreviewView: View {
     @State private var headers: [String] = []
     @State private var delimiter: String = ","
     @State private var searchText: String = ""
+    /// Lowercased joined text per row, built once at parse time. `filteredData`
+    /// used to join + locale-search every row on each keystroke, synchronously
+    /// on the main thread, against an undebounced field.
+    @State private var searchKeys: [String] = []
+    @State private var filteredRows: [[String]] = []
+    @State private var filterTask: Task<Void, Never>?
 
     private var delimiterLabel: String {
         TablePreviewPresentation.delimiterLabel(for: delimiter)
@@ -37,8 +43,8 @@ struct TablePreviewView: View {
                 }
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
-                .onChange(of: delimiter) { oldValue, newValue in
-                    parseData()
+                .onChange(of: delimiter) { _, _ in
+                    Task { await parseDataAsync() }
                 }
                 
                 TextField(TablePreviewPresentation.searchPlaceholder, text: $searchText)
@@ -71,28 +77,61 @@ struct TablePreviewView: View {
                     .padding()
             }
         }
-        .onAppear {
-            detectDelimiter()
-            parseData()
-        }
-        .onChange(of: content) { _, _ in
-            // Reset and reparse when content changes
+        // Parsing splits the whole document; every sibling preview does this
+        // off the main thread in .task(id:) and this one used to do it in
+        // .onAppear.
+        .task(id: content) {
             parsedData = []
             headers = []
+            searchKeys = []
+            filteredRows = []
             detectDelimiter()
-            parseData()
+            await parseDataAsync()
         }
+        .task(id: searchText) {
+            await applyFilter()
+        }
+    }
+
+    /// Debounced so a fast typist doesn't re-scan the table per keystroke —
+    /// MainView's own search already worked this way; this one did not.
+    private func applyFilter() async {
+        guard !searchText.isEmpty else {
+            filteredRows = parsedData
+            return
+        }
+        try? await Task.sleep(for: .milliseconds(150))
+        guard !Task.isCancelled else { return }
+
+        let query = searchText.lowercased()
+        let rows = parsedData
+        let keys = searchKeys
+        filteredRows = await Task.detached(priority: .userInitiated) {
+            zip(rows, keys).filter { $0.1.contains(query) }.map(\.0)
+        }.value
+    }
+
+    private func parseDataAsync() async {
+        let source = content
+        let sep = delimiter
+        let parsed = await Task.detached(priority: .userInitiated) { () -> (headers: [String], rows: [[String]], keys: [String]) in
+            let lines = source.components(separatedBy: .newlines)
+                .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+            guard !lines.isEmpty else { return ([], [], []) }
+            let headers = Self.parseLine(lines[0], delimiter: sep)
+            let rows = lines.dropFirst().map { Self.parseLine($0, delimiter: sep) }
+            // Precomputed search key per row
+            let keys = rows.map { $0.joined(separator: " ").lowercased() }
+            return (headers, rows, keys)
+        }.value
+
+        headers = parsed.headers
+        parsedData = parsed.rows
+        searchKeys = parsed.keys
+        filteredRows = parsed.rows
     }
     
-    private var filteredData: [[String]] {
-        if searchText.isEmpty {
-            return parsedData
-        }
-        
-        return parsedData.filter { row in
-            row.joined(separator: " ").localizedCaseInsensitiveContains(searchText)
-        }
-    }
+    private var filteredData: [[String]] { filteredRows }
     
     private func detectDelimiter() {
         let lines = content.components(separatedBy: .newlines).prefix(5)
@@ -111,24 +150,8 @@ struct TablePreviewView: View {
         }
     }
     
-    private func parseData() {
-        let lines = content.components(separatedBy: .newlines)
-            .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-        
-        guard !lines.isEmpty else {
-            parsedData = []
-            headers = []
-            return
-        }
-        
-        // First line as headers
-        headers = parseLine(lines[0])
-        
-        // Rest as data
-        parsedData = lines.dropFirst().map { parseLine($0) }
-    }
-    
-    private func parseLine(_ line: String) -> [String] {
+
+    nonisolated static func parseLine(_ line: String, delimiter: String) -> [String] {
         // Simple CSV parsing (doesn't handle quoted fields with commas)
         return line.components(separatedBy: delimiter)
             .map { $0.trimmingCharacters(in: .whitespaces) }

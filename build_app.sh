@@ -28,24 +28,35 @@ mkdir -p "$CLANG_MODULE_CACHE_PATH"
 # echo "[Clean] Cleaning build directory..."
 # rm -rf "$ABS_BUILD_PATH"
 
-# 1. Build the project with explicit build path
+# 0. Run the test suite. Packaging an untested binary is how a broken release
+# gets signed and shipped; the suite takes ~1.5s.
+echo "[Test] Running test suite..."
+# Note: the exit status of a pipeline is the LAST command's, so piping through
+# `tail` would mask a test failure. Capture the real status via PIPESTATUS.
+swift test --build-path "$ABS_BUILD_PATH" 2>&1 | tail -20
+TEST_STATUS=${PIPESTATUS[0]}
+if [ "$TEST_STATUS" -ne 0 ]; then
+    echo "[Error] Tests failed (exit $TEST_STATUS) — refusing to package."
+    exit 1
+fi
+
+# 1. Build the project with explicit build path.
+# Delete any existing binary first: the check below must prove THIS build
+# produced an executable, not that a stale one from a previous run survived.
+rm -f "$ABS_BUILD_PATH/$BUILD_CONFIG/$EXECUTABLE_NAME"
+
 echo "[Package] Building Swift package..."
 swift build -c $BUILD_CONFIG --product $EXECUTABLE_NAME --build-path "$ABS_BUILD_PATH" 2>&1
 BUILD_STATUS=$?
 
-# Check if executable was created (warnings are OK, but we need the binary)
-if [ ! -f "$ABS_BUILD_PATH/$BUILD_CONFIG/$EXECUTABLE_NAME" ]; then
-    if [ $BUILD_STATUS -ne 0 ]; then
-        echo "[Error] Build failed with exit code $BUILD_STATUS!"
-        exit 1
-    else
-        echo "[Error] Build completed but executable not found!"
-        exit 1
-    fi
+if [ $BUILD_STATUS -ne 0 ]; then
+    echo "[Error] Build failed with exit code $BUILD_STATUS!"
+    exit 1
 fi
 
-if [ $BUILD_STATUS -ne 0 ]; then
-    echo "[Warning] Build completed with warnings (exit code $BUILD_STATUS), but executable exists. Continuing..."
+if [ ! -f "$ABS_BUILD_PATH/$BUILD_CONFIG/$EXECUTABLE_NAME" ]; then
+    echo "[Error] Build reported success but no executable was produced!"
+    exit 1
 fi
 
 # 2. Setup Bundle Structure

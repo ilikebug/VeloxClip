@@ -3,6 +3,60 @@ import XCTest
 
 @MainActor
 final class ClipboardStoreTests: XCTestCase {
+    /// The initial DB read used to replace `items` wholesale. Because
+    /// `ClipboardStore.shared` is created lazily — often by the monitor's first
+    /// ingest — an item copied while that read was in flight was silently
+    /// overwritten: still in SQLite, gone from the UI until relaunch.
+    func testLoadDoesNotDropItemsAddedWhileLoading() async throws {
+        let databaseManager = DatabaseManager(databaseURL: TestSupport.makeDatabaseURL(#function))
+        let settings = AppSettings(dbManager: databaseManager, autoLoad: false)
+
+        let persisted = ClipboardItem(type: "text", content: "from-db")
+        try await databaseManager.insertClipboardItem(persisted)
+
+        // shouldLoad: true kicks off the async read; insert before it lands.
+        let store = ClipboardStore(dbManager: databaseManager, settings: settings, shouldLoad: true)
+        let live = ClipboardItem(type: "text", content: "copied-during-load")
+        store.addItem(live)
+
+        let persistedID = persisted.id
+        try await TestSupport.waitUntil {
+            await MainActor.run { store.items.contains { $0.id == persistedID } }
+        }
+
+        XCTAssertTrue(store.items.contains { $0.id == live.id },
+                      "an item copied while the initial load was in flight must survive it")
+        XCTAssertTrue(store.items.contains { $0.id == persistedID },
+                      "the persisted item must still be loaded")
+    }
+
+    /// Favorites are re-read on every menu-bar/overlay appearance; that read must
+    /// not clobber a favorite the user toggled while it was in flight.
+    func testLoadFavoritesKeepsLocallyToggledFavorite() async throws {
+        let databaseManager = DatabaseManager(databaseURL: TestSupport.makeDatabaseURL(#function))
+        let settings = AppSettings(dbManager: databaseManager, autoLoad: false)
+        let store = ClipboardStore(dbManager: databaseManager, settings: settings, shouldLoad: false)
+
+        var persistedFavorite = ClipboardItem(type: "text", content: "already-favorite")
+        persistedFavorite.isFavorite = true
+        persistedFavorite.favoritedAt = Date()
+        try await databaseManager.insertClipboardItem(persistedFavorite)
+
+        let justToggled = ClipboardItem(type: "text", content: "toggled-now")
+        store.items = [justToggled]
+        try await databaseManager.insertClipboardItem(justToggled)
+        store.toggleFavorite(for: justToggled)
+
+        store.loadFavorites()
+        let persistedFavoriteID = persistedFavorite.id
+        try await TestSupport.waitUntil {
+            await MainActor.run { store.favoriteItems.contains { $0.id == persistedFavoriteID } }
+        }
+
+        XCTAssertTrue(store.favoriteItems.contains { $0.id == justToggled.id },
+                      "a favorite toggled while the read was in flight must survive it")
+    }
+
     func testDeleteItemsUsesVisibleItemsInsteadOfBackingStoreOffsets() async throws {
         let databaseManager = DatabaseManager(databaseURL: TestSupport.makeDatabaseURL(#function))
         let store = ClipboardStore(dbManager: databaseManager, settings: AppSettings(dbManager: databaseManager, autoLoad: false), shouldLoad: false)
@@ -53,7 +107,10 @@ final class ClipboardStoreTests: XCTestCase {
         let persistedItems = try await databaseManager.fetchAllClipboardItems()
         let persistedItem = persistedItems.first { $0.id == item.id }
         XCTAssertEqual(persistedItem?.tags, ["URL", "Code"])
-        XCTAssertEqual(persistedItem?.embedding, embedding)
+        // List rows deliberately omit the embedding blob; read it narrowly.
+        XCTAssertNil(persistedItem?.embedding)
+        let vectors = try await databaseManager.fetchEmbeddings(ids: [item.id])
+        XCTAssertEqual(vectors[item.id], embedding)
     }
 
     func testListFetchOmitsBlobButKeepsHash() async throws {
@@ -203,7 +260,10 @@ final class ClipboardStoreTests: XCTestCase {
         XCTAssertEqual(store.items.first?.tags, ["todo", "URL"])
         let persisted = try await databaseManager.fetchAllClipboardItems().first
         XCTAssertEqual(persisted?.tags, ["todo", "URL"])
-        XCTAssertEqual(persisted?.embedding, Data([1]))
+        // List rows deliberately omit the embedding blob; read it narrowly.
+        XCTAssertNil(persisted?.embedding)
+        let vectors = try await databaseManager.fetchEmbeddings(ids: [item.id])
+        XCTAssertEqual(vectors[item.id], Data([1]))
     }
 
     func testApplyDetectedMetadataDoesNotClobberFavoriteToggledMeanwhile() async throws {

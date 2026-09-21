@@ -169,6 +169,9 @@ struct PreviewView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        // Breathing room under the divider. Several previews (JSON, Code,
+        // Table) open with a toolbar row, which sat flush against the rule.
+        .padding(.top, 10)
     }
     
     private var loadingIndicator: some View {

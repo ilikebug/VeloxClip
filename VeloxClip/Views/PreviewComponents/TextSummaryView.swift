@@ -8,6 +8,9 @@ struct TextSummaryView: View {
     @State private var summary: String?
     @State private var keywords: [String] = []
     @State private var showFullText = false
+    /// Computed once per text in `.task`, not per body pass.
+    @State private var stats: TextSummaryPresentation.Stats = .empty
+    @State private var paragraphs: [String] = []
 
     // Lazy loading state for long text
     @State private var loadedParagraphs: [String] = []
@@ -20,10 +23,10 @@ struct TextSummaryView: View {
         VStack(alignment: .leading, spacing: 12) {
             // Statistics
             HStack(spacing: 16) {
-                StatItem(icon: "text.word.spacing", label: TextSummaryPresentation.wordsLabel, value: "\(wordCount)")
-                StatItem(icon: "textformat", label: TextSummaryPresentation.charactersLabel, value: "\(text.count)")
-                StatItem(icon: "line.3.horizontal", label: TextSummaryPresentation.linesLabel, value: "\(lineCount)")
-                StatItem(icon: "paragraph", label: TextSummaryPresentation.paragraphsLabel, value: "\(paragraphCount)")
+                StatItem(icon: "text.word.spacing", label: TextSummaryPresentation.wordsLabel, value: "\(stats.words)")
+                StatItem(icon: "textformat", label: TextSummaryPresentation.charactersLabel, value: "\(stats.characters)")
+                StatItem(icon: "line.3.horizontal", label: TextSummaryPresentation.linesLabel, value: "\(stats.lines)")
+                StatItem(icon: "paragraph", label: TextSummaryPresentation.paragraphsLabel, value: "\(stats.paragraphs)")
             }
             .padding(16)
             .background(Color.secondary.opacity(0.05))
@@ -138,42 +141,32 @@ struct TextSummaryView: View {
                         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.secondary.opacity(0.1), lineWidth: 1))
                 }
             }
-            .onAppear {
-                if text.count > 2000 && loadedParagraphs.isEmpty {
-                    loadInitialParagraphs()
-                }
-            }
-            .onChange(of: text) { _, _ in
-                // Reset state when text changes
-                loadedParagraphs = []
-                loadMoreTask?.cancel()
-                isLoadingMore = false
-                if text.count > 2000 {
-                    loadInitialParagraphs()
-                }
-            }
         }
         .task(id: text) {
+            // One pass for the four header counts and the paragraph split,
+            // off the main thread — they used to be four computed properties
+            // walking the whole string on every body evaluation.
+            let (computedStats, computedParagraphs) = await Task.detached(priority: .userInitiated) { [text] in
+                (TextSummaryPresentation.stats(for: text), TextSummaryPresentation.paragraphs(in: text))
+            }.value
+            stats = computedStats
+            paragraphs = computedParagraphs
+
+            // Paging is seeded here, not from onAppear: the split it needs is
+            // produced by this task, so onAppear used to run against an empty
+            // paragraph list.
+            loadMoreTask?.cancel()
+            isLoadingMore = false
+            loadedParagraphs = []
+            if text.count > 2000 {
+                loadInitialParagraphs()
+            }
+
             await extractKeywordsAsync()
         }
     }
     
-    private var wordCount: Int {
-        text.components(separatedBy: .whitespacesAndNewlines)
-            .filter { !$0.isEmpty }
-            .count
-    }
-    
-    private var lineCount: Int {
-        text.components(separatedBy: .newlines).count
-    }
-    
-    private var paragraphCount: Int {
-        text.components(separatedBy: "\n\n")
-            .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-            .count
-    }
-    
+
     private func generateSummary() {
         // Local extractive summary — no network/LLM dependency
         summary = generateSimpleSummary()
@@ -208,13 +201,12 @@ struct TextSummaryView: View {
     }
     
     private func copyText(_ text: String) {
-        PasteboardSelfWriteGate.shared.write(text)
+        PasteboardService.shared.write(text: text)
     }
     
-    private var allParagraphs: [String] {
-        text.components(separatedBy: "\n\n")
-            .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-    }
+    /// Cached alongside the stats; this used to re-split the whole document on
+    /// every call, and it is called from body plus three other places.
+    private var allParagraphs: [String] { paragraphs }
     
     private func loadInitialParagraphs() {
         let paragraphs = allParagraphs

@@ -3,6 +3,69 @@ import SQLite
 @testable import VeloxClip
 
 final class DatabaseManagerTests: XCTestCase {
+    /// The list sort is COALESCE(lastUsedAt, createdAt) DESC, which a plain
+    /// index on createdAt cannot satisfy — every launch was a full scan plus a
+    /// filesort. Assert the planner actually uses the expression index.
+    func testListQueryIsIndexedRatherThanFilesorted() async throws {
+        let url = TestSupport.makeDatabaseURL(#function)
+        let db = DatabaseManager(databaseURL: url)
+        try await db.insertClipboardItem(ClipboardItem(type: "text", content: "x"))
+
+        let connection = try Connection(url.path)
+        var plan: [String] = []
+        for row in try connection.prepare("""
+            EXPLAIN QUERY PLAN
+            SELECT id FROM clipboard_items ORDER BY COALESCE(lastUsedAt, createdAt) DESC
+            """) {
+            plan.append(row.compactMap { $0 as? String }.joined(separator: " "))
+        }
+        let detail = plan.joined(separator: " | ")
+
+        XCTAssertTrue(detail.contains("idx_items_recency"),
+                      "the recency index must serve the list ordering — got: \(detail)")
+        XCTAssertFalse(detail.uppercased().contains("TEMP B-TREE"),
+                       "ordering must not fall back to a filesort — got: \(detail)")
+    }
+
+    /// Embeddings are vector blobs the list never renders. Carrying them on
+    /// every list row kept the whole history's vectors permanently resident.
+    func testListQueriesDoNotCarryEmbeddings() async throws {
+        let url = TestSupport.makeDatabaseURL(#function)
+        let db = DatabaseManager(databaseURL: url)
+
+        var item = ClipboardItem(type: "text", content: "vectorised")
+        item.embedding = try JSONEncoder().encode([0.1, 0.2, 0.3])
+        item.isFavorite = true
+        item.favoritedAt = Date()
+        try await db.insertClipboardItem(item)
+
+        let all = try await db.fetchAllClipboardItems()
+        XCTAssertEqual(all.count, 1)
+        XCTAssertNil(all[0].embedding, "list rows must not carry the embedding blob")
+        XCTAssertNil(all[0].data, "list rows must not carry the data blob")
+
+        let favorites = try await db.fetchFavoriteItems()
+        XCTAssertNil(favorites.first?.embedding, "favorites use the same narrow column set")
+    }
+
+    func testFetchEmbeddingsLoadsVectorsOnDemand() async throws {
+        let url = TestSupport.makeDatabaseURL(#function)
+        let db = DatabaseManager(databaseURL: url)
+
+        var withVector = ClipboardItem(type: "text", content: "has one")
+        let blob = try JSONEncoder().encode([0.5, 0.25])
+        withVector.embedding = blob
+        let withoutVector = ClipboardItem(type: "text", content: "has none")
+        try await db.insertClipboardItem(withVector)
+        try await db.insertClipboardItem(withoutVector)
+
+        let fetched = try await db.fetchEmbeddings(ids: [withVector.id, withoutVector.id])
+        XCTAssertEqual(fetched[withVector.id], blob)
+        XCTAssertNil(fetched[withoutVector.id], "rows without an embedding must be absent, not empty")
+        let empty = try await db.fetchEmbeddings(ids: [])
+        XCTAssertEqual(empty.count, 0)
+    }
+
     func testFetchSkipsRowsWithInvalidIDInsteadOfFailingWholeQuery() async throws {
         let url = TestSupport.makeDatabaseURL(#function)
         let db = DatabaseManager(databaseURL: url)
@@ -97,7 +160,10 @@ final class DatabaseManagerTests: XCTestCase {
         XCTAssertNotNil(stored?.favoritedAt)
         XCTAssertEqual(stored?.content, "ocr text")
         XCTAssertEqual(stored?.tags, ["custom"])
-        XCTAssertEqual(stored?.embedding, Data([9]))
+        // The embedding IS persisted, but list rows deliberately don't carry it
+        XCTAssertNil(stored?.embedding)
+        let vectors = try await db.fetchEmbeddings(ids: [item.id])
+        XCTAssertEqual(vectors[item.id], Data([9]))
         // Blob untouched by the narrow updates
         let blob = try await db.fetchItemData(id: item.id)
         XCTAssertEqual(blob, Data([1, 2, 3]))
