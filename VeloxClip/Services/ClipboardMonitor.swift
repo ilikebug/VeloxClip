@@ -6,15 +6,20 @@ class ClipboardMonitor: ObservableObject {
     private var timer: AnyCancellable?
     private let clipboard = PasteboardService.shared
     private var lastChangeCount: Int
-    private var pipeline: IngestionPipeline!
+
+    /// Serialises every ingest: one item fully persisted before the next
+    /// starts, so history order always matches copy order.
+    ///
+    /// `lazy` rather than built in `init`, because the pipeline's closure
+    /// captures `self`. An implicitly-unwrapped `var` also worked, but then
+    /// `Task { [pipeline] in }` captures a plain Optional and every call site
+    /// has to unwrap it.
+    private lazy var pipeline = IngestionPipeline { [weak self] kind, sourceApp in
+        await self?.persist(kind, sourceApp: sourceApp)
+    }
 
     init() {
         self.lastChangeCount = clipboard.changeCount
-        // Serialises every ingest: one item fully persisted before the next
-        // starts, so history order always matches copy order.
-        self.pipeline = IngestionPipeline { [weak self] kind, sourceApp in
-            await self?.persist(kind, sourceApp: sourceApp)
-        }
     }
 
     /// Starts the poll loop. Deliberately NOT called from `init`: the app must
