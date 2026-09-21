@@ -171,13 +171,7 @@ struct MultiFilePreview: View {
     // "I only want this one out of the group" — covers the only real advantage
     // splitting into separate history items would have had
     private func copySingleFile(_ entry: FileEntry) {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        defer { PasteboardSelfWriteGate.shared.recordSelfWrite() }
-        if entry.exists, pasteboard.writeObjects([URL(fileURLWithPath: entry.path) as NSURL]) {
-            return
-        }
-        pasteboard.setString(entry.path, forType: .string)
+        PasteboardService.shared.write(filePath: entry.path, exists: entry.exists)
     }
 }
 
@@ -371,11 +365,11 @@ struct SingleFilePreview: View {
     }
     
     private func copyPath() {
-        PasteboardSelfWriteGate.shared.write(filePath)
+        PasteboardService.shared.write(text: filePath)
     }
     
     private func copyName() {
         guard let info = fileInfo else { return }
-        PasteboardSelfWriteGate.shared.write(info.name)
+        PasteboardService.shared.write(text: info.name)
     }
 }

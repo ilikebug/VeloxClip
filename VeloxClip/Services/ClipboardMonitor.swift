@@ -4,12 +4,12 @@ import Combine
 @MainActor
 class ClipboardMonitor: ObservableObject {
     private var timer: AnyCancellable?
-    private let pasteboard = NSPasteboard.general
+    private let clipboard = PasteboardService.shared
     private var lastChangeCount: Int
     private var pipeline: IngestionPipeline!
 
     init() {
-        self.lastChangeCount = pasteboard.changeCount
+        self.lastChangeCount = clipboard.changeCount
         // Serialises every ingest: one item fully persisted before the next
         // starts, so history order always matches copy order.
         self.pipeline = IngestionPipeline { [weak self] kind, sourceApp in
@@ -39,8 +39,8 @@ class ClipboardMonitor: ObservableObject {
     }
     
     private func checkForChanges() {
-        guard pasteboard.changeCount != lastChangeCount else { return }
-        lastChangeCount = pasteboard.changeCount
+        guard clipboard.changeCount != lastChangeCount else { return }
+        lastChangeCount = clipboard.changeCount
 
         // Skip changes written by the app itself (pasting from history),
         // otherwise re-encoded images would create duplicate entries
@@ -50,7 +50,7 @@ class ClipboardMonitor: ObservableObject {
         // itself, so the stack's own writes never trigger a pause.
         PasteStackService.shared.noteClipboardChange()
 
-        if PasteboardSelfWriteGate.shared.isSelfWrite(changeCount: lastChangeCount) {
+        if clipboard.isSelfWrite(changeCount: lastChangeCount) {
             return
         }
 
@@ -73,7 +73,7 @@ class ClipboardMonitor: ObservableObject {
     private func processClippedContent() {
         // Skip content the source app marked as concealed/transient
         // (passwords from 1Password, Keychain autofill, etc.)
-        if Self.containsSensitiveMarker(pasteboard.types) {
+        if Self.containsSensitiveMarker(clipboard.types) {
             return
         }
 
@@ -87,27 +87,11 @@ class ClipboardMonitor: ObservableObject {
             return
         }
 
-        // Extract data immediately on main thread to avoid pasteboard state changes,
-        // but lazily in priority order — each data(forType:) copies the whole blob,
-        // so never touch the multi-MB TIFF/PNG types when text already matched
-        // fileURLsOnly: a copied browser URL must not be mistaken for a file
-        let fileURLs = pasteboard.readObjects(
-            forClasses: [NSURL.self],
-            options: [.urlReadingFileURLsOnly: true]
-        ) as? [URL]
-        let hasFiles = !(fileURLs?.isEmpty ?? true)
-        let stringContent = hasFiles ? nil : pasteboard.string(forType: .string)
-        let rtfData = (hasFiles || stringContent != nil) ? nil : pasteboard.data(forType: .rtf)
-        let pngData = (hasFiles || stringContent != nil || rtfData != nil) ? nil : pasteboard.data(forType: .png)
-        let tiffData = (hasFiles || stringContent != nil || rtfData != nil || pngData != nil) ? nil : pasteboard.data(forType: .tiff)
-
-        let payload = PasteboardPayload(
-            filePaths: hasFiles ? fileURLs?.map(\.path).joined(separator: "\n") : nil,
-            text: stringContent,
-            rtf: rtfData,
-            image: pngData ?? tiffData,
-            sourceApp: sourceApp
-        )
+        // Read on the main actor, before anything can change the pasteboard.
+        // The type-priority ladder and its lazy blob reads live in
+        // PasteboardService.read() — one canonical order for the whole app.
+        var payload = clipboard.read()
+        payload.sourceApp = sourceApp
 
         // One ordered hand-off. Previously this spawned an independent
         // Task.detached per tick; those are unordered and the image branch's

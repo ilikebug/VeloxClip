@@ -282,7 +282,7 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
                 await PasteStackService.shared.startIfStaged()
                 return
             }
-            fullItem.copyToPasteboard()
+            PasteboardService.shared.write(item: fullItem)
 
             // Move the item to the top of history without rewriting its copy time
             ClipboardStore.shared.markUsed(item.id)

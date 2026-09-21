@@ -282,7 +282,7 @@ struct CodePreviewView: View {
             if trimmed.hasSuffix("{") || trimmed.hasSuffix("[") { indent += 1 }
         }
         
-        PasteboardSelfWriteGate.shared.write(formatted.joined(separator: "\n"))
+        PasteboardService.shared.write(text: formatted.joined(separator: "\n"))
     }
 }
 

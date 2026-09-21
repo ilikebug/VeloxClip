@@ -221,10 +221,8 @@ class ScreenshotEditorService: NSObject, NSWindowDelegate {
     }
 
     private func copyToClipboard(_ image: NSImage) {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        ClipboardItem.writeImage(image, encoded: nil, to: pasteboard)
         // Intentionally NOT gated as a self-write: the edited image is new
         // content and should be picked up by ClipboardMonitor into history
+        PasteboardService.shared.writeAsNewContent(image: image)
     }
 }

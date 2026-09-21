@@ -208,7 +208,7 @@ struct TextSummaryView: View {
     }
     
     private func copyText(_ text: String) {
-        PasteboardSelfWriteGate.shared.write(text)
+        PasteboardService.shared.write(text: text)
     }
     
     private var allParagraphs: [String] {

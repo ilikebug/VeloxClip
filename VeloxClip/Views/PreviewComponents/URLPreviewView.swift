@@ -114,7 +114,7 @@ struct URLPreviewView: View {
     }
 
     private func copyURL() {
-        PasteboardSelfWriteGate.shared.write(urlString)
+        PasteboardService.shared.write(text: urlString)
     }
 
     private func qrImage(from string: String, size: CGFloat) -> NSImage? {

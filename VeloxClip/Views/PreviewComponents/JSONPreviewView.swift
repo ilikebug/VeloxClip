@@ -243,7 +243,7 @@ struct JSONPreviewView: View {
     
     private func copyJSON() {
         let text = viewMode == .minified ? minifiedJSONText : formattedJSON
-        PasteboardSelfWriteGate.shared.write(text)
+        PasteboardService.shared.write(text: text)
     }
 }
 

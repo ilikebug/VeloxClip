@@ -33,7 +33,7 @@ struct PasteboardSnapshot {
         }
         pasteboard.clearContents()
         pasteboard.writeObjects(pasteboardItems)
-        PasteboardSelfWriteGate.shared.recordSelfWrite()
+        // The self-write is recorded by PasteboardService.restore(_:)
     }
 }
 
@@ -49,18 +49,18 @@ protocol PasteboardWriting {
 
 @MainActor
 final class SystemPasteboardWriter: PasteboardWriting {
-    var changeCount: Int { NSPasteboard.general.changeCount }
+    var changeCount: Int { PasteboardService.shared.changeCount }
 
     func write(_ item: ClipboardItem) {
-        // copyToPasteboard already records the self-write in the gate
-        item.copyToPasteboard()
+        // PasteboardService records the self-write for us
+        PasteboardService.shared.write(item: item)
     }
 
     func capture() -> PasteboardSnapshot? {
-        PasteboardSnapshot.capture(from: NSPasteboard.general)
+        PasteboardService.shared.capture()
     }
 
     func restore(_ snapshot: PasteboardSnapshot) {
-        snapshot.restore(to: NSPasteboard.general)
+        PasteboardService.shared.restore(snapshot)
     }
 }

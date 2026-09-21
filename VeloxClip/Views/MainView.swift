@@ -657,13 +657,13 @@ struct MainView: View {
             if full.data == nil, full.type == "image" || full.type == "rtf" {
                 full.data = await ClipboardStore.shared.loadData(for: item.id)
             }
-            full.copyToPasteboard()
+            PasteboardService.shared.write(item: full)
         }
     }
 
     // Copy a plain string (used by copyHex/copyRgb — hex/rgb are text values).
     private func copyString(_ string: String) {
-        PasteboardSelfWriteGate.shared.write(string)
+        PasteboardService.shared.write(text: string)
     }
 
     private func editImage(_ item: ClipboardItem) {

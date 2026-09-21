@@ -218,7 +218,7 @@ struct ColorPreviewView: View {
     }
     
     private func copyFormat(_ value: String) {
-        PasteboardSelfWriteGate.shared.write(value)
+        PasteboardService.shared.write(text: value)
     }
     
     private func copyAllFormats() {

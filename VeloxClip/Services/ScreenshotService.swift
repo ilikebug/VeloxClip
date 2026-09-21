@@ -20,8 +20,7 @@ class ScreenshotService {
         // later press runs regardless of the (stale until relaunch) preflight.
         guard !ScreenCapturePermission.promptIfNeeded() else { return }
 
-        let pasteboard = NSPasteboard.general
-        previousChangeCount = pasteboard.changeCount
+        previousChangeCount = PasteboardService.shared.changeCount
         
         // Use screencapture command with -i flag for interactive area selection
         // -c flag copies to clipboard
@@ -84,13 +83,12 @@ class ScreenshotService {
     private func checkClipboard() {
         guard isWaitingForScreenshot else { return }
         
-        let pasteboard = NSPasteboard.general
-        let currentChangeCount = pasteboard.changeCount
-        
+        let currentChangeCount = PasteboardService.shared.changeCount
+
         guard currentChangeCount != previousChangeCount else { return }
-        
-        // Check if clipboard contains an image
-        if let imageData = pasteboard.data(forType: .tiff) ?? pasteboard.data(forType: .png),
+
+        // Check if clipboard contains an image (PNG preferred over uncompressed TIFF)
+        if let imageData = PasteboardService.shared.readImageData(),
            let _ = NSImage(data: imageData) {
             // Screenshot detected, open main window to show history
             stopClipboardMonitoring()

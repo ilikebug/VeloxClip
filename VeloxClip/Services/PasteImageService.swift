@@ -22,9 +22,9 @@ class PasteImageService {
     
     // Show floating image window with clipboard image
     func showPasteImage() {
-        // Get image from clipboard
-        let pasteboard = NSPasteboard.general
-        guard let imageData = pasteboard.data(forType: .tiff) ?? pasteboard.data(forType: .png),
+        // Get image from clipboard (PNG preferred over uncompressed TIFF —
+        // this used to prefer TIFF here while the monitor preferred PNG)
+        guard let imageData = PasteboardService.shared.readImageData(),
               let nsImage = NSImage(data: imageData) else {
             // No image in clipboard
             return

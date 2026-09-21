@@ -89,103 +89,15 @@ struct ClipboardItem: Identifiable, Codable, Hashable, Equatable {
     }
 }
 
-import AppKit
-
 extension ClipboardItem {
-    @MainActor
-    func copyToPasteboard(_ pasteboard: NSPasteboard = .general) {
-        guard hasPasteablePayload else { return }
-
-        // Decode before clearing: a blob NSImage can't decode must leave the
-        // user's clipboard intact, not empty (which the paste stack would then
-        // record as its own successful write and silently skip the item)
-        var decodedImage: NSImage?
-        if type == "image" {
-            guard let d = data, let nsImage = NSImage(data: d) else {
-                print("❌ Failed to create NSImage from data")
-                return
-            }
-            decodedImage = nsImage
-        }
-
-        pasteboard.clearContents()
-        defer { if pasteboard == NSPasteboard.general { PasteboardSelfWriteGate.shared.recordSelfWrite() } }
-
-        if let decodedImage, let d = data {
-            Self.writeImage(decodedImage, encoded: d, to: pasteboard)
-            return
-        }
-
-        if type == "color", let c = content {
-            pasteboard.setString(c, forType: .string)
-            return
-        }
-
-        if type == "file", let c = content {
-            // Write real file URLs so pasting into Finder reproduces the files;
-            // fall back to the plain paths if none of them still exist
-            let urls = RowPresentation.filePaths(from: c)
-                .filter { FileManager.default.fileExists(atPath: $0) }
-                .map { URL(fileURLWithPath: $0) as NSURL }
-            if !urls.isEmpty, pasteboard.writeObjects(urls) {
-                return
-            }
-            pasteboard.setString(c, forType: .string)
-            return
-        }
-
-        if let c = content {
-            pasteboard.setString(c, forType: .string)
-        } else if let d = data {
-            if type == "rtf" {
-                pasteboard.setData(d, forType: .rtf)
-            }
-        }
+    /// How a `file` item encodes its paths: one per line, empty lines dropped.
+    /// Never trimmed — a file name may legitimately begin or end with a space.
+    ///
+    /// This is domain knowledge (the item's own storage format), not
+    /// presentation; it used to live in RowPresentation, which made the entity
+    /// depend on the presentation layer.
+    static func filePaths(from content: String) -> [String] {
+        content.components(separatedBy: .newlines).filter { !$0.isEmpty }
     }
 }
 
-extension ClipboardItem {
-    /// Writes the NSImage object (consumers get TIFF on demand) plus the encoded
-    /// bytes as an explicit representation. Stored blobs are PNG (normalized on
-    /// ingest) and go out byte-for-byte — the previous path re-encoded a full
-    /// TIFF twice and a PNG once per paste, on the main thread.
-    @MainActor
-    static func writeImage(_ image: NSImage, encoded: Data?, to pasteboard: NSPasteboard) {
-        pasteboard.writeObjects([image])   // TIFF promise for every consumer
-        if let encoded, encoded.starts(with: [0x89, 0x50, 0x4E, 0x47]) {
-            pasteboard.setData(encoded, forType: .png)
-        } else if let tiff = image.tiffRepresentation,
-                  let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
-            // Legacy JPEG/TIFF blobs: one PNG encode (never declare foreign bytes as TIFF)
-            pasteboard.setData(png, forType: .png)
-        }
-    }
-}
-
-// Tracks pasteboard writes made by the app itself so ClipboardMonitor
-// doesn't re-ingest them as new history items.
-@MainActor
-final class PasteboardSelfWriteGate {
-    static let shared = PasteboardSelfWriteGate()
-
-    private(set) var lastSelfWriteChangeCount: Int = -1
-
-    private init() {}
-
-    func recordSelfWrite() {
-        lastSelfWriteChangeCount = NSPasteboard.general.changeCount
-    }
-
-    /// Clear + set a plain string + record the self-write, in one step. Every
-    /// "copy X" button must go through here, or the monitor records the copy as
-    /// a brand-new history item.
-    func write(_ string: String, to pasteboard: NSPasteboard = .general) {
-        pasteboard.clearContents()
-        pasteboard.setString(string, forType: .string)
-        if pasteboard == NSPasteboard.general { recordSelfWrite() }
-    }
-
-    func isSelfWrite(changeCount: Int) -> Bool {
-        changeCount == lastSelfWriteChangeCount
-    }
-}
