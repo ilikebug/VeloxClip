@@ -419,44 +419,44 @@ struct MainView: View {
     
     private func executeCommand(_ cmd: Command) {
         let item = paletteItem
-        switch cmd.id {
-        case "paste":
+        // Exhaustive over CommandKind: adding a command is now a compiler error
+        // here until it is handled, instead of silently doing nothing.
+        switch cmd.kind {
+        case .paste:
             if let i = item { WindowManager.shared.selectAndPaste(i) }
-        case "copy":
+        case .copy:
             if let i = item { copyItem(i) }
-        case "detail":
+        case .detail:
             if let i = item, detailItem == nil { openDetail(i) }
-        case "copyHex":
+        case .copyHex:
             if let content = item?.content {
                 copyString(ColorFormatting.hex(from: content) ?? content)
             }
-        case "copyRgb":
+        case .copyRgb:
             if let content = item?.content {
                 copyString(ColorFormatting.rgb(from: content) ?? content)
             }
-        case "editImage":
+        case .editImage:
             if let i = item { editImage(i) }
-        case "openURL":
+        case .openURL:
             if let content = item?.content { openURL(content) }
-        case "revealInFinder":
+        case .revealInFinder:
             if let content = item?.content { revealFilesInFinder(content) }
-        case "copyPath":
+        case .copyPath:
             if let content = item?.content { copyString(content) }
-        case "favorite":
+        case .favorite:
             if let i = item { ClipboardStore.shared.toggleFavorite(for: i) }
-        case "stack":
+        case .stack:
             if let i = item { PasteStackService.shared.toggleStaged(i) }
-        case "delete":
+        case .delete:
             if let i = item, let idx = displayItems.firstIndex(where: { $0.id == i.id }) {
                 let items = displayItems
                 // onChange(of: store.items) drops the selection / detail pane for the removed row
                 Task { await ClipboardStore.shared.deleteItems(at: IndexSet(integer: idx), in: items) }
             }
-        default:
-            break
         }
         // Paste dismisses the overlay itself; everything else just closes the palette.
-        if cmd.id != "paste" {
+        if cmd.kind != .paste {
             showCommandPalette = false
         }
     }

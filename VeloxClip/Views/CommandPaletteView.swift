@@ -144,7 +144,7 @@ struct CommandPaletteView: View {
 
     /// Command ids that form the destructive/management group; a divider is
     /// inserted before the first of these that appears.
-    private static let groupBoundaryIDs: Set<String> = ["favorite", "stack", "delete"]
+    private static let groupBoundaryIDs: Set<CommandKind> = [.favorite, .stack, .delete]
 
     @ViewBuilder private func commandList(_ c: DSColors) -> some View {
         VStack(spacing: 2) {
@@ -175,10 +175,10 @@ struct CommandPaletteView: View {
     }
 
     @ViewBuilder private func commandRow(_ cmd: Command, isSelected: Bool, c: DSColors) -> some View {
-        let isDelete = cmd.id == "delete"
+        let isDelete = cmd.kind == .delete
         let titleColor: Color = isSelected ? .white : (isDelete ? c.destructive : c.text)
         HStack(spacing: 11) {
-            if (cmd.id == "copyHex" || cmd.id == "copyRgb"), let color = itemColor {
+            if (cmd.kind == .copyHex || cmd.kind == .copyRgb), let color = itemColor {
                 RoundedRectangle(cornerRadius: 3, style: .continuous)
                     .fill(color)
                     .frame(width: 13, height: 13)
@@ -215,10 +215,10 @@ struct CommandPaletteView: View {
     /// Trailing computed value for the color copy rows (e.g. `#0A84FF`, `10 132 255`).
     private func computedValue(for cmd: Command) -> String? {
         guard let content = item?.content else { return nil }
-        switch cmd.id {
-        case "copyHex": return ColorFormatting.hex(from: content)
-        case "copyRgb": return ColorFormatting.rgb(from: content)
-        default:        return nil
+        switch cmd.kind {
+        case .copyHex: return ColorFormatting.hex(from: content)
+        case .copyRgb: return ColorFormatting.rgb(from: content)
+        default:       return nil
         }
     }
 }
