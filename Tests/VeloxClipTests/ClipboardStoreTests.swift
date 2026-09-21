@@ -107,7 +107,10 @@ final class ClipboardStoreTests: XCTestCase {
         let persistedItems = try await databaseManager.fetchAllClipboardItems()
         let persistedItem = persistedItems.first { $0.id == item.id }
         XCTAssertEqual(persistedItem?.tags, ["URL", "Code"])
-        XCTAssertEqual(persistedItem?.embedding, embedding)
+        // List rows deliberately omit the embedding blob; read it narrowly.
+        XCTAssertNil(persistedItem?.embedding)
+        let vectors = try await databaseManager.fetchEmbeddings(ids: [item.id])
+        XCTAssertEqual(vectors[item.id], embedding)
     }
 
     func testListFetchOmitsBlobButKeepsHash() async throws {
@@ -257,7 +260,10 @@ final class ClipboardStoreTests: XCTestCase {
         XCTAssertEqual(store.items.first?.tags, ["todo", "URL"])
         let persisted = try await databaseManager.fetchAllClipboardItems().first
         XCTAssertEqual(persisted?.tags, ["todo", "URL"])
-        XCTAssertEqual(persisted?.embedding, Data([1]))
+        // List rows deliberately omit the embedding blob; read it narrowly.
+        XCTAssertNil(persisted?.embedding)
+        let vectors = try await databaseManager.fetchEmbeddings(ids: [item.id])
+        XCTAssertEqual(vectors[item.id], Data([1]))
     }
 
     func testApplyDetectedMetadataDoesNotClobberFavoriteToggledMeanwhile() async throws {

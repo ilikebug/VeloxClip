@@ -200,6 +200,13 @@ struct MainView: View {
             return cached
         }
 
+        // Vectors are no longer carried on list rows (they were tens of MB of
+        // permanently-resident blobs the list never renders). Load just the ones
+        // this search needs.
+        let candidateIDs = baseItems.filter { $0.content != nil }.map(\.id)
+        let vectors = (try? await DatabaseManager.shared.fetchEmbeddings(ids: candidateIDs)) ?? [:]
+        guard !vectors.isEmpty else { return [] }
+
         let finalResults = await Task.detached(priority: .userInitiated) { () -> [(UUID, Double)] in
             guard let queryVector = await AIService.shared.generateEmbedding(for: query) else {
                 return []
@@ -209,10 +216,10 @@ struct MainView: View {
             let maxResults = 20
 
             // Decode each stored vector exactly once per item
-            let results = baseItems.compactMap { item -> (UUID, Double)? in
-                guard item.content != nil, let itemVector = item.vector else { return nil }
+            let results = vectors.compactMap { itemID, blob -> (UUID, Double)? in
+                guard let itemVector = ClipboardItem.decodeVector(blob) else { return nil }
                 let similarity = AIService.shared.calculateSimilarity(queryVector, itemVector)
-                return similarity >= threshold ? (item.id, similarity) : nil
+                return similarity >= threshold ? (itemID, similarity) : nil
             }
             .sorted { $0.1 > $1.1 }
             .prefix(maxResults)

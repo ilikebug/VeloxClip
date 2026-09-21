@@ -150,9 +150,20 @@ actor DatabaseManager {
 
         try migrateClipboardItemsTableIfNeeded()
 
-        // Optimization: Add indexes for frequently queried/sorted columns
-        try db.run(clipboardItems.createIndex(createdAt, ifNotExists: true))
-        try db.run(clipboardItems.createIndex(isFavorite, ifNotExists: true))
+        // Indices must match the ORDER BY the list queries actually use.
+        // A plain index on createdAt cannot satisfy an ORDER BY over
+        // COALESCE(lastUsedAt, createdAt), so every launch was a full scan
+        // plus a filesort. These are expression indices on the real sort keys.
+        try db.run("""
+            CREATE INDEX IF NOT EXISTS idx_items_recency
+            ON clipboard_items(COALESCE(lastUsedAt, createdAt) DESC)
+            """)
+        try db.run("""
+            CREATE INDEX IF NOT EXISTS idx_items_fav_recency
+            ON clipboard_items(isFavorite, COALESCE(favoritedAt, createdAt) DESC)
+            """)
+        // Superseded by idx_items_recency; drop it so we don't pay to maintain it.
+        try db.run("DROP INDEX IF EXISTS index_clipboard_items_on_createdAt")
     }
 
     private func migrateClipboardItemsTableIfNeeded() throws {
@@ -292,8 +303,13 @@ actor DatabaseManager {
 
     // List queries skip the `data` blob column — images can be megabytes each
     // and the list only needs metadata. Use fetchItemData(id:) to load blobs on demand.
+    //
+    // `embedding` is skipped for the same reason: it is a per-item vector blob
+    // that the list never renders, and pulling every one of them at launch kept
+    // the whole history's vectors permanently resident. Semantic search loads
+    // them on demand via fetchEmbeddings(ids:).
     private var listColumns: [Expressible] {
-        [id, createdAt, lastUsedAt, type, content, dataHash, sourceApp, tags, embedding, isFavorite, favoritedAt]
+        [id, createdAt, lastUsedAt, type, content, dataHash, sourceApp, tags, isFavorite, favoritedAt]
     }
 
     private var sortKey: SQLite.Expression<Double> {
@@ -315,6 +331,27 @@ actor DatabaseManager {
         let query = clipboardItems.select(data).filter(id == itemID.uuidString)
         guard let row = try db.pluck(query) else { return nil }
         return row[data]
+    }
+
+    /// Embeddings for the given items, loaded on demand by semantic search.
+    /// Chunked to stay under SQLite's bound-variable limit, like the bulk delete.
+    func fetchEmbeddings(ids: [UUID]) async throws -> [UUID: Data] {
+        guard !ids.isEmpty else { return [:] }
+        await ensureInitialized()
+        guard let db = db else { throw DatabaseError.connectionFailed }
+
+        var result: [UUID: Data] = [:]
+        let chunkSize = 500
+        for start in stride(from: 0, to: ids.count, by: chunkSize) {
+            let chunk = ids[start..<min(start + chunkSize, ids.count)].map(\.uuidString)
+            let query = clipboardItems.select(id, embedding)
+                .filter(chunk.contains(id) && embedding != nil)
+            for row in try db.prepare(query) {
+                guard let itemID = UUID(uuidString: row[id]), let vector = row[embedding] else { continue }
+                result[itemID] = vector
+            }
+        }
+        return result
     }
 
     /// nil for a row whose id isn't a UUID (legacy/tampered data) — one bad row
@@ -341,7 +378,8 @@ actor DatabaseManager {
             item.lastUsedAt = Date(timeIntervalSince1970: lastUsedAtTimestamp)
         }
         item.tags = tagsArray
-        item.embedding = row[embedding]
+        // `embedding` is deliberately not in listColumns — see the comment there.
+        item.embedding = nil
         item.isFavorite = row[isFavorite]
         if let favoritedAtTimestamp = row[favoritedAt] {
             item.favoritedAt = Date(timeIntervalSince1970: favoritedAtTimestamp)
