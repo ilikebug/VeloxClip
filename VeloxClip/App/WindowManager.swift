@@ -308,7 +308,7 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
             }
 
             // 4. Return focus to the target app explicitly
-            app.activate(options: .activateIgnoringOtherApps)
+            app.activate()
 
             // 5. Event injection requires Accessibility permission; without it
             // postToPid silently does nothing — prompt the user instead.
@@ -325,7 +325,7 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
 
             // If another app became frontmost, try to reactivate target app
             if currentFrontmost?.processIdentifier != targetPID {
-                app.activate(options: .activateIgnoringOtherApps)
+                app.activate()
                 try? await Task.sleep(nanoseconds: 200_000_000)
             }
             self.injectPasteEvent(to: app)

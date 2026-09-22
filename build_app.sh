@@ -119,7 +119,7 @@ echo "[Info] Generating Info.plist..."
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>3.0.0</string>
+    <string>3.1.0</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
     <key>NSHighResolutionCapable</key>

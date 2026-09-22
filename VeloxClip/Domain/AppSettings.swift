@@ -155,7 +155,7 @@ class AppSettings: ObservableObject {
     }
 
     static func encodeList(_ list: [String]) -> String {
-        (try? String(data: JSONEncoder().encode(list), encoding: .utf8)) as? String ?? "[]"
+        (try? String(data: JSONEncoder().encode(list), encoding: .utf8)) ?? "[]"
     }
 
     static func decodeList(_ raw: String?) -> [String] {

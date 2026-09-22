@@ -95,16 +95,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor
     private func registerShortcuts() {
         let settings = AppSettings.shared
-        ShortcutManager.shared.register(settings.globalShortcut, for: .windowToggle) {
+        // Startup registration is silent: the defaults (F1/F2/F3 especially) are
+        // routinely owned by other apps or by macOS itself, and a modal alert on
+        // every launch — before the user has chosen anything — is noise about a
+        // conflict they did not create. Preferences reports failures, because
+        // there the user picked the combination and expects it to work.
+        ShortcutManager.shared.register(settings.globalShortcut, for: .windowToggle, reportErrors: false) {
             WindowManager.shared.toggleWindow()
         }
-        ShortcutManager.shared.register(settings.screenshotShortcut, for: .screenshot) {
+        ShortcutManager.shared.register(settings.screenshotShortcut, for: .screenshot, reportErrors: false) {
             ScreenshotService.shared.captureArea()
         }
-        ShortcutManager.shared.register(settings.pasteImageShortcut, for: .pasteImage) {
+        ShortcutManager.shared.register(settings.pasteImageShortcut, for: .pasteImage, reportErrors: false) {
             PasteImageService.shared.showPasteImage()
         }
-        ShortcutManager.shared.register(settings.textCaptureShortcut, for: .textCapture) {
+        ShortcutManager.shared.register(settings.textCaptureShortcut, for: .textCapture, reportErrors: false) {
             TextCaptureService.shared.captureText()
         }
     }
@@ -117,7 +122,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if app.bundleIdentifier == bundleIdentifier &&
                app.processIdentifier != ProcessInfo.processInfo.processIdentifier {
                 // Activate the existing instance
-                app.activate(options: [.activateIgnoringOtherApps])
+                app.activate()
                 break
             }
         }

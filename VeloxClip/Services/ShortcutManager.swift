@@ -34,7 +34,11 @@ class ShortcutManager {
     // Resources are automatically cleaned up by the system when the app terminates
 
     /// Registers `shortcut` for `slot` and remembers what it should do.
-    func register(_ shortcut: String, for slot: Slot, action: @escaping () -> Void) {
+    ///
+    /// Errors from the OS (already taken by another app) are only reported when
+    /// `reportErrors` is true — initial startup with defaults that conflict is
+    /// expected and silent, but a user-chosen shortcut that fails needs to show.
+    func register(_ shortcut: String, for slot: Slot, reportErrors: Bool = true, action: @escaping () -> Void) {
         actions[slot.rawValue] = action
         Self.dispatchTable[slot.rawValue] = action
         // Re-binding a slot that already holds a hotkey is exactly what update()
@@ -42,9 +46,9 @@ class ShortcutManager {
         // first tore down a working hotkey whenever the new string was
         // unparseable or the OS refused it, leaving the user with neither.
         if isRegistered(slot) {
-            update(shortcut, for: slot)
+            update(shortcut, for: slot, reportErrors: reportErrors)
         } else {
-            registerShortcut(shortcut, slot: slot)
+            registerShortcut(shortcut, slot: slot, reportErrors: reportErrors)
         }
     }
 
@@ -55,7 +59,7 @@ class ShortcutManager {
     /// parseability still tore down a working hotkey when the OS refused the
     /// new combination (already owned by another app, or by another slot),
     /// leaving the user with neither.
-    func update(_ shortcut: String, for slot: Slot) {
+    func update(_ shortcut: String, for slot: Slot, reportErrors: Bool = true) {
         guard let parsed = ShortcutParser.parse(shortcut) else {
             print("Ignoring unparseable shortcut \"\(shortcut)\" for hotkey \(slot); keeping the current one")
             return
@@ -73,7 +77,9 @@ class ShortcutManager {
 
         guard status == noErr, let replacement else {
             print("Failed to register hotkey \(slot) with shortcut \(shortcut), status: \(status); keeping the current one")
-            ErrorHandler.shared.handle(ShortcutError.registrationFailed(shortcut: shortcut, status: status))
+            if reportErrors {
+                ErrorHandler.shared.handle(ShortcutError.registrationFailed(shortcut: shortcut, status: status))
+            }
             return
         }
 
@@ -94,7 +100,7 @@ class ShortcutManager {
         }
     }
 
-    private func registerShortcut(_ shortcutString: String, slot: Slot) {
+    private func registerShortcut(_ shortcutString: String, slot: Slot, reportErrors: Bool = true) {
         guard let parsed = ShortcutParser.parse(shortcutString) else {
             print("Failed to parse shortcut: \(shortcutString)")
             return
@@ -112,10 +118,10 @@ class ShortcutManager {
         if status == noErr {
             hotKeyRefs[slot] = ref
         } else {
-            // The user configured this shortcut in Preferences and it silently
-            // did nothing — they must be told, not just the console.
             print("Failed to register hotkey \(slot) with shortcut \(shortcutString), status: \(status)")
-            ErrorHandler.shared.handle(ShortcutError.registrationFailed(shortcut: shortcutString, status: status))
+            if reportErrors {
+                ErrorHandler.shared.handle(ShortcutError.registrationFailed(shortcut: shortcutString, status: status))
+            }
         }
     }
 
