@@ -7,13 +7,14 @@ final class ShortcutManagerTests: XCTestCase {
     /// unparseable string used to unregister the working hotkey first and then
     /// fail to register the new one, leaving the user with no shortcut at all.
     ///
-    /// Previously untestable — the manager read AppSettings.shared directly and
-    /// dispatched into four other singletons, so it could not be constructed in
-    /// a test at all.
-    func testUnparseableReplacementKeepsTheWorkingShortcut() {
+    /// Asserted through `isRegistered` when the OS actually grants the hotkey,
+    /// and skipped when it cannot — a headless CI runner has no window server,
+    /// so RegisterEventHotKey fails for reasons that say nothing about us.
+    func testUnparseableReplacementKeepsTheWorkingShortcut() throws {
         let manager = ShortcutManager()
         manager.register("cmd+shift+v", for: .windowToggle) {}
-        XCTAssertTrue(manager.isRegistered(.windowToggle), "precondition: the original registered")
+        try XCTSkipUnless(manager.isRegistered(.windowToggle),
+                          "no window server — the OS refused the hotkey, nothing to assert about")
 
         manager.update("not a shortcut", for: .windowToggle)
 
@@ -21,9 +22,20 @@ final class ShortcutManagerTests: XCTestCase {
                       "a bad replacement must leave the existing hotkey working")
     }
 
-    func testValidReplacementReRegisters() {
+    /// The same rule, independent of whether the OS grants hotkeys: an
+    /// unparseable string must be rejected before anything is torn down.
+    func testUnparseableShortcutsAreRejectedBeforeAnyTeardown() {
+        XCTAssertNil(ShortcutParser.parse("not a shortcut"))
+        XCTAssertNil(ShortcutParser.parse(""))
+        XCTAssertNil(ShortcutParser.parse("???"))
+        XCTAssertNotNil(ShortcutParser.parse("cmd+shift+v"),
+                        "…while a valid one still parses")
+    }
+
+    func testValidReplacementReRegisters() throws {
         let manager = ShortcutManager()
         manager.register("cmd+shift+v", for: .windowToggle) {}
+        try XCTSkipUnless(manager.isRegistered(.windowToggle), "no window server")
 
         manager.update("cmd+shift+b", for: .windowToggle)
 
