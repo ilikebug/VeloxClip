@@ -55,6 +55,21 @@ final class ClipboardSearchViewModel: ObservableObject {
         searchTask = nil
     }
 
+    /// Drops rows that no longer exist in the store.
+    ///
+    /// `results` is a snapshot taken when the query ran; nothing re-derives it
+    /// when the store changes. Without this, a row deleted from another surface
+    /// stayed in the visible list, stayed selectable, and — because the snapshot
+    /// still carried its `content` — pasting it wrote a deleted clip back to the
+    /// system pasteboard. The view calls this whenever the store publishes.
+    func prune(validIDs: Set<UUID>) {
+        guard !results.isEmpty else { return }
+        let kept = results.filter { validIDs.contains($0.id) }
+        // Publishing an identical array would churn the view's selection repair.
+        guard kept.count != results.count else { return }
+        results = kept
+    }
+
     func clear() {
         cancel()
         results = []

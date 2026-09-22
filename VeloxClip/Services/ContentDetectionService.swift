@@ -80,7 +80,15 @@ actor ContentDetectionService {
             // outright also rejected the most common spreadsheet copy there
             // is, so lean on row count instead — a note is a line or two, a
             // table keeps going.
-            if (delimiter == "," || delimiter == "|") && first < 2 && lines.count < 3 { continue }
+            // A single delimiter per line is ambiguous: "Alice, the project lead"
+            // is prose, "name,age" is a CSV header. Machine-written exports pack
+            // cells tight ("Alice,30"); prose and hand-written notes put a space
+            // after the separator. That space is the discriminator — requiring
+            // extra rows instead would reject a perfectly normal 3-line export.
+            if (delimiter == "," || delimiter == "|") && first < 2 {
+                let padded = lines.contains { $0.contains(delimiter + " ") || $0.contains(" " + delimiter) }
+                if padded { continue }
+            }
             return true
         }
         return false
@@ -105,8 +113,10 @@ actor ContentDetectionService {
         // and rendered them as a confident calendar date (an ISBN came out as
         // December 2279).
         guard trimmed.allSatisfy(\.isNumber), let value = Double(trimmed) else { return false }
-        let plausibleSeconds = 1_000_000_000.0...2_000_000_000.0       // 2001-2033
-        let plausibleMilliseconds = 1_000_000_000_000.0...2_000_000_000_000.0
+        // 2001-09-09 to 2100. A 2e9 ceiling excluded 2147483647 — INT32_MAX,
+        // the Y2038 epoch and the most-copied timestamp constant in software.
+        let plausibleSeconds = 1_000_000_000.0...4_102_444_800.0
+        let plausibleMilliseconds = 1_000_000_000_000.0...4_102_444_800_000.0
         if trimmed.count == 10 { return plausibleSeconds.contains(value) }
         if trimmed.count == 13 { return plausibleMilliseconds.contains(value) }
         return false

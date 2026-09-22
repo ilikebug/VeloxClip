@@ -36,7 +36,15 @@ struct JSONPreviewView: View {
     // Static cache for processed JSON to persist across view updates.
     // Cleared via CacheRegistry (see ViewCaches.registerAll).
     @MainActor
-    static var jsonCache = FIFOCache<String, (formatted: String, minified: String, isValid: Bool, error: String?)>(maxEntries: 100)
+    // Keyed on the full document and holding two more copies of it, so bound
+    // bytes as well as entries: 100 one-megabyte JSON previews pinned ~381 MB.
+    static var jsonCache = FIFOCache<String, (formatted: String, minified: String, isValid: Bool, error: String?)>(
+        maxEntries: 100,
+        maxBytes: 16 * 1024 * 1024,
+        sizeOf: { key, value in
+            key.utf8.count + value.formatted.utf8.count + value.minified.utf8.count + (value.error?.utf8.count ?? 0)
+        }
+    )
     var body: some View {
         GeometryReader { geo in
             VStack(alignment: .leading, spacing: 12) {

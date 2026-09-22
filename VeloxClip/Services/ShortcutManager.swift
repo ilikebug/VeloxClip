@@ -37,12 +37,15 @@ class ShortcutManager {
     func register(_ shortcut: String, for slot: Slot, action: @escaping () -> Void) {
         actions[slot.rawValue] = action
         Self.dispatchTable[slot.rawValue] = action
-        // Release any previous registration for this slot first. Overwriting
-        // hotKeyRefs[slot] leaked the old EventHotKeyRef, so the OS kept the
-        // old combination claimed — it still fired the action, and no other
-        // app could take it, for the rest of the process lifetime.
-        unregisterShortcut(slot: slot)
-        registerShortcut(shortcut, slot: slot)
+        // Re-binding a slot that already holds a hotkey is exactly what update()
+        // does, including its register-before-release safety: unregistering here
+        // first tore down a working hotkey whenever the new string was
+        // unparseable or the OS refused it, leaving the user with neither.
+        if isRegistered(slot) {
+            update(shortcut, for: slot)
+        } else {
+            registerShortcut(shortcut, slot: slot)
+        }
     }
 
     /// Re-binds an already-registered slot to a new key combination, keeping

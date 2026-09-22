@@ -202,10 +202,15 @@ class ClipboardStore: ObservableObject {
 
     /// OCR result for an image item: sets the text and adds the "OCR" tag.
     func updateItem(id: UUID, content: String) {
-        guard let index = items.firstIndex(where: { $0.id == id }) else { return }
+        // Bounded window again: a favorited screenshot outside it must still
+        // receive its OCR text, or it stays unsearchable forever.
+        let windowIndex = items.firstIndex(where: { $0.id == id })
+        let favoriteIndex = favoriteItems.firstIndex(where: { $0.id == id })
+        guard let originalItem = windowIndex.map({ items[$0] }) ?? favoriteIndex.map({ favoriteItems[$0] }) else {
+            return
+        }
 
-        var updatedItem = items[index]
-        let originalItem = items[index] // Backup for rollback
+        var updatedItem = originalItem
 
         updatedItem.content = content
         if !updatedItem.tags.contains("OCR") {
@@ -213,12 +218,14 @@ class ClipboardStore: ObservableObject {
         }
 
         // Optimistic UI update
-        self.items[index] = updatedItem
+        if let windowIndex {
+            self.items[windowIndex] = updatedItem
+        }
 
         // Keep the favorites list in sync — a favorited screenshot must show
         // its OCR text there too
-        if updatedItem.isFavorite, let favIndex = favoriteItems.firstIndex(where: { $0.id == id }) {
-            favoriteItems[favIndex] = updatedItem
+        if let favoriteIndex {
+            favoriteItems[favoriteIndex] = updatedItem
         }
 
         // Persist only the columns that changed — a full-row write from this
@@ -235,7 +242,7 @@ class ClipboardStore: ObservableObject {
                     if let currentIndex = self.items.firstIndex(where: { $0.id == id }) {
                         self.items[currentIndex] = originalItem
                     }
-                    if originalItem.isFavorite, let favIndex = self.favoriteItems.firstIndex(where: { $0.id == id }) {
+                    if let favIndex = self.favoriteItems.firstIndex(where: { $0.id == id }) {
                         self.favoriteItems[favIndex] = originalItem
                     }
                     ErrorHandler.shared.handle(error)
@@ -251,11 +258,19 @@ class ClipboardStore: ObservableObject {
     }
 
     /// Replaces the tag list and/or embedding (user tag edits pass the full list).
+    ///
+    /// `items` is a bounded window and `favoriteItems` is not, so a favorite
+    /// older than the window lives only in the latter. Resolving the row from
+    /// `items` alone silently dropped every tag edit and OCR write-back on such
+    /// a row — in the Favorites tab, the surface built for long-lived clips.
     func updateMetadata(id: UUID, tags: [String]? = nil, embedding: Data? = nil) async {
-        guard let index = items.firstIndex(where: { $0.id == id }) else { return }
+        let windowIndex = items.firstIndex(where: { $0.id == id })
+        let favoriteIndex = favoriteItems.firstIndex(where: { $0.id == id })
+        guard let originalItem = windowIndex.map({ items[$0] }) ?? favoriteIndex.map({ favoriteItems[$0] }) else {
+            return
+        }
 
-        var updatedItem = items[index]
-        let originalItem = items[index] // Backup for rollback
+        var updatedItem = originalItem
 
         if let tags {
             updatedItem.tags = tags
@@ -265,12 +280,12 @@ class ClipboardStore: ObservableObject {
             updatedItem.embedding = embedding
         }
 
-        // Optimistic UI update
-        self.items[index] = updatedItem
-
-        // Update favoriteItems if it's a favorite
-        if updatedItem.isFavorite, let favIndex = favoriteItems.firstIndex(where: { $0.id == id }) {
-            favoriteItems[favIndex] = updatedItem
+        // Optimistic UI update in whichever lists hold the row.
+        if let windowIndex {
+            self.items[windowIndex] = updatedItem
+        }
+        if let favoriteIndex {
+            self.favoriteItems[favoriteIndex] = updatedItem
         }
 
         // Persist only tags/embedding — never the favorite columns from this snapshot
@@ -282,9 +297,8 @@ class ClipboardStore: ObservableObject {
             if let currentIndex = self.items.firstIndex(where: { $0.id == id }) {
                 self.items[currentIndex] = originalItem
             }
-            // Also rollback favoriteItems
-            if originalItem.isFavorite, let favIndex = self.favoriteItems.firstIndex(where: { $0.id == id }) {
-                self.favoriteItems[favIndex] = originalItem
+            if let currentFavIndex = self.favoriteItems.firstIndex(where: { $0.id == id }) {
+                self.favoriteItems[currentFavIndex] = originalItem
             }
             ErrorHandler.shared.handle(error)
         }
@@ -294,8 +308,11 @@ class ClipboardStore: ObservableObject {
     /// whatever tags the item has by now, so a tag the user added while the analysis
     /// was running is kept.
     func applyDetectedMetadata(id: UUID, tags detected: [String], embedding: Data?) async {
-        guard let index = items.firstIndex(where: { $0.id == id }) else { return }
-        var merged = items[index].tags
+        // Same bounded-window caveat as updateMetadata: an old favorite lives
+        // only in favoriteItems, and its screenshot still deserves its OCR text.
+        guard let existing = items.first(where: { $0.id == id })
+            ?? favoriteItems.first(where: { $0.id == id }) else { return }
+        var merged = existing.tags
         for tag in detected where !merged.contains(tag) {
             merged.append(tag)
         }
@@ -303,11 +320,16 @@ class ClipboardStore: ObservableObject {
     }
 
     func addTag(_ tag: String, to item: ClipboardItem) {
+        // Trim here too: callers other than the tag field exist, and a blank tag
+        // is unremovable in the UI. The duplicate check is case-insensitive so a
+        // typed "ocr" does not sit beside the auto-applied "OCR", with both
+        // polluting search.
+        let trimmed = tag.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
         var updatedTags = item.tags
-        if !updatedTags.contains(tag) {
-            updatedTags.append(tag)
-            updateTags(id: item.id, tags: updatedTags)
-        }
+        guard !updatedTags.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) else { return }
+        updatedTags.append(trimmed)
+        updateTags(id: item.id, tags: updatedTags)
     }
 
     func removeTag(_ tag: String, from item: ClipboardItem) {

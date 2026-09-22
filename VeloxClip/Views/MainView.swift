@@ -184,12 +184,19 @@ struct MainView: View {
             }
         }
         .onChange(of: store.items) { _, newItems in
-            // Deleting an item must not leave a ghost row in active search results
-            let validIDs = Set(newItems.map(\.id))
-            // results are re-derived by the view model on the next query
+            // Deleting an item must not leave a ghost row in active search results.
+            // The view model holds a snapshot it never re-derives, so without this
+            // a deleted row stayed visible, stayed selectable, and pasting it wrote
+            // the deleted clip back to the system pasteboard.
+            let validIDs = Set(newItems.map(\.id)).union(store.favoriteItems.map(\.id))
+            search.prune(validIDs: validIDs)
             // …nor a ghost selection — ⏎ would try to paste an item that no longer
-            // exists (for an image that meant clearing the clipboard and pasting nothing)
-            if let selected = selectedItem, !validIDs.contains(selected.id) {
+            // exists (for an image that meant clearing the clipboard and pasting nothing).
+            // Validate against what is actually on screen: in the Favorites tab the
+            // rendered list is favoriteItems, and a favorite outside the bounded
+            // window is a normal steady state, not a deleted row.
+            let visibleIDs = Set(displayItems.map(\.id))
+            if let selected = selectedItem, !visibleIDs.contains(selected.id) {
                 selectedItem = displayItems.first
             }
             if let detail = detailItem, !validIDs.contains(detail.id) {

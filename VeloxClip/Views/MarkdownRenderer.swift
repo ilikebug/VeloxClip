@@ -34,7 +34,15 @@ struct MarkdownView: View {
     // Cleared via CacheRegistry (see ViewCaches.registerAll) so CacheManager
     // does not have to name this view type.
     @MainActor
-    static var chunksCache = FIFOCache<String, [MarkdownChunk]>(maxEntries: 100)
+    // The key alone is the whole document — 100 × 400 KB pinned ~42 MB before
+    // counting the parsed chunks.
+    static var chunksCache = FIFOCache<String, [MarkdownChunk]>(
+        maxEntries: 100,
+        maxBytes: 16 * 1024 * 1024,
+        sizeOf: { key, chunks in
+            key.utf8.count + chunks.reduce(0) { $0 + $1.content.utf8.count }
+        }
+    )
     
     private let chunksPerPage = 20
     
@@ -128,6 +136,14 @@ struct MarkdownView: View {
         // Tracked rather than re-derived — re-splitting the whole buffer on
         // every blank line made a loose list quadratic (8s for 4000 items).
         var lastNonEmptyLine = ""
+        // The raw line as well: lastNonEmptyLine is trimmed, so testing it for
+        // indentation could never fire and the continuation rule was dead.
+        var lastNonEmptyRawLine = ""
+        // Whether the chunk OPENED with a list marker. looksLikeAListItem alone
+        // cannot tell "1) real first" from a sentence that happens to start
+        // "1) is also how the German ordinal is written" — but a list that a
+        // blank line should hold open began as a list.
+        var chunkStartsAList = false
         // A blank line inside a list only holds the chunk open if a list item
         // or an indented continuation actually follows it.
         var pendingBlankLines = 0
@@ -137,11 +153,35 @@ struct MarkdownView: View {
             if !trimmed.isEmpty { chunks.append(MarkdownChunk(content: trimmed)) }
             currentChunk = ""
             lastNonEmptyLine = ""
+            lastNonEmptyRawLine = ""
+            chunkStartsAList = false
             pendingBlankLines = 0
         }
 
-        func isFence(_ trimmed: String) -> Bool {
-            trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~")
+        /// An opening fence: at least three of the same marker character, and
+        /// either an info string or a matching closer later in the document.
+        /// Without the second condition a run of tildes or backticks used as a
+        /// visual divider — common in READMEs and chat logs — opened a code
+        /// block that never closed and swallowed the rest of the document.
+        func fenceRun(_ trimmed: String) -> (marker: Character, length: Int, info: Substring)? {
+            guard let first = trimmed.first, first == "`" || first == "~" else { return nil }
+            let run = trimmed.prefix { $0 == first }
+            guard run.count >= 3 else { return nil }
+            return (first, run.count, trimmed.dropFirst(run.count))
+        }
+
+        func isOpeningFence(_ trimmed: String, at index: Int) -> Bool {
+            guard let run = fenceRun(trimmed) else { return false }
+            // An info string makes it unambiguously a fence.
+            if !run.info.trimmingCharacters(in: .whitespaces).isEmpty { return true }
+            // Otherwise require a closer somewhere below.
+            return lines.dropFirst(index + 1).contains { candidate in
+                let candidateTrimmed = candidate.trimmingCharacters(in: .whitespaces)
+                guard let closer = fenceRun(candidateTrimmed) else { return false }
+                return closer.marker == run.marker
+                    && closer.length >= run.length
+                    && closer.info.trimmingCharacters(in: .whitespaces).isEmpty
+            }
         }
 
         /// A list marker at the START of a line: `-`, `*`, `+`, or `N.` with at
@@ -154,7 +194,11 @@ struct MarkdownView: View {
             let digits = trimmed.prefix { $0.isNumber }
             guard !digits.isEmpty, digits.count <= 9 else { return false }
             let rest = trimmed.dropFirst(digits.count)
-            return rest.hasPrefix(". ") || rest.hasPrefix(") ")
+            if rest.hasPrefix(". ") { return true }
+            // The paren form appears in prose far more often than the dot form
+            // ("section 12 subsection 3)", German ordinals), so only accept a
+            // short number — real lists start at 1 and rarely pass 99.
+            return rest.hasPrefix(") ") && digits.count <= 2
         }
 
         /// Indented continuation of a list item (a nested list or a paragraph
@@ -166,7 +210,7 @@ struct MarkdownView: View {
         for (index, line) in lines.enumerated() {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
 
-            if isFence(trimmed) {
+            if isOpeningFence(trimmed, at: index) || (inCodeBlock && fenceRun(trimmed) != nil) {
                 if inCodeBlock {
                     // Only the character that opened the block can close it.
                     if trimmed.first == fenceCharacter {
@@ -202,7 +246,8 @@ struct MarkdownView: View {
                 if currentChunk.isEmpty {
                     continue
                 }
-                if looksLikeAListItem(lastNonEmptyLine) || isIndentedContinuation(lastNonEmptyLine) {
+                if chunkStartsAList,
+                   looksLikeAListItem(lastNonEmptyLine) || isIndentedContinuation(lastNonEmptyRawLine) {
                     pendingBlankLines += 1
                 } else {
                     flush()
@@ -221,9 +266,12 @@ struct MarkdownView: View {
                 }
             }
 
+            if currentChunk.isEmpty {
+                chunkStartsAList = looksLikeAListItem(trimmed)
+            }
             currentChunk += line + "\n"
             lastNonEmptyLine = trimmed
-            _ = index
+            lastNonEmptyRawLine = line
         }
 
         flush()

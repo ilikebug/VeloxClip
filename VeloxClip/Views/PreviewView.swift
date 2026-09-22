@@ -22,7 +22,12 @@ struct PreviewView: View {
     // Get the latest item from store to ensure favorite status is up to date
     private var currentItem: ClipboardItem? {
         guard let item = item else { return nil }
-        return store.items.first(where: { $0.id == item.id }) ?? item
+        // items is a bounded window; an old favorite lives only in favoriteItems.
+        // Falling straight through to the stale snapshot made the star in the
+        // detail pane contradict the Favorites list the user just changed.
+        return store.items.first(where: { $0.id == item.id })
+            ?? store.favoriteItems.first(where: { $0.id == item.id })
+            ?? item
     }
     
     var body: some View {
@@ -427,8 +432,11 @@ struct PreviewView: View {
                 isTagInputFocused = false
             }
             .onSubmit {
-                if !newTagText.isEmpty {
-                    store.addTag(newTagText, to: item)
+                // A whitespace-only tag renders as a blank pill that carries no
+                // label and, outside edit mode, no × to remove it.
+                let candidate = newTagText.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !candidate.isEmpty {
+                    store.addTag(candidate, to: item)
                     newTagText = ""
                 }
                 // Committing (or ⏎ on an empty field) CLOSES the input — a new one
