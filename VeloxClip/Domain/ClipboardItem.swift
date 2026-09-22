@@ -42,11 +42,24 @@ struct ClipboardItem: Identifiable, Codable, Hashable, Equatable {
         }
     }
 
+    /// Strips NUL bytes from text bound for SQLite.
+    ///
+    /// SQLite.swift binds text with `sqlite3_bind_text(..., -1, ...)`, i.e.
+    /// C-string semantics: everything after the first U+0000 is discarded on
+    /// write. The pasteboard really does deliver such strings (editors,
+    /// terminals, DB clients), and the UI kept showing the whole clip until the
+    /// next launch — at which point the tail was gone for good, and two clips
+    /// sharing a prefix had collapsed into one identical stored row.
+    static func sanitizedContent(_ content: String?) -> String? {
+        guard let content, content.contains("\0") else { return content }
+        return content.replacingOccurrences(of: "\0", with: "\u{FFFD}")
+    }
+
     init(type: String, content: String? = nil, data: Data? = nil, sourceApp: String? = nil) {
         self.id = UUID()
         self.createdAt = Date()
         self.type = type
-        self.content = content
+        self.content = Self.sanitizedContent(content)
         self.data = data
         self.dataHash = data.map(Self.hash(of:))
         self.sourceApp = sourceApp

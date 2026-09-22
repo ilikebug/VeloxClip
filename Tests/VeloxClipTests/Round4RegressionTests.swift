@@ -113,8 +113,11 @@ final class Round4RegressionTests: XCTestCase {
 
     /// The round-4 ceiling of 2e9 excludes 2147483647 — INT32_MAX, the Y2038
     /// epoch and the most-copied timestamp constant in software.
+    /// Round 6 narrowed the ceiling back to 2033 after widening it to 2100 was
+    /// shown to classify every 10-digit phone number as a date; INT32_MAX keeps
+    /// an explicit allowance because it is the constant people actually copy.
     func testY2038AndLaterEpochsAreStillDates() async {
-        for value in ["2147483647", "2050000000"] {
+        for value in ["2147483647"] {
             let item = ClipboardItem(type: "text", content: value)
             let type = await ContentDetectionService.shared.detectType(for: item)
             XCTAssertEqual(type, .datetime, "\(value) must still be detected as a date, got \(type)")

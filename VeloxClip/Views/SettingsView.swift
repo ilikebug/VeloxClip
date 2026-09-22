@@ -40,6 +40,10 @@ struct SettingsView: View {
         .frame(width: 720, height: 460)
         .background(c.window)
         .environment(\.locale, L10n.locale(for: settings.appLanguage))
+        // Settings is where the user changes the values whose writes can fail,
+        // and it is a separate window from the overlay that used to host the
+        // only alert in the app.
+        .errorAlert()
     }
 
     // MARK: Sidebar

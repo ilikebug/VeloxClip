@@ -86,8 +86,16 @@ actor ContentDetectionService {
             // after the separator. That space is the discriminator — requiring
             // extra rows instead would reject a perfectly normal 3-line export.
             if (delimiter == "," || delimiter == "|") && first < 2 {
-                let padded = lines.contains { $0.contains(delimiter + " ") || $0.contains(" " + delimiter) }
-                if padded { continue }
+                // Two signals, because neither alone is enough: prose puts a
+                // space after the separator ("Alice, the project lead"), and a
+                // hand-written note has only a line or two. Testing padding
+                // globally let ONE summary row demote a 52-row export, so count
+                // padded rows proportionally instead.
+                let paddedRows = lines.filter {
+                    $0.contains(delimiter + " ") || $0.contains(" " + delimiter)
+                }.count
+                let mostlyPadded = paddedRows * 2 > lines.count
+                if mostlyPadded || lines.count < 3 { continue }
             }
             return true
         }
@@ -113,11 +121,18 @@ actor ContentDetectionService {
         // and rendered them as a confident calendar date (an ISBN came out as
         // December 2279).
         guard trimmed.allSatisfy(\.isNumber), let value = Double(trimmed) else { return false }
-        // 2001-09-09 to 2100. A 2e9 ceiling excluded 2147483647 — INT32_MAX,
-        // the Y2038 epoch and the most-copied timestamp constant in software.
-        let plausibleSeconds = 1_000_000_000.0...4_102_444_800.0
-        let plausibleMilliseconds = 1_000_000_000_000.0...4_102_444_800_000.0
-        if trimmed.count == 10 { return plausibleSeconds.contains(value) }
+        // 2001-09-09 through 2033. Widening this to 2100 tripled the 10-digit
+        // space classed as a date (11% -> 34%) and swallowed every US phone
+        // number and order number, so the ceiling stays tight and INT32_MAX —
+        // the one constant worth the exception — is allowed explicitly below.
+        let plausibleSeconds = 1_000_000_000.0...2_000_000_000.0
+        let plausibleMilliseconds = 1_000_000_000_000.0...2_000_000_000_000.0
+        if trimmed.count == 10 {
+            // INT32_MAX and its successor: the Y2038 epoch, copied out of code
+            // and headers constantly, and not worth widening the whole band for.
+            if value == 2_147_483_647 || value == 2_147_483_648 { return true }
+            return plausibleSeconds.contains(value)
+        }
         if trimmed.count == 13 { return plausibleMilliseconds.contains(value) }
         return false
     }

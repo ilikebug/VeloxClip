@@ -21,24 +21,28 @@ class ErrorHandler: ObservableObject {
                 details: error.localizedDescription
             )
         } else {
+            let localized = error as? LocalizedError
             appError = AppError(
                 title: "Error",
-                message: error.localizedDescription,
-                details: error.localizedDescription
+                message: localized?.errorDescription ?? error.localizedDescription,
+                details: localized?.recoverySuggestion ?? error.localizedDescription
             )
         }
         
         currentError = appError
         showError = true
-        
-        // Auto-dismiss after 5 seconds
-        Task {
-            try? await Task.sleep(nanoseconds: 5_000_000_000)
-            if currentError?.id == appError.id {
-                showError = false
-                currentError = nil
-            }
-        }
+        // No auto-dismiss. This is a menu bar app: the overlay window that
+        // renders the alert is hidden almost all the time, so a 5-second timer
+        // meant every background failure — ingestion, OCR write-back, deferred
+        // maintenance, DB init — self-destructed before anyone could see it,
+        // making all the rollback-and-report work unreachable. Errors stay
+        // until acknowledged.
+    }
+
+    /// Acknowledge the current error (the alert's button, or the dashboard row).
+    func dismiss() {
+        showError = false
+        currentError = nil
     }
     
     func clear() {

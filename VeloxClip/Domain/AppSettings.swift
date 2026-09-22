@@ -18,7 +18,7 @@ class AppSettings: ObservableObject {
         didSet {
             guard !isInitializing else { return }
             Task {
-                try? await dbManager.setSetting(key: "historyLimit", value: String(historyLimit))
+                await persistSetting(key: "historyLimit", value: String(historyLimit))
             }
             onHistoryLimitChanged?()
         }
@@ -28,7 +28,7 @@ class AppSettings: ObservableObject {
         didSet {
             guard !isInitializing else { return }
             Task {
-                try? await dbManager.setSetting(key: "launchAtLogin", value: String(launchAtLogin))
+                await persistSetting(key: "launchAtLogin", value: String(launchAtLogin))
             }
             updateLaunchAtLogin()
         }
@@ -38,7 +38,7 @@ class AppSettings: ObservableObject {
         didSet {
             if !isInitializing {
                 Task {
-                    try? await dbManager.setSetting(key: "globalShortcut", value: globalShortcut)
+                    await persistSetting(key: "globalShortcut", value: globalShortcut)
                 }
             }
             ShortcutManager.shared.update(globalShortcut, for: .windowToggle)
@@ -49,7 +49,7 @@ class AppSettings: ObservableObject {
         didSet {
             if !isInitializing {
                 Task {
-                    try? await dbManager.setSetting(key: "screenshotShortcut", value: screenshotShortcut)
+                    await persistSetting(key: "screenshotShortcut", value: screenshotShortcut)
                 }
             }
             ShortcutManager.shared.update(screenshotShortcut, for: .screenshot)
@@ -60,7 +60,7 @@ class AppSettings: ObservableObject {
         didSet {
             if !isInitializing {
                 Task {
-                    try? await dbManager.setSetting(key: "pasteImageShortcut", value: pasteImageShortcut)
+                    await persistSetting(key: "pasteImageShortcut", value: pasteImageShortcut)
                 }
             }
             ShortcutManager.shared.update(pasteImageShortcut, for: .pasteImage)
@@ -71,7 +71,7 @@ class AppSettings: ObservableObject {
         didSet {
             if !isInitializing {
                 Task {
-                    try? await dbManager.setSetting(key: "textCaptureShortcut", value: textCaptureShortcut)
+                    await persistSetting(key: "textCaptureShortcut", value: textCaptureShortcut)
                 }
             }
             ShortcutManager.shared.update(textCaptureShortcut, for: .textCapture)
@@ -82,7 +82,7 @@ class AppSettings: ObservableObject {
         didSet {
             guard !isInitializing else { return }
             Task {
-                try? await dbManager.setSetting(key: "showPasteStackHUD", value: String(showPasteStackHUD))
+                await persistSetting(key: "showPasteStackHUD", value: String(showPasteStackHUD))
             }
         }
     }
@@ -92,7 +92,7 @@ class AppSettings: ObservableObject {
         didSet {
             guard !isInitializing else { return }
             Task {
-                try? await dbManager.setSetting(key: "pasteStackHUDPosition", value: pasteStackHUDPosition)
+                await persistSetting(key: "pasteStackHUDPosition", value: pasteStackHUDPosition)
             }
         }
     }
@@ -102,7 +102,7 @@ class AppSettings: ObservableObject {
         didSet {
             guard !isInitializing else { return }
             Task {
-                try? await dbManager.setSetting(key: "pasteStackHUDCustomOrigin", value: pasteStackHUDCustomOrigin)
+                await persistSetting(key: "pasteStackHUDCustomOrigin", value: pasteStackHUDCustomOrigin)
             }
         }
     }
@@ -114,7 +114,7 @@ class AppSettings: ObservableObject {
         didSet {
             guard !isInitializing else { return }
             Task {
-                try? await dbManager.setSetting(key: "appearance", value: appearance)
+                await persistSetting(key: "appearance", value: appearance)
             }
             applyAppearance()
         }
@@ -127,7 +127,7 @@ class AppSettings: ObservableObject {
         didSet {
             guard !isInitializing else { return }
             Task {
-                try? await dbManager.setSetting(key: "appLanguage", value: appLanguage.rawValue)
+                await persistSetting(key: "appLanguage", value: appLanguage.rawValue)
             }
         }
     }
@@ -138,7 +138,7 @@ class AppSettings: ObservableObject {
             BlacklistManager.shared.apply(userAdded: blacklistUserAdded, userRemoved: blacklistUserRemoved)
             guard !isInitializing else { return }
             Task { [blacklistUserAdded] in
-                try? await dbManager.setSetting(key: "blacklistUserAdded", value: Self.encodeList(blacklistUserAdded))
+                await persistSetting(key: "blacklistUserAdded", value: Self.encodeList(blacklistUserAdded))
             }
         }
     }
@@ -149,7 +149,7 @@ class AppSettings: ObservableObject {
             BlacklistManager.shared.apply(userAdded: blacklistUserAdded, userRemoved: blacklistUserRemoved)
             guard !isInitializing else { return }
             Task { [blacklistUserRemoved] in
-                try? await dbManager.setSetting(key: "blacklistUserRemoved", value: Self.encodeList(blacklistUserRemoved))
+                await persistSetting(key: "blacklistUserRemoved", value: Self.encodeList(blacklistUserRemoved))
             }
         }
     }
@@ -205,6 +205,19 @@ class AppSettings: ObservableObject {
     }
 
     /// Applies persisted values, then reconciles the login item with the system.
+    /// Persists one setting, reporting failures instead of swallowing them.
+    ///
+    /// Every write here used to be `try?`: the @Published value updated, the UI
+    /// showed the new setting, the write failed, and the next launch read the
+    /// old value back. The user saw the app "forget" rather than fail.
+    private func persistSetting(key: String, value: String) async {
+        do {
+            try await dbManager.setSetting(key: key, value: value)
+        } catch {
+            ErrorHandler.shared.handle(error)
+        }
+    }
+
     func load() async {
         await loadSettings()
         isInitializing = false
@@ -253,49 +266,49 @@ class AppSettings: ObservableObject {
            let limit = Int(historyLimitStr), limit > 0 {
             self.historyLimit = limit
         } else {
-            try? await dbManager.setSetting(key: "historyLimit", value: "100")
+            await persistSetting(key: "historyLimit", value: "100")
         }
 
         // Load launchAtLogin
         if let launchAtLoginStr = await dbManager.getSetting(key: "launchAtLogin") {
             self.launchAtLogin = launchAtLoginStr == "true"
         } else {
-            try? await dbManager.setSetting(key: "launchAtLogin", value: "false")
+            await persistSetting(key: "launchAtLogin", value: "false")
         }
 
         // Load globalShortcut
         if let shortcut = await dbManager.getSetting(key: "globalShortcut") {
             self.globalShortcut = shortcut
         } else {
-            try? await dbManager.setSetting(key: "globalShortcut", value: "cmd+shift+v")
+            await persistSetting(key: "globalShortcut", value: "cmd+shift+v")
         }
 
         // Load screenshotShortcut
         if let shortcut = await dbManager.getSetting(key: "screenshotShortcut") {
             self.screenshotShortcut = shortcut
         } else {
-            try? await dbManager.setSetting(key: "screenshotShortcut", value: "f1")
+            await persistSetting(key: "screenshotShortcut", value: "f1")
         }
 
         // Load pasteImageShortcut
         if let shortcut = await dbManager.getSetting(key: "pasteImageShortcut") {
             self.pasteImageShortcut = shortcut
         } else {
-            try? await dbManager.setSetting(key: "pasteImageShortcut", value: "f3")
+            await persistSetting(key: "pasteImageShortcut", value: "f3")
         }
 
         // Load textCaptureShortcut
         if let shortcut = await dbManager.getSetting(key: "textCaptureShortcut") {
             self.textCaptureShortcut = shortcut
         } else {
-            try? await dbManager.setSetting(key: "textCaptureShortcut", value: "f2")
+            await persistSetting(key: "textCaptureShortcut", value: "f2")
         }
 
         // Load paste stack HUD settings
         if let show = await dbManager.getSetting(key: "showPasteStackHUD") {
             self.showPasteStackHUD = show == "true"
         } else {
-            try? await dbManager.setSetting(key: "showPasteStackHUD", value: "true")
+            await persistSetting(key: "showPasteStackHUD", value: "true")
         }
 
         // One-time default change: bottomRight then topCenter were earlier
@@ -307,9 +320,9 @@ class AppSettings: ObservableObject {
            positionMigrated || !oldDefaults.contains(position) {
             self.pasteStackHUDPosition = position
         } else {
-            try? await dbManager.setSetting(key: "pasteStackHUDPosition", value: "bottomCenter")
+            await persistSetting(key: "pasteStackHUDPosition", value: "bottomCenter")
         }
-        try? await dbManager.setSetting(key: "hudPositionBottomCenterMigration", value: "done")
+        await persistSetting(key: "hudPositionBottomCenterMigration", value: "done")
         try? await dbManager.deleteSetting(key: "hudPositionTopCenterMigration")
 
         if let origin = await dbManager.getSetting(key: "pasteStackHUDCustomOrigin") {
@@ -320,7 +333,7 @@ class AppSettings: ObservableObject {
         if let appearanceValue = await dbManager.getSetting(key: "appearance") {
             self.appearance = appearanceValue
         } else {
-            try? await dbManager.setSetting(key: "appearance", value: "light")
+            await persistSetting(key: "appearance", value: "light")
         }
         applyAppearance()
 
@@ -328,7 +341,7 @@ class AppSettings: ObservableObject {
            let language = AppLanguage(rawValue: languageValue) {
             self.appLanguage = language
         } else {
-            try? await dbManager.setSetting(key: "appLanguage", value: AppLanguage.system.rawValue)
+            await persistSetting(key: "appLanguage", value: AppLanguage.system.rawValue)
         }
 
         // Never-record list. Applied to BlacklistManager via the didSet hooks,

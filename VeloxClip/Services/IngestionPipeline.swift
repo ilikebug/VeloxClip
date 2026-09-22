@@ -51,14 +51,21 @@ actor IngestionPipeline {
         if let paths = payload.filePaths, !paths.isEmpty {
             return .file(paths: paths)
         }
-        if let text = payload.text {
-            // A whitespace-only selection (double-clicking past the end of a
-            // line, an empty cell) has no title to render: the row shows only
-            // "Plain Text · 0 chars" and displaces a real entry. Content itself
-            // is stored verbatim — indented code must keep its indentation.
-            guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return .none }
-            return ClipboardIngestion.isColor(text) ? .color(text) : .text(text)
+        if let text = payload.text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            // Strip NULs here as well as in ClipboardItem: SQLite truncates the
+            // row at the first U+0000, and the dedup comparison downstream runs
+            // on this string, so an unsanitized one would compare unequal to
+            // the sanitized row it will become.
+            let safe = ClipboardItem.sanitizedContent(text) ?? text
+            return ClipboardIngestion.isColor(safe) ? .color(safe) : .text(safe)
         }
+        // A whitespace-only .string flavour must not discard the payload: apps
+        // routinely advertise one beside a real image or RTF, and returning
+        // .none from inside the text branch silently dropped those copies
+        // entirely. Fall through — the richer branches below still apply, and a
+        // genuinely text-only whitespace copy ends at .none as intended (it has
+        // no title to render, just "Plain Text · 0 chars").
+        // Content is stored verbatim: indented code must keep its indentation.
         if let rtf = payload.rtf {
             return .rtf(rtf)
         }

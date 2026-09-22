@@ -20,7 +20,13 @@ struct ErrorAlertModifier: ViewModifier {
                     errorHandler.clear()
                 }
             } message: { error in
-                Text(error.message)
+                // details carries the recoverySuggestion when the error has one
+                // — "Update VeloxClip to open it" is the actionable half.
+                if error.details != error.message, !error.details.isEmpty {
+                    Text("\(error.message)\n\n\(error.details)")
+                } else {
+                    Text(error.message)
+                }
             }
     }
 }

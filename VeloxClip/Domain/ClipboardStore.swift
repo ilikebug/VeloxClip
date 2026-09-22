@@ -122,10 +122,23 @@ class ClipboardStore: ObservableObject {
         }
         let idsToRemove = itemsToRemove.map(\.id)
         let removeSet = Set(idsToRemove)
+        let removedRows = items.filter { removeSet.contains($0.id) }
         items.removeAll { removeSet.contains($0.id) }
 
         Task {
-            try? await dbManager.deleteClipboardItems(ids: idsToRemove)
+            do {
+                try await dbManager.deleteClipboardItems(ids: idsToRemove)
+            } catch {
+                // The rows left the UI but are still on disk: they would come
+                // back on the next launch, which for the feature whose job is
+                // purging old clips is a privacy failure. Put them back and say
+                // so, exactly as deleteItems and clearHistory already do.
+                let restored = (items + removedRows).sorted {
+                    ($0.lastUsedAt ?? $0.createdAt) > ($1.lastUsedAt ?? $1.createdAt)
+                }
+                items = restored
+                ErrorHandler.shared.handle(error)
+            }
         }
     }
 
@@ -155,7 +168,7 @@ class ClipboardStore: ObservableObject {
             items.removeAll { removed.contains($0.id) }
             favoriteItems.removeAll { removed.contains($0.id) }
         } catch {
-            print("Failed to trim stored history: \(error)")
+            ErrorHandler.shared.handle(error)
         }
     }
 
@@ -212,6 +225,8 @@ class ClipboardStore: ObservableObject {
 
         var updatedItem = originalItem
 
+        // NUL bytes truncate the row on write (SQLite C-string binding).
+        let content = ClipboardItem.sanitizedContent(content) ?? content
         updatedItem.content = content
         if !updatedItem.tags.contains("OCR") {
             updatedItem.tags.append("OCR")

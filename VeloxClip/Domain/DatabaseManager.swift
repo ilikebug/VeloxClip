@@ -56,6 +56,9 @@ actor DatabaseManager {
         )
     }
 
+    /// The file this manager is bound to (tests force write failures against it).
+    var databaseURL: URL { dbPath }
+
     init(databaseURL: URL, legacyDatabaseURLs: [URL] = [], fileManager: FileManager = .default) {
         self.dbPath = databaseURL
         self.fileManager = fileManager
@@ -688,9 +691,33 @@ actor DatabaseManager {
     }
 }
 
-enum DatabaseError: Error {
+enum DatabaseError: Error, LocalizedError {
     case connectionFailed
     /// The file was written by a newer build; writing to it would corrupt data
     /// the current binary doesn't understand.
     case schemaTooNew(found: Int, supported: Int)
+
+    // Without these every cause rendered as "The operation couldn't be
+    // completed. (VeloxClip.DatabaseError error 1.)", so a newer schema, a
+    // damaged file and an unwritable directory were indistinguishable — and
+    // none of them told the user what to do.
+    var errorDescription: String? {
+        switch self {
+        case .connectionFailed:
+            return "VeloxClip could not open its clipboard database."
+        case .schemaTooNew(let found, let supported):
+            return "This clipboard database was created by a newer version of VeloxClip "
+                + "(format \(found); this build understands \(supported))."
+        }
+    }
+
+    var recoverySuggestion: String? {
+        switch self {
+        case .connectionFailed:
+            return "Check that ~/Library/Application Support/VeloxClip is writable, "
+                + "then restart VeloxClip."
+        case .schemaTooNew:
+            return "Update VeloxClip to open it. Your clipboard history has not been changed."
+        }
+    }
 }

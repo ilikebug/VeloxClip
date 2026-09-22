@@ -8,6 +8,7 @@ struct MenuBarDashboard: View {
     @ObservedObject var store = ClipboardStore.shared
     @ObservedObject var stack = PasteStackService.shared
     @ObservedObject var settings = AppSettings.shared
+    @ObservedObject private var errors = ErrorHandler.shared
     @Environment(\.colorScheme) private var scheme
     @Environment(\.dismiss) private var dismiss
     let openSettings: () -> Void
@@ -16,6 +17,7 @@ struct MenuBarDashboard: View {
         let c = DSColors(scheme: scheme)
         VStack(spacing: 0) {
             header(c)
+            errorBanner(c)
             stats(c)
             quickActions(c)
             queueControls(c)
@@ -224,6 +226,46 @@ struct MenuBarDashboard: View {
         }
         if dashboardAction.hidesAppAfterAction {
             NSApp.hide(nil)
+        }
+    }
+
+    /// The always-reachable error surface.
+    ///
+    /// The only alert in the app hung off the overlay window, which a menu bar
+    /// app keeps hidden — so every background failure was invisible. The menu
+    /// bar popover is the one surface a user can always open.
+    @ViewBuilder
+    private func errorBanner(_ c: DSColors) -> some View {
+        if let error = errors.currentError {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundColor(.orange)
+                    .font(.system(size: 12))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(error.message)
+                        .font(.system(size: 11.5, weight: .medium))
+                        .foregroundColor(c.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if !error.details.isEmpty, error.details != error.message {
+                        Text(error.details)
+                            .font(.system(size: 11))
+                            .foregroundColor(c.text2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Spacer(minLength: 0)
+                Button {
+                    errors.dismiss()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(c.text2)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .background(Color.orange.opacity(0.12))
         }
     }
 

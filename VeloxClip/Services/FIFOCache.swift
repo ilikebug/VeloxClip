@@ -54,6 +54,16 @@ struct FIFOCache<Key: Hashable, Value> {
                 insertionOrder.append(key)
             } else {
                 byteCount -= sizes.removeValue(forKey: key) ?? 0
+                // With a byte budget, move to the back: otherwise overwriting
+                // the OLDEST key with a value that exceeds the budget made the
+                // eviction loop below discard the entry just written, leaving
+                // the preview caches useless for exactly the large documents
+                // they bound. Entry-count-only callers keep the original
+                // semantics, where an overwrite does not refresh the position.
+                if maxBytes != nil, let position = insertionOrder.firstIndex(of: key) {
+                    insertionOrder.remove(at: position)
+                    insertionOrder.append(key)
+                }
             }
             storage[key] = newValue
 

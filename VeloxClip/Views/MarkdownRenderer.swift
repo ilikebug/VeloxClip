@@ -133,20 +133,52 @@ struct MarkdownView: View {
         var inCodeBlock = false
         // Which character opened the block: ``` and ~~~ do not close each other.
         var fenceCharacter: Character = "`"
+        // …and how long the opening run was: per CommonMark only a run at least
+        // that long closes it, so a ``` line inside a ```` block is content.
+        var fenceLength = 0
         // Tracked rather than re-derived — re-splitting the whole buffer on
         // every blank line made a loose list quadratic (8s for 4000 items).
         var lastNonEmptyLine = ""
         // The raw line as well: lastNonEmptyLine is trimmed, so testing it for
         // indentation could never fire and the continuation rule was dead.
         var lastNonEmptyRawLine = ""
-        // Whether the chunk OPENED with a list marker. looksLikeAListItem alone
-        // cannot tell "1) real first" from a sentence that happens to start
-        // "1) is also how the German ordinal is written" — but a list that a
-        // blank line should hold open began as a list.
-        var chunkStartsAList = false
+        // Whether the chunk currently HOLDS an open list. Testing only the
+        // chunk's first line discarded the hold-open rule for every list with a
+        // lead-in ("Here are the steps:"), which is most real lists; testing
+        // the last line alone cannot tell "1) real first" from prose that
+        // happens to begin "1) is also how the German ordinal is written".
+        // A list item with a list above it in the same chunk is a real list.
+        var chunkHasOpenList = false
         // A blank line inside a list only holds the chunk open if a list item
         // or an indented continuation actually follows it.
         var pendingBlankLines = 0
+
+        // For each index, the longest run of each marker that appears at or
+        // after it, so isOpeningFence is an array lookup rather than a scan of
+        // the remaining document. The per-line scan was O(fences x lines) —
+        // the same quadratic shape as the bug it replaced (34s on a 4000-line
+        // document of descending dividers).
+        func markerRun(_ trimmed: String) -> (marker: Character, length: Int, info: Substring)? {
+            guard let first = trimmed.first, first == "`" || first == "~" else { return nil }
+            let run = trimmed.prefix { $0 == first }
+            guard run.count >= 3 else { return nil }
+            return (first, run.count, trimmed.dropFirst(run.count))
+        }
+
+        var maxBacktickCloserAfter = [Int](repeating: 0, count: lines.count + 1)
+        var maxTildeCloserAfter = [Int](repeating: 0, count: lines.count + 1)
+        for index in stride(from: lines.count - 1, through: 0, by: -1) {
+            var backtick = maxBacktickCloserAfter[index + 1]
+            var tilde = maxTildeCloserAfter[index + 1]
+            let trimmed = lines[index].trimmingCharacters(in: .whitespaces)
+            // Only a bare run can close a block, so only bare runs are indexed.
+            if let run = markerRun(trimmed), run.info.trimmingCharacters(in: .whitespaces).isEmpty {
+                if run.marker == "`" { backtick = max(backtick, run.length) }
+                else { tilde = max(tilde, run.length) }
+            }
+            maxBacktickCloserAfter[index] = backtick
+            maxTildeCloserAfter[index] = tilde
+        }
 
         func flush() {
             let trimmed = currentChunk.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -154,34 +186,40 @@ struct MarkdownView: View {
             currentChunk = ""
             lastNonEmptyLine = ""
             lastNonEmptyRawLine = ""
-            chunkStartsAList = false
+            chunkHasOpenList = false
             pendingBlankLines = 0
         }
 
-        /// An opening fence: at least three of the same marker character, and
-        /// either an info string or a matching closer later in the document.
-        /// Without the second condition a run of tildes or backticks used as a
-        /// visual divider — common in READMEs and chat logs — opened a code
-        /// block that never closed and swallowed the rest of the document.
-        func fenceRun(_ trimmed: String) -> (marker: Character, length: Int, info: Substring)? {
-            guard let first = trimmed.first, first == "`" || first == "~" else { return nil }
-            let run = trimmed.prefix { $0 == first }
-            guard run.count >= 3 else { return nil }
-            return (first, run.count, trimmed.dropFirst(run.count))
+        /// An opening fence: at least three of the same marker, and either a
+        /// usable info string or a matching closer below. Without the second
+        /// condition a run of tildes or backticks used as a visual divider
+        /// opened a code block that swallowed the rest of the document.
+        func isOpeningFence(_ trimmed: String, at index: Int) -> Bool {
+            guard let run = markerRun(trimmed) else { return false }
+            let info = run.info.trimmingCharacters(in: .whitespaces)
+            if !info.isEmpty {
+                // CommonMark forbids a backtick anywhere in a backtick fence's
+                // info string, so "``` note ```" is a paragraph, not a fence.
+                // A decorative tilde run is the same idea for "~~~ Section ~~~".
+                let decorative = info.contains(run.marker)
+                if !decorative { return true }
+            }
+            // Otherwise require a bare closer of at least this length below.
+            let available = run.marker == "`"
+                ? maxBacktickCloserAfter[min(index + 1, lines.count)]
+                : maxTildeCloserAfter[min(index + 1, lines.count)]
+            return available >= run.length
         }
 
-        func isOpeningFence(_ trimmed: String, at index: Int) -> Bool {
-            guard let run = fenceRun(trimmed) else { return false }
-            // An info string makes it unambiguously a fence.
-            if !run.info.trimmingCharacters(in: .whitespaces).isEmpty { return true }
-            // Otherwise require a closer somewhere below.
-            return lines.dropFirst(index + 1).contains { candidate in
-                let candidateTrimmed = candidate.trimmingCharacters(in: .whitespaces)
-                guard let closer = fenceRun(candidateTrimmed) else { return false }
-                return closer.marker == run.marker
-                    && closer.length >= run.length
-                    && closer.info.trimmingCharacters(in: .whitespaces).isEmpty
-            }
+        /// Per CommonMark: same marker, run at least as long as the opener, and
+        /// no info string. Both the lookahead above and the branch that closes
+        /// a block must agree, or a nested ```lang line ends the outer block
+        /// and chunking stops being idempotent.
+        func isClosingFence(_ trimmed: String) -> Bool {
+            guard let run = markerRun(trimmed) else { return false }
+            return run.marker == fenceCharacter
+                && run.length >= fenceLength
+                && run.info.trimmingCharacters(in: .whitespaces).isEmpty
         }
 
         /// A list marker at the START of a line: `-`, `*`, `+`, or `N.` with at
@@ -194,11 +232,11 @@ struct MarkdownView: View {
             let digits = trimmed.prefix { $0.isNumber }
             guard !digits.isEmpty, digits.count <= 9 else { return false }
             let rest = trimmed.dropFirst(digits.count)
-            if rest.hasPrefix(". ") { return true }
-            // The paren form appears in prose far more often than the dot form
-            // ("section 12 subsection 3)", German ordinals), so only accept a
-            // short number — real lists start at 1 and rarely pass 99.
-            return rest.hasPrefix(") ") && digits.count <= 2
+            // CommonMark applies the same 9-digit limit to both delimiters; the
+            // prose false positive ("section 12 subsection 3)") is rejected by
+            // requiring a list ABOVE the line in the same chunk, not by capping
+            // the digits — a cap broke real paren lists at item 100.
+            return rest.hasPrefix(". ") || rest.hasPrefix(") ")
         }
 
         /// Indented continuation of a list item (a nested list or a paragraph
@@ -210,22 +248,22 @@ struct MarkdownView: View {
         for (index, line) in lines.enumerated() {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
 
-            if isOpeningFence(trimmed, at: index) || (inCodeBlock && fenceRun(trimmed) != nil) {
-                if inCodeBlock {
-                    // Only the character that opened the block can close it.
-                    if trimmed.first == fenceCharacter {
-                        currentChunk += line + "\n"
-                        flush()
-                        inCodeBlock = false
-                    } else {
-                        currentChunk += line + "\n"
-                    }
-                } else {
+            if inCodeBlock {
+                // Only a valid closer ends the block: a nested ```swift line
+                // inside a ```` block is content, not a terminator.
+                if isClosingFence(trimmed) {
+                    currentChunk += line + "\n"
                     flush()
-                    currentChunk = line + "\n"
-                    inCodeBlock = true
-                    fenceCharacter = trimmed.first ?? "`"
+                    inCodeBlock = false
+                    continue
                 }
+            } else if isOpeningFence(trimmed, at: index) {
+                flush()
+                currentChunk = line + "\n"
+                inCodeBlock = true
+                let run = markerRun(trimmed)
+                fenceCharacter = run?.marker ?? "`"
+                fenceLength = run?.length ?? 3
                 continue
             }
 
@@ -246,7 +284,7 @@ struct MarkdownView: View {
                 if currentChunk.isEmpty {
                     continue
                 }
-                if chunkStartsAList,
+                if chunkHasOpenList,
                    looksLikeAListItem(lastNonEmptyLine) || isIndentedContinuation(lastNonEmptyRawLine) {
                     pendingBlankLines += 1
                 } else {
@@ -266,8 +304,21 @@ struct MarkdownView: View {
                 }
             }
 
-            if currentChunk.isEmpty {
-                chunkStartsAList = looksLikeAListItem(trimmed)
+            // A list item opens a list — unless it directly follows a prose line
+            // in the same chunk, which is what "…subsection 3) which applies /
+            // 1) is also how the German ordinal is written" looks like. A real
+            // list either starts its chunk, follows a lead-in that ends with
+            // ":", or follows another list line or an indented continuation.
+            if looksLikeAListItem(trimmed) {
+                let followsList = looksLikeAListItem(lastNonEmptyLine)
+                    || isIndentedContinuation(lastNonEmptyRawLine)
+                let startsBlock = lastNonEmptyLine.isEmpty
+                let followsLeadIn = lastNonEmptyLine.hasSuffix(":") || lastNonEmptyLine.hasSuffix("：")
+                if followsList || startsBlock || followsLeadIn || chunkHasOpenList {
+                    chunkHasOpenList = true
+                }
+            } else if !isIndentedContinuation(line) {
+                chunkHasOpenList = false
             }
             currentChunk += line + "\n"
             lastNonEmptyLine = trimmed
