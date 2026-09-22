@@ -56,7 +56,7 @@ struct ColorPreviewView: View {
                 }
 
                 // Color info
-                if let rgb = extractRGB(from: color) {
+                if let rgb = ColorFormatting.components(from: colorString) {
                     VStack(alignment: .leading, spacing: 12) {
                         Text(L10n.string("preview.color.info", language: settings.appLanguage))
                             .font(.system(size: 13, weight: .semibold))
@@ -139,84 +139,24 @@ struct ColorPreviewView: View {
                                blue: Double(comp.b) / 255.0,
                                opacity: comp.a)
             color = parsed
-            generateFormats(from: parsed)
+            // Pass the EXACT parsed channels. Re-deriving them from the Color
+            // went through NSColor's extended-sRGB components, where an exact
+            // 11 comes back as 10.999997 and Int() floors it — 75 of 256 values
+            // displayed one lower than the colour the user actually copied.
+            generateFormats(from: comp)
             return
         }
         color = nil
     }
 
-    private func generateFormats(from color: Color) {
-        var formats: [ColorFormat] = []
-        
-        if let rgb = extractRGB(from: color) {
-            // HEX / RGB routed through the shared ColorFormatting helper so the
-            // preview and command palette can never disagree on canonical output.
-            // (Feed it an rgb() string; fall back to local formatting if unparseable.)
-            let rgbSource = "rgb(\(rgb.r), \(rgb.g), \(rgb.b))"
-
-            // HEX (#0A84FF)
-            let hex = ColorFormatting.hex(from: rgbSource) ?? String(format: "#%02X%02X%02X", rgb.r, rgb.g, rgb.b)
-            formats.append(ColorFormat(name: "HEX", value: hex))
-
-            if rgb.a < 1.0 {
-                let hexA = String(format: "#%02X%02X%02X%02X", rgb.r, rgb.g, rgb.b, Int(rgb.a * 255))
-                formats.append(ColorFormat(name: "HEXA", value: hexA))
-            }
-
-            // RGB — bare space-separated numbers (kit style: "10 132 255")
-            let rgbValue = ColorFormatting.rgb(from: rgbSource) ?? "\(rgb.r) \(rgb.g) \(rgb.b)"
-            formats.append(ColorFormat(name: "RGB", value: rgbValue))
-            if rgb.a < 1.0 {
-                formats.append(ColorFormat(name: "RGBA", value: "\(rgb.r) \(rgb.g) \(rgb.b) \(String(format: "%.2f", rgb.a))"))
-            }
-
-            // HSL — bare space-separated numbers (kit style)
-            let hsl = rgbToHSL(rgb)
-            formats.append(ColorFormat(name: "HSL", value: "\(Int(hsl.h)) \(Int(hsl.s * 100)) \(Int(hsl.l * 100))"))
+    private func generateFormats(from rgb: (r: Int, g: Int, b: Int, a: Double)) {
+        // Row construction lives in ColorPreviewFormats so it can be asserted
+        // directly; it works from the exact parsed components.
+        formats = ColorPreviewFormats.rows(for: rgb).map {
+            ColorFormat(name: $0.name, value: $0.value)
         }
-        
-        self.formats = formats
     }
-    
-    private func extractRGB(from color: Color) -> (r: Int, g: Int, b: Int, a: Double)? {
-        let nsColor = NSColor(color)
-        var r: CGFloat = 0
-        var g: CGFloat = 0
-        var b: CGFloat = 0
-        var a: CGFloat = 0
-        nsColor.getRed(&r, green: &g, blue: &b, alpha: &a)
-        return (Int(r * 255), Int(g * 255), Int(b * 255), Double(a))
-    }
-    
-    private func rgbToHSL(_ rgb: (r: Int, g: Int, b: Int, a: Double)) -> (h: Double, s: Double, l: Double) {
-        let r = Double(rgb.r) / 255.0
-        let g = Double(rgb.g) / 255.0
-        let b = Double(rgb.b) / 255.0
-        
-        let max = Swift.max(r, g, b)
-        let min = Swift.min(r, g, b)
-        let delta = max - min
-        
-        var h: Double = 0
-        var s: Double = 0
-        let l = (max + min) / 2.0
-        
-        if delta != 0 {
-            s = l > 0.5 ? delta / (2.0 - max - min) : delta / (max + min)
-            
-            if max == r {
-                h = ((g - b) / delta) + (g < b ? 6 : 0)
-            } else if max == g {
-                h = ((b - r) / delta) + 2
-            } else {
-                h = ((r - g) / delta) + 4
-            }
-            h /= 6.0
-        }
-        
-        return (h * 360, s, l)
-    }
-    
+
     private func copyFormat(_ value: String) {
         PasteboardService.shared.write(text: value)
     }

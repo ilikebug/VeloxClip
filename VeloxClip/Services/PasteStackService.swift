@@ -175,8 +175,21 @@ final class PasteStackService: ObservableObject {
     // stack's own write — this covers user copies AND the app's other
     // pasteboard writers (text capture, Copy Text, single-item paste).
     func noteClipboardChange() {
-        guard phase == .active, writer.changeCount != lastWriteChangeCount else { return }
-        pauseForForeignWrite()
+        guard writer.changeCount != lastWriteChangeCount else { return }
+        switch phase {
+        case .active:
+            pauseForForeignWrite()
+        case .completed:
+            // The stack sits in .completed for a second showing "done", which
+            // is a natural moment to copy the next thing. Guarding on .active
+            // meant that copy was not recorded, so finish() restored the
+            // pre-stack pasteboard over it a second later. Pausing a finished
+            // stack would be wrong — just record the write so the restore is
+            // suppressed.
+            userWroteDuringStack = true
+        case .idle, .paused:
+            break
+        }
     }
 
     private func pauseForForeignWrite() {

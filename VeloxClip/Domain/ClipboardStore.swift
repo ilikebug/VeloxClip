@@ -334,6 +334,7 @@ class ClipboardStore: ObservableObject {
 
         items.removeAll { idsToDelete.contains($0.id) }
         favoriteItems.removeAll { idsToDelete.contains($0.id) }
+        await refreshStoredCount()
     }
 
     /// Deletes every non-favorite item. Favorites are a separate collection the

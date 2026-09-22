@@ -89,57 +89,83 @@ struct MarkdownView: View {
         }
         
         await Task.detached(priority: .userInitiated) {
-            var chunks: [MarkdownChunk] = []
-            let lines = input.components(separatedBy: .newlines)
-            var currentChunk = ""
-            var inCodeBlock = false
-            
-            for line in lines {
-                let trimmed = line.trimmingCharacters(in: .whitespaces)
-                
-                if trimmed.hasPrefix("```") {
-                    if inCodeBlock {
-                        if !currentChunk.isEmpty { chunks.append(MarkdownChunk(content: currentChunk)) }
-                        currentChunk = ""
-                        inCodeBlock = false
-                    } else {
-                        if !currentChunk.isEmpty { chunks.append(MarkdownChunk(content: currentChunk.trimmingCharacters(in: .whitespacesAndNewlines))) }
-                        currentChunk = ""
-                        inCodeBlock = true
-                    }
-                    continue
-                }
-                
-                if inCodeBlock {
-                    currentChunk += line + "\n"
-                } else {
-                    if trimmed.hasPrefix("#") {
-                        if !currentChunk.isEmpty { chunks.append(MarkdownChunk(content: currentChunk.trimmingCharacters(in: .whitespacesAndNewlines))) }
-                        chunks.append(MarkdownChunk(content: line))
-                        currentChunk = ""
-                    } else if trimmed.isEmpty {
-                        if !currentChunk.isEmpty {
-                            chunks.append(MarkdownChunk(content: currentChunk.trimmingCharacters(in: .whitespacesAndNewlines)))
-                            currentChunk = ""
-                        }
-                    } else {
-                        currentChunk += line + "\n"
-                    }
-                }
-            }
-            
-            if !currentChunk.isEmpty {
-                chunks.append(MarkdownChunk(content: currentChunk.trimmingCharacters(in: .whitespacesAndNewlines)))
-            }
-            
-            if chunks.isEmpty { chunks.append(MarkdownChunk(content: input)) }
-            
+            let chunks = MarkdownView.chunk(input)
             await MainActor.run {
                 Self.chunksCache[input] = chunks
                 self.allChunks = chunks
                 self.loadInitialChunks(from: chunks)
             }
         }.value
+    }
+
+    /// Splits a document for incremental rendering WITHOUT changing what it is.
+    ///
+    /// Two rules earn their keep here: fence lines are re-emitted (dropping
+    /// them handed the renderer bare prose, so no code block could ever be
+    /// styled), and a blank line does not split a list (each fragment would
+    /// become its own document and restart numbering).
+    nonisolated static func chunk(_ input: String) -> [MarkdownChunk] {
+        var chunks: [MarkdownChunk] = []
+        let lines = input.components(separatedBy: .newlines)
+        var currentChunk = ""
+        var inCodeBlock = false
+
+        func flush() {
+            let trimmed = currentChunk.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty { chunks.append(MarkdownChunk(content: trimmed)) }
+            currentChunk = ""
+        }
+
+        /// True when the buffer is an open list, so a blank line inside it is
+        /// loose-list spacing rather than a document boundary.
+        func bufferIsAList() -> Bool {
+            let lines = currentChunk
+                .components(separatedBy: .newlines)
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+            guard let last = lines.last else { return false }
+            if last.hasPrefix("- ") || last.hasPrefix("* ") || last.hasPrefix("+ ") { return true }
+            let ordered = last.prefix { $0.isNumber }
+            return !ordered.isEmpty && last.dropFirst(ordered.count).hasPrefix(". ")
+        }
+
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+
+            if trimmed.hasPrefix("```") {
+                if inCodeBlock {
+                    // Keep the closing fence with its block, then flush.
+                    currentChunk += line + "\n"
+                    flush()
+                    inCodeBlock = false
+                } else {
+                    flush()
+                    currentChunk = line + "\n"
+                    inCodeBlock = true
+                }
+                continue
+            }
+
+            if inCodeBlock {
+                currentChunk += line + "\n"
+            } else if trimmed.hasPrefix("#") {
+                flush()
+                chunks.append(MarkdownChunk(content: line))
+            } else if trimmed.isEmpty {
+                // A blank line inside a list is loose-list spacing, not a break.
+                if bufferIsAList() {
+                    currentChunk += "\n"
+                } else {
+                    flush()
+                }
+            } else {
+                currentChunk += line + "\n"
+            }
+        }
+
+        flush()
+        if chunks.isEmpty { chunks.append(MarkdownChunk(content: input)) }
+        return chunks
     }
     
     private func loadInitialChunks(from chunks: [MarkdownChunk]) {

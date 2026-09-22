@@ -79,6 +79,10 @@ class EditorState: ObservableObject {
         endPoint = .zero
         textInput = ""
         textPosition = nil
+        // Close the eraser session too. Leaving it armed meant an erase
+        // performed after a mid-drag Cmd+Z took no undo snapshot at all — those
+        // annotations were permanently unrecoverable.
+        eraseSessionDidSave = false
     }
     
     func canUndo() -> Bool {

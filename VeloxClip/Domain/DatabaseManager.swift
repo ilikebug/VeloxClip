@@ -453,7 +453,8 @@ actor DatabaseManager {
     func countStoredItems() async throws -> Int {
         await ensureInitialized()
         guard let db = db else { throw DatabaseError.connectionFailed }
-        return try db.scalar(clipboardItems.count)
+        // Non-favorites only, matching the history limit the setting shows.
+        return try db.scalar(clipboardItems.filter(isFavorite == false).count)
     }
 
     /// Deletes non-favorite rows beyond the newest `keeping`, returning the ids

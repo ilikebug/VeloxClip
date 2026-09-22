@@ -33,10 +33,18 @@ struct WindowTargetPolicy {
         return currentFrontmostProcessID
     }
 
+    /// `isAlive` lets a dead remembered PID fall through to the live frontmost
+    /// app. Without it, an app that quit while the overlay was open poisoned
+    /// the lookup: `appMatching` rejected the terminated PID, `selectAndPaste`
+    /// bailed out, and ⏎ wrote the clipboard and closed the overlay without
+    /// pasting anywhere — while another app was right there and frontmost.
     static func pasteTargetProcessID(rememberedTargetProcessID: pid_t?,
                                      currentFrontmostProcessID: pid_t?,
-                                     ownProcessID: pid_t) -> pid_t? {
-        if let rememberedTargetProcessID, rememberedTargetProcessID != ownProcessID {
+                                     ownProcessID: pid_t,
+                                     isAlive: (pid_t) -> Bool = { _ in true }) -> pid_t? {
+        if let rememberedTargetProcessID,
+           rememberedTargetProcessID != ownProcessID,
+           isAlive(rememberedTargetProcessID) {
             return rememberedTargetProcessID
         }
         if let currentFrontmostProcessID, currentFrontmostProcessID != ownProcessID {
@@ -261,7 +269,10 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
             processID: WindowTargetPolicy.pasteTargetProcessID(
                 rememberedTargetProcessID: lastActiveApp?.processIdentifier,
                 currentFrontmostProcessID: frontmostApp?.processIdentifier,
-                ownProcessID: ownProcessID
+                ownProcessID: ownProcessID,
+                isAlive: { pid in
+                    NSRunningApplication(processIdentifier: pid)?.isTerminated == false
+                }
             ),
             preferredApps: [lastActiveApp, frontmostApp]
         )

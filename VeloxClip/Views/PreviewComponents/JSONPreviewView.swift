@@ -383,15 +383,20 @@ struct JSONTreeView: View {
     }
 
     private func valueView(_ value: Any) -> some View {
-        if let str = value as? String {
-            return Text("\"\(str)\"").foregroundColor(stringColor)
-        } else if let bool = value as? Bool {
-            return Text(bool ? "true" : "false").foregroundColor(keywordColor)
-        } else if value is NSNull {
+        // Classification lives in JSONValueRendering: NSNumber must be tested
+        // before Bool, because JSONSerialization returns every number as an
+        // NSNumber and `NSNumber(1) as? Bool` succeeds — which rendered the
+        // integers 1 and 0 as `true` and `false`.
+        switch JSONValueRendering.describe(value) {
+        case .string(let s):
+            return Text("\"\(s)\"").foregroundColor(stringColor)
+        case .boolean(let b):
+            return Text(b).foregroundColor(keywordColor)
+        case .null:
             return Text("null").foregroundColor(keywordColor)
-        } else if let num = value as? NSNumber {
-            return Text(num.stringValue).foregroundColor(numberColor)
-        } else {
+        case .number(let n):
+            return Text(n).foregroundColor(numberColor)
+        case .dictionary, .array, .unknown:
             return Text(String(describing: value)).foregroundColor(DSColors(scheme: scheme).text)
         }
     }

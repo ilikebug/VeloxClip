@@ -154,8 +154,13 @@ final class ClipboardSearchViewModel: ObservableObject {
     }
 
     private func semanticMatches(query: String, in baseItems: [ClipboardItem]) async -> [(UUID, Double)] {
-        let normalizedQuery = query.lowercased()
-        if let cached = cachedSemanticResults[normalizedQuery] {
+        // Key on the candidate set as well as the query. Keying on the query
+        // alone meant a repeated search returned its first run's hit list, so
+        // anything copied since was invisible to semantic search for the rest
+        // of the session — while keyword hits still appeared, which made the
+        // gap look arbitrary rather than broken.
+        let cacheKey = "\(query.lowercased())|\(baseItems.count)|\(baseItems.first?.id.uuidString ?? "")"
+        if let cached = cachedSemanticResults[cacheKey] {
             return cached
         }
 
@@ -179,7 +184,7 @@ final class ClipboardSearchViewModel: ObservableObject {
         .prefix(Self.maxSemanticResults)
 
         let finalResults = Array(scored)
-        cachedSemanticResults[normalizedQuery] = finalResults
+        cachedSemanticResults[cacheKey] = finalResults
         return finalResults
     }
 }
