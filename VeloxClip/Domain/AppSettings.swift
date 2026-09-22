@@ -132,6 +132,37 @@ class AppSettings: ObservableObject {
         }
     }
 
+    /// Bundle IDs the user added to the never-record list. Stored as JSON.
+    @Published var blacklistUserAdded: [String] {
+        didSet {
+            BlacklistManager.shared.apply(userAdded: blacklistUserAdded, userRemoved: blacklistUserRemoved)
+            guard !isInitializing else { return }
+            Task { [blacklistUserAdded] in
+                try? await dbManager.setSetting(key: "blacklistUserAdded", value: Self.encodeList(blacklistUserAdded))
+            }
+        }
+    }
+
+    /// Built-in defaults the user opted out of.
+    @Published var blacklistUserRemoved: [String] {
+        didSet {
+            BlacklistManager.shared.apply(userAdded: blacklistUserAdded, userRemoved: blacklistUserRemoved)
+            guard !isInitializing else { return }
+            Task { [blacklistUserRemoved] in
+                try? await dbManager.setSetting(key: "blacklistUserRemoved", value: Self.encodeList(blacklistUserRemoved))
+            }
+        }
+    }
+
+    static func encodeList(_ list: [String]) -> String {
+        (try? String(data: JSONEncoder().encode(list), encoding: .utf8)) as? String ?? "[]"
+    }
+
+    static func decodeList(_ raw: String?) -> [String] {
+        guard let raw, let data = raw.data(using: .utf8) else { return [] }
+        return (try? JSONDecoder().decode([String].self, from: data)) ?? []
+    }
+
     private var isInitializing = true
 
     // True once load() has applied the persisted values. History trimming must
@@ -159,6 +190,8 @@ class AppSettings: ObservableObject {
         self.pasteStackHUDCustomOrigin = ""
         self.appearance = "light"
         self.appLanguage = .system
+        self.blacklistUserAdded = []
+        self.blacklistUserRemoved = []
 
         if autoLoad {
             Task { await load() }
@@ -271,6 +304,11 @@ class AppSettings: ObservableObject {
         } else {
             try? await dbManager.setSetting(key: "appLanguage", value: AppLanguage.system.rawValue)
         }
+
+        // Never-record list. Applied to BlacklistManager via the didSet hooks,
+        // which run even while isInitializing (only the DB write is guarded).
+        self.blacklistUserAdded = Self.decodeList(await dbManager.getSetting(key: "blacklistUserAdded"))
+        self.blacklistUserRemoved = Self.decodeList(await dbManager.getSetting(key: "blacklistUserRemoved"))
 
         // LLM integration was removed — clean up any previously stored credentials/config
         // so an API key doesn't linger in the settings table

@@ -7,6 +7,11 @@
 
 "settings.section.appearance" = "外观";
 "settings.section.history" = "历史";
+"settings.section.privacy" = "隐私";
+"settings.privacy.explainer" = "这些应用在前台时，复制的内容不会被记录。密码管理器默认已屏蔽。";
+"settings.privacy.add" = "添加应用";
+"settings.privacy.remove" = "取消屏蔽该应用";
+"settings.privacy.empty" = "当前没有屏蔽任何应用，所有复制都会被记录。";
 "settings.section.pasteStack" = "Paste Stack";
 "settings.section.shortcuts" = "快捷键";
 "settings.section.advanced" = "高级";

@@ -6,12 +6,13 @@ struct SettingsView: View {
     @State private var section: SettingsSectionID = .appearance
 
     enum SettingsSectionID: CaseIterable {
-        case appearance, history, pasteStack, shortcuts, advanced
+        case appearance, history, privacy, pasteStack, shortcuts, advanced
 
         var title: String {
             switch self {
             case .appearance: return L10n.string("settings.section.appearance")
             case .history:    return L10n.string("settings.section.history")
+            case .privacy:    return L10n.string("settings.section.privacy")
             case .pasteStack: return L10n.string("settings.section.pasteStack")
             case .shortcuts:  return L10n.string("settings.section.shortcuts")
             case .advanced:   return L10n.string("settings.section.advanced")
@@ -22,6 +23,7 @@ struct SettingsView: View {
             switch self {
             case .appearance: return "circle.lefthalf.filled"
             case .history:    return "clock"
+            case .privacy:    return "hand.raised"
             case .pasteStack: return "square.stack"
             case .shortcuts:  return "keyboard"
             case .advanced:   return "slider.horizontal.3"
@@ -91,6 +93,7 @@ struct SettingsView: View {
                 switch section {
                 case .appearance: AppearanceSection()
                 case .history:    HistorySection()
+                case .privacy:    PrivacySection()
                 case .pasteStack: PasteStackSection()
                 case .shortcuts:  ShortcutsSection()
                 case .advanced:   AdvancedSection()
@@ -199,9 +202,11 @@ private struct HistorySection: View {
             SectionHeader(title: L10n.string("settings.section.history"))
 
             SettingRow(label: L10n.string("settings.historyLimit")) {
+                // 2000/5000 are safe now that deferred maintenance reclaims the
+                // freed pages — before, a large history meant a file that only grew.
                 DSSegmented(
                     selection: $settings.historyLimit,
-                    options: [(50, "50"), (100, "100"), (500, "500"), (1000, "1000")]
+                    options: [(100, "100"), (500, "500"), (1000, "1000"), (2000, "2000"), (5000, "5000")]
                 )
             }
 
@@ -211,6 +216,120 @@ private struct HistorySection: View {
                     .labelsHidden()
                     .fixedSize()
             }
+        }
+    }
+}
+
+// MARK: - Privacy
+
+/// The never-record list. Copies made while one of these apps is frontmost
+/// never reach history — the defaults cover the common password managers, and
+/// the user can add their own or opt out of a default.
+private struct PrivacySection: View {
+    @Environment(\.colorScheme) private var scheme
+    @ObservedObject var settings = AppSettings.shared
+
+    private var blocked: [String] { BlacklistManager.shared.blockedBundleIDs }
+
+    var body: some View {
+        let c = DSColors(scheme: scheme)
+        VStack(alignment: .leading, spacing: 0) {
+            SectionHeader(title: L10n.string("settings.section.privacy"))
+
+            Text(L10n.string("settings.privacy.explainer"))
+                .font(.dsCaption)
+                .foregroundColor(c.text2)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.bottom, 12)
+
+            VStack(spacing: 0) {
+                ForEach(blocked, id: \.self) { bundleID in
+                    HStack(spacing: 10) {
+                        Image(systemName: "app.dashed")
+                            .font(.system(size: 12))
+                            .foregroundColor(c.text2)
+                        Text(displayName(for: bundleID))
+                            .font(.dsBody)
+                            .foregroundColor(c.text)
+                        Text(bundleID)
+                            .font(.dsCaption2)
+                            .foregroundColor(c.text2)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Spacer(minLength: 8)
+                        Button {
+                            remove(bundleID)
+                        } label: {
+                            Image(systemName: "minus.circle")
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundColor(c.text2)
+                        .help(L10n.string("settings.privacy.remove"))
+                    }
+                    .padding(.vertical, 7)
+
+                    if bundleID != blocked.last {
+                        Rectangle().fill(c.divider).frame(height: 1)
+                    }
+                }
+
+                if blocked.isEmpty {
+                    Text(L10n.string("settings.privacy.empty"))
+                        .font(.dsCaption)
+                        .foregroundColor(c.text2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 12)
+                }
+            }
+            .padding(.horizontal, 12)
+            .background(RoundedRectangle(cornerRadius: 10).fill(c.card))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(c.divider, lineWidth: 1))
+
+            Button {
+                addApp()
+            } label: {
+                Label(L10n.string("settings.privacy.add"), systemImage: "plus")
+            }
+            .dsButton(.secondary, small: true)
+            .padding(.top, 12)
+        }
+    }
+
+    private func displayName(for bundleID: String) -> String {
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else {
+            return bundleID.components(separatedBy: ".").last ?? bundleID
+        }
+        return FileManager.default.displayName(atPath: url.path)
+    }
+
+    private func addApp() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.application]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        panel.prompt = L10n.string("settings.privacy.add")
+
+        guard panel.runModal() == .OK,
+              let url = panel.url,
+              let bundleID = Bundle(url: url)?.bundleIdentifier else { return }
+
+        // Re-adding a default the user previously removed is an un-remove,
+        // not a duplicate entry.
+        settings.blacklistUserRemoved.removeAll { $0.caseInsensitiveCompare(bundleID) == .orderedSame }
+        if !settings.blacklistUserAdded.contains(where: { $0.caseInsensitiveCompare(bundleID) == .orderedSame }),
+           !BlacklistManager.defaultBundleIDs.contains(where: { $0.caseInsensitiveCompare(bundleID) == .orderedSame }) {
+            settings.blacklistUserAdded.append(bundleID)
+        }
+    }
+
+    private func remove(_ bundleID: String) {
+        let matches: (String) -> Bool = { $0.caseInsensitiveCompare(bundleID) == .orderedSame }
+        if settings.blacklistUserAdded.contains(where: matches) {
+            settings.blacklistUserAdded.removeAll(where: matches)
+        } else if !settings.blacklistUserRemoved.contains(where: matches) {
+            // A built-in default: record the opt-out so it survives a relaunch.
+            settings.blacklistUserRemoved.append(bundleID)
         }
     }
 }

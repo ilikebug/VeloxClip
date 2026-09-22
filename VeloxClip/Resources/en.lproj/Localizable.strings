@@ -7,6 +7,11 @@
 
 "settings.section.appearance" = "Appearance";
 "settings.section.history" = "History";
+"settings.section.privacy" = "Privacy";
+"settings.privacy.explainer" = "Copies made while one of these apps is in front are never recorded. Password managers are blocked by default.";
+"settings.privacy.add" = "Add App";
+"settings.privacy.remove" = "Stop blocking this app";
+"settings.privacy.empty" = "Nothing is blocked. Every copy will be recorded.";
 "settings.section.pasteStack" = "Paste Stack";
 "settings.section.shortcuts" = "Shortcuts";
 "settings.section.advanced" = "Advanced";
