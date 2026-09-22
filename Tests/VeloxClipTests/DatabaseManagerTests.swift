@@ -66,6 +66,30 @@ final class DatabaseManagerTests: XCTestCase {
         XCTAssertEqual(empty.count, 0)
     }
 
+    /// The initial load used to read the entire table into memory. With a large
+    /// history that is a needless cost on the critical launch path.
+    func testFetchRespectsTheRowLimit() async throws {
+        let db = DatabaseManager(databaseURL: TestSupport.makeDatabaseURL(#function))
+
+        var newest: UUID?
+        for i in 0..<12 {
+            var item = ClipboardItem(type: "text", content: "item \(i)")
+            item.createdAt = Date(timeIntervalSince1970: TimeInterval(1_000 + i))
+            try await db.insertClipboardItem(item)
+            newest = item.id
+        }
+
+        let limited = try await db.fetchAllClipboardItems(limit: 5)
+        XCTAssertEqual(limited.count, 5)
+        XCTAssertEqual(limited.first?.id, newest, "the limit must keep the NEWEST rows, not an arbitrary five")
+
+        let unbounded = try await db.fetchAllClipboardItems()
+        XCTAssertEqual(unbounded.count, 12, "no limit still reads everything")
+
+        let zero = try await db.fetchAllClipboardItems(limit: 0)
+        XCTAssertEqual(zero.count, 12, "a non-positive limit is treated as unbounded")
+    }
+
     func testFetchSkipsRowsWithInvalidIDInsteadOfFailingWholeQuery() async throws {
         let url = TestSupport.makeDatabaseURL(#function)
         let db = DatabaseManager(databaseURL: url)

@@ -368,9 +368,12 @@ class ClipboardStore: ObservableObject {
     }
 
     private func load() {
+        // Bound the initial read. Favorites are exempt from the history limit,
+        // so allow headroom for them rather than reading the whole table.
+        let limit = settings.historyLimit > 0 ? settings.historyLimit * 2 : nil
         Task {
             do {
-                let loadedItems = try await dbManager.fetchAllClipboardItems()
+                let loadedItems = try await dbManager.fetchAllClipboardItems(limit: limit)
                 await MainActor.run {
                     // Merge, never replace. `shared` is created lazily — often by
                     // the monitor's first ingest — so items can be inserted while

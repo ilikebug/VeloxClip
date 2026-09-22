@@ -455,12 +455,19 @@ actor DatabaseManager {
         lastUsedAt ?? createdAt
     }
 
-    func fetchAllClipboardItems() async throws -> [ClipboardItem] {
+    /// `limit` bounds how many rows are read into memory at launch. Nil reads
+    /// everything — used by tests and by callers that genuinely need the whole
+    /// table. `ClipboardStore` passes the configured history limit plus
+    /// headroom, because favorites do not count against that limit.
+    func fetchAllClipboardItems(limit: Int? = nil) async throws -> [ClipboardItem] {
         await ensureInitialized()
         guard let db = db else { throw DatabaseError.connectionFailed }
 
-        return try db.prepare(clipboardItems.select(listColumns).order(sortKey.desc))
-            .compactMap(clipboardItem(from:))
+        var query = clipboardItems.select(listColumns).order(sortKey.desc)
+        if let limit, limit > 0 {
+            query = query.limit(limit)
+        }
+        return try db.prepare(query).compactMap(clipboardItem(from:))
     }
 
     func fetchItemData(id itemID: UUID) async throws -> Data? {
