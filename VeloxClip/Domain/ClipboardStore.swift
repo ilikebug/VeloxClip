@@ -130,7 +130,15 @@ class ClipboardStore: ObservableObject {
         guard limit > 0 else { return }
 
         do {
-            try await dbManager.trimNonFavorites(keeping: limit)
+            let deleted = try await dbManager.trimNonFavorites(keeping: limit)
+            guard !deleted.isEmpty else { return }
+            // Drop the same rows from memory. Leaving them would give the user
+            // ghost entries: favoriting one silently fails (toggleFavorite's
+            // pluck finds nothing and does not throw, so the rollback never
+            // fires) and image previews come back blank.
+            let removed = Set(deleted)
+            items.removeAll { removed.contains($0.id) }
+            favoriteItems.removeAll { removed.contains($0.id) }
         } catch {
             print("Failed to trim stored history: \(error)")
         }
@@ -386,11 +394,14 @@ class ClipboardStore: ObservableObject {
     }
 
     private func load() {
-        // Bound the initial read. Favorites are exempt from the history limit,
-        // so allow headroom for them rather than reading the whole table.
-        let limit = settings.historyLimit > 0 ? settings.historyLimit * 2 : nil
         Task {
             do {
+                // Read the limit INSIDE the task, after settings have loaded.
+                // Reading it at construction caught the hardcoded default (100)
+                // because AppSettings loads asynchronously — so a user on the
+                // 500…5000 options silently got a 200-row window.
+                await settings.waitUntilLoaded()
+                let limit = settings.historyLimit > 0 ? settings.historyLimit * 2 : nil
                 let loadedItems = try await dbManager.fetchAllClipboardItems(limit: limit)
                 await MainActor.run {
                     // Merge, never replace. `shared` is created lazily — often by
@@ -401,9 +412,12 @@ class ClipboardStore: ObservableObject {
                     let liveOnly = self.items.filter { !loadedIDs.contains($0.id) }
                     self.items = (loadedItems + liveOnly)
                         .sorted { ($0.lastUsedAt ?? $0.createdAt) > ($1.lastUsedAt ?? $1.createdAt) }
-                    self.favoriteItems = self.items.filter { $0.isFavorite }
-                        .sorted { ($0.favoritedAt ?? $0.createdAt) > ($1.favoritedAt ?? $1.createdAt) }
                 }
+                // Favorites come from their own unbounded query, never from the
+                // bounded window: favorites are exempt from the history limit,
+                // so deriving them here would truncate the Favorites tab and
+                // could overwrite a complete list that loadFavorites() built.
+                loadFavorites()
                 // The loaded window may be smaller than what is stored (a lowered
                 // limit, or an upgrade from a build that kept more), so trim the
                 // table itself — the in-memory pass can only see what it loaded.

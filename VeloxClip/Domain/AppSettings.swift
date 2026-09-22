@@ -165,6 +165,11 @@ class AppSettings: ObservableObject {
 
     private var isInitializing = true
 
+    /// Whether this instance will load itself. Tests construct with
+    /// `autoLoad: false` and may never call `load()`, so `waitUntilLoaded()`
+    /// must not suspend forever in that case.
+    private let autoLoadRequested: Bool
+
     // True once load() has applied the persisted values. History trimming must
     // not run before this — historyLimit still holds its default and trimming
     // against it could mass-delete history at launch.
@@ -177,6 +182,7 @@ class AppSettings: ObservableObject {
     /// `autoLoad: false` lets tests drive `load()` themselves against an injected DB.
     init(dbManager: DatabaseManager, autoLoad: Bool = true) {
         self.dbManager = dbManager
+        self.autoLoadRequested = autoLoad
 
         // Initialize with default values first
         self.historyLimit = 100
@@ -204,6 +210,26 @@ class AppSettings: ObservableObject {
         isInitializing = false
         settingsLoaded = true
         syncLaunchAtLoginWithSystem()
+        for continuation in loadWaiters {
+            continuation.resume()
+        }
+        loadWaiters.removeAll()
+    }
+
+    private var loadWaiters: [CheckedContinuation<Void, Never>] = []
+
+    /// Suspends until `load()` has applied the stored values.
+    ///
+    /// Anything that reads a setting to make a decision — rather than to
+    /// display it — must await this, or it sees the hardcoded defaults. When
+    /// `autoLoad` is false (tests) and nobody calls `load()`, this returns
+    /// immediately so a caller cannot hang.
+    func waitUntilLoaded() async {
+        guard !settingsLoaded else { return }
+        guard autoLoadRequested else { return }
+        await withCheckedContinuation { continuation in
+            loadWaiters.append(continuation)
+        }
     }
 
     // The system is the source of truth for the login item. Runs after load so

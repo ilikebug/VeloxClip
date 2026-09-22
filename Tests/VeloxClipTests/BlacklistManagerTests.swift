@@ -50,6 +50,18 @@ final class BlacklistManagerTests: XCTestCase {
         XCTAssertFalse(manager.shouldIgnore(bundleID: "com.foo.bar"))
     }
 
+    /// An id that is BOTH a default and user-added must still be removable.
+    /// The Settings remove button branched on `if userAdded … else if …`, so
+    /// for such an id it dropped the userAdded entry and never recorded the
+    /// opt-out — the app kept blocking, and the row never left the list.
+    func testAnIdThatIsBothDefaultAndUserAddedCanBeUnblocked() {
+        let manager = BlacklistManager(userAdded: ["com.1password.1password"],
+                                       userRemoved: ["com.1password.1password"])
+        XCTAssertFalse(manager.shouldIgnore(bundleID: "com.1password.1password"),
+                       "removal must win even when the id is also a default")
+        XCTAssertFalse(manager.blockedBundleIDs.contains("com.1password.1password"))
+    }
+
     func testBlockedListIsTheEffectiveSetSortedForDisplay() {
         let manager = BlacklistManager(userAdded: ["com.aaa.app"], userRemoved: ["com.apple.keychainaccess"])
         let blocked = manager.blockedBundleIDs

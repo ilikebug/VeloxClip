@@ -325,10 +325,13 @@ private struct PrivacySection: View {
 
     private func remove(_ bundleID: String) {
         let matches: (String) -> Bool = { $0.caseInsensitiveCompare(bundleID) == .orderedSame }
-        if settings.blacklistUserAdded.contains(where: matches) {
-            settings.blacklistUserAdded.removeAll(where: matches)
-        } else if !settings.blacklistUserRemoved.contains(where: matches) {
-            // A built-in default: record the opt-out so it survives a relaunch.
+        // Both directions unconditionally: an id can be BOTH user-added and a
+        // built-in default (from an older settings row, or because a later
+        // release promoted it into the defaults). Branching on `else if` left
+        // such an app blocked forever with a button that appeared to do nothing.
+        settings.blacklistUserAdded.removeAll(where: matches)
+        if BlacklistManager.defaultBundleIDs.contains(where: matches),
+           !settings.blacklistUserRemoved.contains(where: matches) {
             settings.blacklistUserRemoved.append(bundleID)
         }
     }

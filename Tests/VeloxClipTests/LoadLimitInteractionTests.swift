@@ -69,4 +69,37 @@ final class LoadLimitInteractionTests: XCTestCase {
         XCTAssertEqual(loadedRecent, 5,
                        "recent history must survive a window crowded with favorites")
     }
+
+    /// The window must reflect the user's ACTUAL limit.
+    ///
+    /// `load()` read `settings.historyLimit` synchronously at construction, but
+    /// `AppSettings` loads its stored values in a detached Task — so at that
+    /// instant the limit was still the hardcoded default of 100 and the window
+    /// was 200 rows regardless of what the user chose. Anyone on the
+    /// 500/1000/2000/5000 options saw only their newest 200 items, with no way
+    /// to reach the rest.
+    func testWindowUsesTheStoredLimitNotTheDefault() async throws {
+        let url = TestSupport.makeDatabaseURL(#function)
+
+        // A previous session persisted a limit of 1000
+        let seed = DatabaseManager(databaseURL: url)
+        try await seed.setSetting(key: "historyLimit", value: "1000")
+        for i in 0..<320 {
+            var item = ClipboardItem(type: "text", content: "item \(i)")
+            item.createdAt = Date(timeIntervalSince1970: TimeInterval(1_000 + i))
+            try await seed.insertClipboardItem(item)
+        }
+
+        // A fresh launch: settings load asynchronously, exactly like the app
+        let db = DatabaseManager(databaseURL: url)
+        let settings = AppSettings(dbManager: db, autoLoad: true)
+        let store = ClipboardStore(dbManager: db, settings: settings, shouldLoad: true)
+
+        try await TestSupport.waitUntil {
+            await MainActor.run { store.items.count >= 320 }
+        }
+
+        XCTAssertEqual(store.items.count, 320,
+                       "all 320 rows fit under the stored limit of 1000 and must be loaded")
+    }
 }

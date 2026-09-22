@@ -440,28 +440,39 @@ actor DatabaseManager {
         try db.run(clipboardItems.filter(isFavorite == false).delete())
     }
 
-    /// Deletes non-favorite rows beyond the newest `keeping`, in SQL.
+    /// Deletes non-favorite rows beyond the newest `keeping`, returning the ids
+    /// it removed so callers can prune their in-memory copy.
     ///
     /// The in-memory trim can only see the rows that were loaded, and the
     /// initial read is bounded — so anything past that window would otherwise
     /// stay on disk forever, invisible and taking space.
-    func trimNonFavorites(keeping limit: Int) async throws {
-        guard limit > 0 else { return }
+    @discardableResult
+    func trimNonFavorites(keeping limit: Int) async throws -> [UUID] {
+        guard limit > 0 else { return [] }
         await ensureInitialized()
         guard let db = db else { throw DatabaseError.connectionFailed }
 
-        let survivors = clipboardItems
-            .select(id)
+        // Find the cutoff by offset rather than collecting survivor ids: an id
+        // list would bind one variable per kept row (up to 5000 with the
+        // current settings), and every other bulk query here is chunked at 500
+        // precisely to stay under SQLite's bound-variable ceiling.
+        let cutoffQuery = clipboardItems
+            .select(sortKey)
             .filter(isFavorite == false)
             .order(sortKey.desc)
-            .limit(limit)
-        let keepIDs = try db.prepare(survivors).map { $0[id] }
+            .limit(1, offset: limit)
+        guard let cutoffRow = try db.pluck(cutoffQuery) else {
+            return []   // fewer non-favorites than the limit: nothing to trim
+        }
+        let cutoff = cutoffRow[sortKey]
 
-        try db.run(
-            clipboardItems
-                .filter(isFavorite == false && !keepIDs.contains(id))
-                .delete()
-        )
+        let doomed = clipboardItems
+            .select(id)
+            .filter(isFavorite == false && sortKey <= cutoff)
+        let doomedIDs = try db.prepare(doomed).compactMap { UUID(uuidString: $0[id]) }
+
+        try db.run(clipboardItems.filter(isFavorite == false && sortKey <= cutoff).delete())
+        return doomedIDs
     }
 
     // List queries skip the `data` blob column — images can be megabytes each
