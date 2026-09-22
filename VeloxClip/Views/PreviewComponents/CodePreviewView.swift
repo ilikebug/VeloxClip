@@ -27,7 +27,10 @@ struct CodePreviewView: View {
     }()
     
     
-    static let languageKeywords: [String: [String]] = [
+    // `nonisolated` because detectLanguage runs off the main actor (it is the
+    // expensive scan the preview moved to a background task). The table is a
+    // `let` of immutable value types, so sharing it is safe.
+    nonisolated static let languageKeywords: [String: [String]] = [
         "Swift": ["func", "class", "struct", "enum", "var", "let", "import", "extension", "protocol", "if", "else", "for", "while", "switch", "case", "return", "guard", "try", "catch", "async", "await"],
         "Python": ["def", "class", "import", "from", "if", "else", "elif", "for", "while", "try", "except", "return", "yield", "async", "await"],
         "JavaScript": ["function", "const", "let", "var", "class", "import", "export", "if", "else", "for", "while", "try", "catch", "async", "await"],

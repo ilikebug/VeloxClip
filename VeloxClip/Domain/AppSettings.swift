@@ -34,6 +34,12 @@ class AppSettings: ObservableObject {
         }
     }
 
+    // The hotkey registration deliberately runs even while isInitializing —
+    // that is how values read back from the database take effect. Only the DB
+    // write is guarded. But a failure during load is NOT the user's doing: the
+    // stored shortcut was already accepted once, and whatever owns it now took
+    // it while the app was closed. Reporting is therefore tied to the same
+    // flag, or every launch re-accuses the user (F2 -9878 was the live case).
     @Published var globalShortcut: String {
         didSet {
             if !isInitializing {
@@ -41,7 +47,7 @@ class AppSettings: ObservableObject {
                     await persistSetting(key: "globalShortcut", value: globalShortcut)
                 }
             }
-            ShortcutManager.shared.update(globalShortcut, for: .windowToggle)
+            ShortcutManager.shared.update(globalShortcut, for: .windowToggle, reportErrors: !isInitializing)
         }
     }
 
@@ -52,7 +58,7 @@ class AppSettings: ObservableObject {
                     await persistSetting(key: "screenshotShortcut", value: screenshotShortcut)
                 }
             }
-            ShortcutManager.shared.update(screenshotShortcut, for: .screenshot)
+            ShortcutManager.shared.update(screenshotShortcut, for: .screenshot, reportErrors: !isInitializing)
         }
     }
 
@@ -63,7 +69,7 @@ class AppSettings: ObservableObject {
                     await persistSetting(key: "pasteImageShortcut", value: pasteImageShortcut)
                 }
             }
-            ShortcutManager.shared.update(pasteImageShortcut, for: .pasteImage)
+            ShortcutManager.shared.update(pasteImageShortcut, for: .pasteImage, reportErrors: !isInitializing)
         }
     }
 
@@ -74,7 +80,7 @@ class AppSettings: ObservableObject {
                     await persistSetting(key: "textCaptureShortcut", value: textCaptureShortcut)
                 }
             }
-            ShortcutManager.shared.update(textCaptureShortcut, for: .textCapture)
+            ShortcutManager.shared.update(textCaptureShortcut, for: .textCapture, reportErrors: !isInitializing)
         }
     }
 

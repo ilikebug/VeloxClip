@@ -67,4 +67,48 @@ final class ShortcutStartupNoiseTests: XCTestCase {
         }
         ErrorHandler.shared.dismiss()
     }
+
+    /// The path that actually shipped the bug: AppSettings.load() assigns the
+    /// stored shortcuts, and each didSet re-registers the hotkey *outside* the
+    /// isInitializing guard (that is how stored values take effect). Those
+    /// registrations reported failures, so a stored F2 that another app had
+    /// taken while VeloxClip was closed produced the -9878 alert on every
+    /// single launch.
+    func testLoadingStoredShortcutsIsSilent() async throws {
+        let manager = ShortcutManager.shared
+        // Something else owns the combination before settings load.
+        manager.register("cmd+shift+j", for: .windowToggle, reportErrors: false) {}
+        ErrorHandler.shared.dismiss()
+
+        let db = DatabaseManager(databaseURL: TestSupport.makeDatabaseURL(#function))
+        try await db.setSetting(key: "screenshotShortcut", value: "cmd+shift+j")
+        let settings = AppSettings(dbManager: db, autoLoad: false)
+
+        await settings.load()
+
+        XCTAssertNil(
+            ErrorHandler.shared.currentError,
+            "loading stored settings raised a shortcut alert on every launch"
+        )
+    }
+
+    /// …and once loading is done, the same assignment must report again.
+    func testChangingAShortcutAfterLoadStillReports() async throws {
+        let manager = ShortcutManager.shared
+        manager.register("cmd+shift+k", for: .windowToggle, reportErrors: false) {}
+
+        let db = DatabaseManager(databaseURL: TestSupport.makeDatabaseURL(#function))
+        let settings = AppSettings(dbManager: db, autoLoad: false)
+        await settings.load()
+        ErrorHandler.shared.dismiss()
+
+        // The user picks a combination that is already taken.
+        settings.screenshotShortcut = "cmd+shift+k"
+
+        XCTAssertNotNil(
+            ErrorHandler.shared.currentError,
+            "a shortcut the user chose in Preferences failed silently"
+        )
+        ErrorHandler.shared.dismiss()
+    }
 }
