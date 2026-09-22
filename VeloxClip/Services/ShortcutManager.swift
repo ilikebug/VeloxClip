@@ -37,21 +37,46 @@ class ShortcutManager {
     func register(_ shortcut: String, for slot: Slot, action: @escaping () -> Void) {
         actions[slot.rawValue] = action
         Self.dispatchTable[slot.rawValue] = action
+        // Release any previous registration for this slot first. Overwriting
+        // hotKeyRefs[slot] leaked the old EventHotKeyRef, so the OS kept the
+        // old combination claimed — it still fired the action, and no other
+        // app could take it, for the rest of the process lifetime.
+        unregisterShortcut(slot: slot)
         registerShortcut(shortcut, slot: slot)
     }
 
     /// Re-binds an already-registered slot to a new key combination, keeping
     /// its action.
     ///
-    /// Validates BEFORE unregistering: an unparseable string used to drop the
-    /// working hotkey and leave the user with nothing.
+    /// Registers the replacement BEFORE releasing the old one: validating only
+    /// parseability still tore down a working hotkey when the OS refused the
+    /// new combination (already owned by another app, or by another slot),
+    /// leaving the user with neither.
     func update(_ shortcut: String, for slot: Slot) {
-        guard ShortcutParser.parse(shortcut) != nil else {
+        guard let parsed = ShortcutParser.parse(shortcut) else {
             print("Ignoring unparseable shortcut \"\(shortcut)\" for hotkey \(slot); keeping the current one")
             return
         }
-        unregisterShortcut(slot: slot)
-        registerShortcut(shortcut, slot: slot)
+
+        installEventHandlerIfNeeded()
+
+        var hotKeyID = EventHotKeyID()
+        hotKeyID.signature = OSType(0x564c5843) // 'VLXC'
+        hotKeyID.id = slot.rawValue
+
+        var replacement: EventHotKeyRef?
+        let status = RegisterEventHotKey(parsed.keyCode, parsed.modifiers, hotKeyID,
+                                         GetApplicationEventTarget(), 0, &replacement)
+
+        guard status == noErr, let replacement else {
+            print("Failed to register hotkey \(slot) with shortcut \(shortcut), status: \(status); keeping the current one")
+            ErrorHandler.shared.handle(ShortcutError.registrationFailed(shortcut: shortcut, status: status))
+            return
+        }
+
+        // Only now is the old one safe to drop.
+        if let old = hotKeyRefs[slot] { UnregisterEventHotKey(old) }
+        hotKeyRefs[slot] = replacement
     }
 
     /// True when `slot` currently has a live registration.

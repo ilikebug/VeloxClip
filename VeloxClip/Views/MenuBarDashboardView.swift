@@ -32,7 +32,13 @@ struct MenuBarDashboard: View {
 
     private var presentation: MenuBarDashboardPresentation {
         MenuBarDashboardPresentation(
-            historyCount: max(store.storedItemCount, store.items.count),
+            // Both sides must count the same population. `items` still holds
+            // favorites, so an unfiltered floor put every favorite straight
+            // back into the History card beside the Favorites card — and left
+            // a non-zero history showing right after Clear History. The floor
+            // itself stays: it repairs an under-count from the bounded window.
+            historyCount: max(store.storedItemCount,
+                              store.items.lazy.filter { !$0.isFavorite }.count),
             favoriteCount: store.favoriteItems.count,
             stagedCount: stack.staged.count,
             queueCount: stack.queue.count,

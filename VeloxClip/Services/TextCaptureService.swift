@@ -58,8 +58,15 @@ final class TextCaptureService {
     // Barcode payloads beat OCR text: when the user frames a QR code, the
     // payload is the intent, not the "scan me" caption around it
     nonisolated static func chooseContent(ocrText: String?, barcodePayloads: [String]) -> String? {
-        if !barcodePayloads.isEmpty {
-            return barcodePayloads.joined(separator: "\n")
+        // Only usable payloads win. A damaged or partially-framed code yields
+        // an empty payloadStringValue, which used to beat real OCR text — it
+        // wiped the clipboard with an empty string, added a blank history row,
+        // and reported success.
+        let usable = barcodePayloads
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        if !usable.isEmpty {
+            return usable.joined(separator: "\n")
         }
         let trimmed = ocrText?.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let trimmed, !trimmed.isEmpty else { return nil }

@@ -46,6 +46,21 @@ struct DateTimePreviewPresentation {
         return Date(timeIntervalSince1970: value >= 1e11 ? value / 1000 : value)
     }
 
+    /// What the Unix row shows and the Copy-Unix button copies.
+    ///
+    /// A 13-digit millisecond epoch was divided by 1000 to build the Date, and
+    /// then rendered from that Date — handing back a value 1000x smaller than
+    /// the one the user copied. When the source IS a numeric epoch, echo it
+    /// unchanged; only a formatted date has to be converted.
+    static func unixTimestampString(for source: String, parsedDate: Date? = nil) -> String? {
+        let trimmed = source.trimmingCharacters(in: .whitespaces)
+        if trimmed.allSatisfy(\.isNumber), !trimmed.isEmpty, Double(trimmed) != nil {
+            return trimmed
+        }
+        guard let date = parsedDate ?? unixDate(from: trimmed) else { return nil }
+        return String(Int(date.timeIntervalSince1970))
+    }
+
     static var title: String { title() }
     static var copyISOButtonTitle: String { copyISOButtonTitle() }
     static var copyUnixButtonTitle: String { copyUnixButtonTitle() }

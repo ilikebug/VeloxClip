@@ -24,17 +24,26 @@ actor ContentDetectionService {
         if item.type == "image" { return .image }
         if item.type == "color" { return .color }
         if item.type == "file" { return .file }
-        
+
         guard let content = item.content, !content.isEmpty else { return .plain }
-        
-        if isURL(content) { return .url }
-        if isJSON(content) { return .json }
-        if isTableData(content) { return .table }
-        if isDateTime(content) { return .datetime }
-        if isCode(content) { return .code }
-        if isMarkdown(content) { return .markdown }
+
+        // Bound the scans. These are whole-string `contains` passes (twelve for
+        // code indicators alone), so one 5 MB paste occupied this actor for
+        // ~2s and every later preview selection queued behind it. The type
+        // only decides which preview to render — a 64 KB window is far more
+        // than enough to tell JSON from a table from code, and the structural
+        // checks below still see the prefix/suffix they need.
+        let scanLimit = 64 * 1024
+        let sample = content.count > scanLimit ? String(content.prefix(scanLimit)) : content
+
+        if isURL(sample) { return .url }
+        if isJSON(content) { return .json }   // needs the whole string to parse
+        if isTableData(sample) { return .table }
+        if isDateTime(sample) { return .datetime }
+        if isCode(sample) { return .code }
+        if isMarkdown(sample) { return .markdown }
         if isLongText(content) { return .longtext }
-        
+
         return .plain
     }
     
@@ -66,7 +75,12 @@ actor ContentDetectionService {
         for delimiter in ["\t", "|", ","] {
             let counts = lines.map { $0.components(separatedBy: delimiter).count - 1 }
             guard let first = counts.first, first >= 1, counts.allSatisfy({ $0 == first }) else { continue }
-            if (delimiter == "," || delimiter == "|") && first < 2 { continue }
+            // Two-column comma/pipe content is ambiguous: a real CSV export
+            // looks the same as a short note like "状态 | 说明". Rejecting it
+            // outright also rejected the most common spreadsheet copy there
+            // is, so lean on row count instead — a note is a line or two, a
+            // table keeps going.
+            if (delimiter == "," || delimiter == "|") && first < 2 && lines.count < 3 { continue }
             return true
         }
         return false
@@ -81,10 +95,21 @@ actor ContentDetectionService {
             #"^\d{4}[-/]\d{1,2}[-/]\d{1,2}([ T]\d{1,2}:\d{2}(:\d{2})?(\.\d+)?(Z|[+-]\d{2}:?\d{2})?)?$"#, // 2026-06-12, ISO 8601
             #"^\d{1,2}[-/]\d{1,2}[-/]\d{2,4}$"#,   // 12/06/2026
             #"^\d{1,2}:\d{2}(:\d{2})?$"#,           // 14:30, 14:30:05
-            #"^\d{10}$"#,                            // unix timestamp (seconds)
-            #"^\d{13}$"#                             // unix timestamp (milliseconds)
         ]
-        return patterns.contains { trimmed.range(of: $0, options: .regularExpression) != nil }
+        if patterns.contains(where: { trimmed.range(of: $0, options: .regularExpression) != nil }) {
+            return true
+        }
+
+        // Bare numeric epochs, but only in a plausible range. Matching any 10-
+        // or 13-digit number swept up ISBNs, order numbers and tracking codes
+        // and rendered them as a confident calendar date (an ISBN came out as
+        // December 2279).
+        guard trimmed.allSatisfy(\.isNumber), let value = Double(trimmed) else { return false }
+        let plausibleSeconds = 1_000_000_000.0...2_000_000_000.0       // 2001-2033
+        let plausibleMilliseconds = 1_000_000_000_000.0...2_000_000_000_000.0
+        if trimmed.count == 10 { return plausibleSeconds.contains(value) }
+        if trimmed.count == 13 { return plausibleMilliseconds.contains(value) }
+        return false
     }
     
     private func isLongText(_ content: String) -> Bool {

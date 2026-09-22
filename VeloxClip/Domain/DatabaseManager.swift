@@ -120,6 +120,20 @@ actor DatabaseManager {
             return false
         }
 
+        // A file at the legacy path is not necessarily a database: a partial
+        // download or a copy truncated by a crash has the right header and a
+        // broken body. Promoting one used to be permanent — it occupied the
+        // live path, the `!fileExists` guard blocked any retry, and every
+        // subsequent copy failed with connectionFailed for good.
+        do {
+            let probe = try Connection(dbPath.path)
+            _ = try probe.scalar("PRAGMA schema_version")
+        } catch {
+            print("⚠️ Migrated file at \(dbPath.path) is not a usable database: \(error) — rolling back")
+            rollback()
+            return false
+        }
+
         print("✅ Migrated database from \(legacyDB.lastPathComponent) to \(dbPath.path)")
 
         // Remove only what we migrated. This used to delete the whole legacy
@@ -129,6 +143,19 @@ actor DatabaseManager {
             try? fileManager.removeItem(at: legacyDirectory)
         }
         return true
+    }
+
+    /// Exposes the migration for tests without making the real entry point public.
+    static func migrateLegacyDatabaseForTesting(from legacyDB: URL,
+                                                to dbPath: URL,
+                                                fileManager: FileManager) -> Bool {
+        migrateLegacyDatabase(from: legacyDB, to: dbPath, fileManager: fileManager)
+    }
+
+    /// Closes the connection so a test can hand the file to another manager.
+    func closeForTesting() {
+        db = nil
+        isInitialized = false
     }
 
     // Initialize database on first access (lazy initialization). A failed open or

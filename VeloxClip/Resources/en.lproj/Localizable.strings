@@ -3,7 +3,7 @@
 "language.en" = "English";
 
 "settings.language" = "Language";
-"common.items.count" = "%d items";
+"common.items.count" = "%ld items";
 
 "settings.section.appearance" = "Appearance";
 "settings.section.history" = "History";
@@ -40,7 +40,7 @@
 "settings.clearCache" = "Clear Cache";
 "textCapture.noText" = "No text found";
 "textCapture.noTextNoPermission" = "No text found — Screen Recording permission may be missing";
-"textCapture.recognized" = "OCR recognized %d characters";
+"textCapture.recognized" = "OCR recognized %ld characters";
 "settings.clearHistory" = "Clear History";
 "settings.clearHistory.confirm" = "Delete all non-favorite items?";
 "settings.clearHistory.confirm.yes" = "Delete";
@@ -52,17 +52,17 @@
 "preview.table.delimiter.tsv" = "TSV (tab)";
 "preview.table.delimiter.pipe" = "Pipe (|)";
 "preview.table.delimiter.csv" = "CSV (,)";
-"preview.table.summary" = "%d rows, %d columns";
+"preview.table.summary" = "%ld rows, %ld columns";
 
 "preview.datetime.title" = "Date/Time Formats";
 "preview.datetime.copyISO" = "Copy ISO";
 "preview.datetime.copyUnix" = "Copy Unix";
 "preview.datetime.copyAll" = "Copy All";
-"preview.datetime.secondsAgo" = "%d seconds ago";
-"preview.datetime.minutesAgo" = "%d minutes ago";
-"preview.datetime.hoursAgo" = "%d hours ago";
-"preview.datetime.daysAgo" = "%d days ago";
-"preview.datetime.weeksAgo" = "%d weeks ago";
+"preview.datetime.secondsAgo" = "%ld seconds ago";
+"preview.datetime.minutesAgo" = "%ld minutes ago";
+"preview.datetime.hoursAgo" = "%ld hours ago";
+"preview.datetime.daysAgo" = "%ld days ago";
+"preview.datetime.weeksAgo" = "%ld weeks ago";
 
 "preview.file.missing" = "Missing";
 "preview.file.details" = "File Details";
@@ -77,8 +77,8 @@
 "preview.file.copySingleHelp" = "Copy this file only";
 "preview.file.unknown" = "Unknown";
 "preview.file.generic" = "File";
-"preview.file.count" = "%d files";
-"preview.file.missingCount" = "%d missing";
+"preview.file.count" = "%ld files";
+"preview.file.missingCount" = "%ld missing";
 
 "preview.text.words" = "Words";
 "preview.text.characters" = "Characters";
@@ -99,7 +99,7 @@
 "menubar.status.active" = "Paste Stack active";
 "menubar.status.paused" = "Paste Stack paused";
 "menubar.status.completed" = "Paste Stack completed";
-"menubar.status.staged" = "%d items staged";
+"menubar.status.staged" = "%ld items staged";
 "menubar.status.idle" = "Idle";
 
 "row.type.image" = "Image";
@@ -110,16 +110,16 @@
 "row.type.rtf" = "Rich Text";
 "row.type.text" = "Plain Text";
 "row.type.unknownContent" = "Unknown Content";
-"row.unit.chars" = "%d chars";
-"row.unit.lines" = "%d lines";
-"row.unit.keys" = "%d keys";
-"row.unit.items" = "%d items";
-"row.unit.files" = "%d files";
+"row.unit.chars" = "%ld chars";
+"row.unit.lines" = "%ld lines";
+"row.unit.keys" = "%ld keys";
+"row.unit.items" = "%ld items";
+"row.unit.files" = "%ld files";
 "row.time.justNow" = "now";
-"row.time.minutes" = "%d min";
-"row.time.hours" = "%d hr";
+"row.time.minutes" = "%ld min";
+"row.time.hours" = "%ld hr";
 "row.time.yesterday" = "Yesterday";
-"row.time.monthDay" = "%d/%d";
+"row.time.monthDay" = "%ld/%ld";
 
 "menubar.stat.history" = "History";
 "menubar.stat.favorites" = "Favorites";
@@ -148,7 +148,7 @@
 "list.stage.removeHelp" = "In paste queue - click to remove";
 "list.stage.addHelp" = "Add to paste queue (⌘⏎)";
 "list.display.colorFallback" = "Color";
-"list.display.files" = "%d files - %@...";
+"list.display.files" = "%ld files - %@...";
 "list.display.imageData" = "Image Data";
 "list.display.richText" = "Rich Text";
 
@@ -157,7 +157,7 @@
 "main.action.detail" = "Detail";
 "main.action.stack" = "Stack";
 "main.action.actions" = "Actions";
-"main.items.count" = "%d items";
+"main.items.count" = "%ld items";
 "main.tab.history" = "History";
 "main.tab.favorites" = "Favorites";
 
@@ -187,7 +187,7 @@
 "detail.back" = "Back";
 "detail.loading" = "Detecting content...";
 "detail.ocrText" = "Text in Image";
-"detail.truncated" = "... (%d more characters)";
+"detail.truncated" = "... (%ld more characters)";
 "detail.edit" = "Edit";
 "detail.tools" = "Tools";
 "detail.tags" = "Tags";
@@ -242,7 +242,7 @@
 "hud.paused.message" = "Paused - you copied new content";
 "hud.resume" = "Resume";
 "hud.cancel" = "Cancel";
-"hud.completed.count" = "Pasted %d items";
+"hud.completed.count" = "Pasted %ld items";
 "hud.completed.title" = "Sequence completed";
 "hud.completed.hint" = "Position can be changed in Settings - default bottom center";
 

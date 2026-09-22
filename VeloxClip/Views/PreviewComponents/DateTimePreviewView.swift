@@ -143,7 +143,9 @@ struct DateTimePreviewView: View {
     private func generateFormats(date: Date) {
         formats = [
             DateFormat(name: "ISO 8601", value: Self.isoFormatter.string(from: date)),
-            DateFormat(name: L10n.string("preview.datetime.unixTimestamp", language: settings.appLanguage), value: String(Int(date.timeIntervalSince1970))),
+            DateFormat(name: L10n.string("preview.datetime.unixTimestamp", language: settings.appLanguage),
+                       value: DateTimePreviewPresentation.unixTimestampString(for: dateString, parsedDate: date)
+                           ?? String(Int(date.timeIntervalSince1970))),
             DateFormat(name: L10n.string("preview.datetime.relative", language: settings.appLanguage), value: relativeTimeString(from: date)),
             DateFormat(name: L10n.string("preview.datetime.humanReadable", language: settings.appLanguage), value: humanReadableString(from: date)),
             DateFormat(name: L10n.string("preview.datetime.dateOnly", language: settings.appLanguage), value: localizedDateString(from: date, dateStyle: .long, timeStyle: .none)),
@@ -182,7 +184,10 @@ struct DateTimePreviewView: View {
     
     private func copyUnixTimestamp() {
         guard let date = parsedDate else { return }
-        copyFormat(String(Int(date.timeIntervalSince1970)))
+        // Echo the epoch the user copied; a 13-digit millisecond value used to
+        // come back 1000x smaller.
+        copyFormat(DateTimePreviewPresentation.unixTimestampString(for: dateString, parsedDate: date)
+                   ?? String(Int(date.timeIntervalSince1970)))
     }
     
     private func copyAllFormats() {

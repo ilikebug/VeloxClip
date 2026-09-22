@@ -154,20 +154,25 @@ final class ClipboardSearchViewModel: ObservableObject {
     }
 
     private func semanticMatches(query: String, in baseItems: [ClipboardItem]) async -> [(UUID, Double)] {
-        // Key on the candidate set as well as the query. Keying on the query
-        // alone meant a repeated search returned its first run's hit list, so
-        // anything copied since was invisible to semantic search for the rest
-        // of the session — while keyword hits still appeared, which made the
-        // gap look arbitrary rather than broken.
-        let cacheKey = "\(query.lowercased())|\(baseItems.count)|\(baseItems.first?.id.uuidString ?? "")"
-        if let cached = cachedSemanticResults[cacheKey] {
-            return cached
-        }
-
         // Vectors are no longer carried on list rows (they were tens of MB of
         // permanently-resident blobs the list never renders). Load just the ones
         // this search needs.
         let candidateIDs = baseItems.filter { $0.content != nil }.map(\.id)
+
+        // Key on the candidates' identity, not a proxy for it. Keying on the
+        // query alone replayed the first run's hit list, hiding anything copied
+        // since; count+firstID still collided whenever two different sets
+        // shared them (after favouriting, or deleting one item and adding
+        // another).
+        var hasher = Hasher()
+        hasher.combine(query.lowercased())
+        for id in candidateIDs { hasher.combine(id) }
+        let cacheKey = String(hasher.finalize())
+
+        if let cached = cachedSemanticResults[cacheKey] {
+            return cached
+        }
+
         let vectors = await loadEmbeddings(candidateIDs)
         guard !vectors.isEmpty else { return [] }
 
@@ -184,7 +189,12 @@ final class ClipboardSearchViewModel: ObservableObject {
         .prefix(Self.maxSemanticResults)
 
         let finalResults = Array(scored)
-        cachedSemanticResults[cacheKey] = finalResults
+        // Only cache a complete run. Embeddings are generated asynchronously
+        // after a copy, so a run made while one was still pending would
+        // otherwise pin an incomplete hit list and keep that item unfindable.
+        if vectors.count == candidateIDs.count {
+            cachedSemanticResults[cacheKey] = finalResults
+        }
         return finalResults
     }
 }

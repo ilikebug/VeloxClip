@@ -104,63 +104,126 @@ struct MarkdownView: View {
     /// them handed the renderer bare prose, so no code block could ever be
     /// styled), and a blank line does not split a list (each fragment would
     /// become its own document and restart numbering).
+    /// Splits a document for incremental rendering WITHOUT changing what it is.
+    ///
+    /// Three rules earn their keep: fence lines are re-emitted (dropping them
+    /// handed the renderer bare prose, so no code block could ever be styled),
+    /// a blank line inside an open list does not split it (each fragment would
+    /// become its own document and restart numbering), and CRLF is normalised
+    /// first (`.newlines` treats CR and LF as separate separators, which
+    /// injected a blank line between every line of Windows-copied text).
     nonisolated static func chunk(_ input: String) -> [MarkdownChunk] {
+        // Normalise line endings once: splitting on `.newlines` made every
+        // CRLF line yield the line plus an empty string.
+        let normalized = input
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+
         var chunks: [MarkdownChunk] = []
-        let lines = input.components(separatedBy: .newlines)
+        let lines = normalized.components(separatedBy: "\n")
         var currentChunk = ""
         var inCodeBlock = false
+        // Which character opened the block: ``` and ~~~ do not close each other.
+        var fenceCharacter: Character = "`"
+        // Tracked rather than re-derived — re-splitting the whole buffer on
+        // every blank line made a loose list quadratic (8s for 4000 items).
+        var lastNonEmptyLine = ""
+        // A blank line inside a list only holds the chunk open if a list item
+        // or an indented continuation actually follows it.
+        var pendingBlankLines = 0
 
         func flush() {
             let trimmed = currentChunk.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmed.isEmpty { chunks.append(MarkdownChunk(content: trimmed)) }
             currentChunk = ""
+            lastNonEmptyLine = ""
+            pendingBlankLines = 0
         }
 
-        /// True when the buffer is an open list, so a blank line inside it is
-        /// loose-list spacing rather than a document boundary.
-        func bufferIsAList() -> Bool {
-            let lines = currentChunk
-                .components(separatedBy: .newlines)
-                .map { $0.trimmingCharacters(in: .whitespaces) }
-                .filter { !$0.isEmpty }
-            guard let last = lines.last else { return false }
-            if last.hasPrefix("- ") || last.hasPrefix("* ") || last.hasPrefix("+ ") { return true }
-            let ordered = last.prefix { $0.isNumber }
-            return !ordered.isEmpty && last.dropFirst(ordered.count).hasPrefix(". ")
+        func isFence(_ trimmed: String) -> Bool {
+            trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~")
         }
 
-        for line in lines {
+        /// A list marker at the START of a line: `-`, `*`, `+`, or `N.` with at
+        /// most nine digits (CommonMark's limit). Prose that merely begins with
+        /// a year — "1984. It was a bright cold day" — is not a list item, so
+        /// the caller must also know the line begins a list.
+        func looksLikeAListItem(_ trimmed: String) -> Bool {
+            if trimmed == "-" || trimmed == "*" || trimmed == "+" { return false }
+            for marker in ["- ", "* ", "+ "] where trimmed.hasPrefix(marker) { return true }
+            let digits = trimmed.prefix { $0.isNumber }
+            guard !digits.isEmpty, digits.count <= 9 else { return false }
+            let rest = trimmed.dropFirst(digits.count)
+            return rest.hasPrefix(". ") || rest.hasPrefix(") ")
+        }
+
+        /// Indented continuation of a list item (a nested list or a paragraph
+        /// belonging to the item above).
+        func isIndentedContinuation(_ line: String) -> Bool {
+            line.hasPrefix("  ") || line.hasPrefix("\t")
+        }
+
+        for (index, line) in lines.enumerated() {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
 
-            if trimmed.hasPrefix("```") {
+            if isFence(trimmed) {
                 if inCodeBlock {
-                    // Keep the closing fence with its block, then flush.
-                    currentChunk += line + "\n"
-                    flush()
-                    inCodeBlock = false
+                    // Only the character that opened the block can close it.
+                    if trimmed.first == fenceCharacter {
+                        currentChunk += line + "\n"
+                        flush()
+                        inCodeBlock = false
+                    } else {
+                        currentChunk += line + "\n"
+                    }
                 } else {
                     flush()
                     currentChunk = line + "\n"
                     inCodeBlock = true
+                    fenceCharacter = trimmed.first ?? "`"
                 }
                 continue
             }
 
             if inCodeBlock {
                 currentChunk += line + "\n"
-            } else if trimmed.hasPrefix("#") {
+                continue
+            }
+
+            if trimmed.hasPrefix("#") {
                 flush()
                 chunks.append(MarkdownChunk(content: line))
-            } else if trimmed.isEmpty {
-                // A blank line inside a list is loose-list spacing, not a break.
-                if bufferIsAList() {
-                    currentChunk += "\n"
+                continue
+            }
+
+            if trimmed.isEmpty {
+                // Defer the decision: whether this blank line splits depends on
+                // what comes next.
+                if currentChunk.isEmpty {
+                    continue
+                }
+                if looksLikeAListItem(lastNonEmptyLine) || isIndentedContinuation(lastNonEmptyLine) {
+                    pendingBlankLines += 1
                 } else {
                     flush()
                 }
-            } else {
-                currentChunk += line + "\n"
+                continue
             }
+
+            // A non-blank line after a held-open blank line: keep the list
+            // together only if this line continues it.
+            if pendingBlankLines > 0 {
+                if looksLikeAListItem(trimmed) || isIndentedContinuation(line) {
+                    currentChunk += String(repeating: "\n", count: pendingBlankLines)
+                    pendingBlankLines = 0
+                } else {
+                    flush()
+                }
+            }
+
+            currentChunk += line + "\n"
+            lastNonEmptyLine = trimmed
+            _ = index
         }
 
         flush()
