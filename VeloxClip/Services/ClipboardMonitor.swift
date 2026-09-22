@@ -162,7 +162,7 @@ class ClipboardMonitor: ObservableObject {
             if let text = capturedContent {
                 detectedTags = ClipboardIngestion.detectTags(in: text)
 
-                if text.count >= 3 && text.count <= 2000 {
+                if ClipboardIngestion.isEmbeddable(text) {
                     if let vector = await AIService.shared.generateEmbedding(for: text) {
                         detectedEmbedding = ClipboardItem.encodeVector(vector)
                     }

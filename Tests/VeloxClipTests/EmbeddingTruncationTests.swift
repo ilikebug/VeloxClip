@@ -1,45 +1,54 @@
 import XCTest
 @testable import VeloxClip
 
-/// `generateEmbedding` truncates to 500 characters and then uses the truncated
-/// text as the cache key, while ingestion embeds anything up to 2000
-/// characters. Two different long items that share an opening are therefore one
-/// cache entry — and semantic search compares only their first 500 characters.
+/// `generateEmbedding` used to truncate to 500 characters and then use the
+/// truncated text as its cache key, while ingestion embeds up to 2000. Items
+/// between the two bounds were half-represented in semantic search, and two
+/// documents sharing a 500-character opening collapsed to one cache entry —
+/// the second silently got the first one's vector.
 final class EmbeddingTruncationTests: XCTestCase {
-    /// Documents the truncation boundary the two limits disagree on.
-    func testIngestionEmbedsUpToFourTimesWhatIsActuallyEmbedded() {
-        // ClipboardMonitor embeds text of 3...2000 characters
-        let ingestUpperBound = 2000
-        // AIService.generateEmbedding truncates to 500 before embedding
-        let embeddedPrefix = 500
-        XCTAssertGreaterThan(ingestUpperBound, embeddedPrefix,
-                             "text between these bounds is only partially represented")
-    }
-
-    /// The consequence: two distinct documents sharing a 500-character opening
-    /// produce the same cache key, so the second one gets the first one's
-    /// vector — they become indistinguishable to semantic search.
-    func testDocumentsSharingAnOpeningCollideOnTheCacheKey() async {
-        let shared = String(repeating: "a", count: 500)
+    /// The cache key must distinguish documents that share an opening.
+    func testDocumentsSharingAnOpeningGetDistinctCacheKeys() {
+        let shared = String(repeating: "a", count: 600)
         let docA = shared + " the tail that makes this about databases"
         let docB = shared + " the tail that makes this about cooking"
 
-        // Mirror what generateEmbedding does to build its key
-        func cacheKey(_ text: String) -> String {
-            let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            return normalized.count > 500 ? String(normalized.prefix(500)) : normalized
-        }
-
-        XCTAssertEqual(cacheKey(docA), cacheKey(docB),
-                       "distinct documents collapse to one cache entry")
-        XCTAssertNotEqual(docA, docB, "…even though the documents differ")
+        XCTAssertNotEqual(AIService.cacheKey(for: docA), AIService.cacheKey(for: docB),
+                          "distinct documents must not collapse to one cache entry")
     }
 
-    /// Short text — the overwhelming majority of clipboard items — is unaffected.
-    func testShortTextIsRepresentedInFull() {
-        let text = "a normal snippet"
-        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let key = normalized.count > 500 ? String(normalized.prefix(500)) : normalized
-        XCTAssertEqual(key, normalized)
+    /// Identical text must still hit the cache — that is the whole point of it.
+    func testIdenticalTextSharesACacheKey() {
+        XCTAssertEqual(AIService.cacheKey(for: "  A Snippet With Spacing  "),
+                       AIService.cacheKey(for: "a snippet with spacing"),
+                       "the key normalizes case and surrounding whitespace")
+    }
+
+    /// The embed window must cover everything ingestion is willing to embed,
+    /// or items in the gap are only partially searchable.
+    func testTheEmbedWindowCoversEverythingIngestionEmbeds() {
+        XCTAssertGreaterThanOrEqual(AIService.maxEmbeddingLength,
+                                    ClipboardIngestion.maxEmbeddableLength,
+                                    "text ingestion embeds must be embedded in full")
+    }
+
+    /// A document inside the ingestion bound is represented in full, not by a
+    /// prefix of it.
+    func testTextWithinTheIngestionBoundIsEmbeddedWhole() {
+        let text = String(repeating: "b", count: ClipboardIngestion.maxEmbeddableLength)
+        XCTAssertEqual(AIService.textToEmbed(for: text).count, text.count,
+                       "nothing within the ingestion bound may be truncated")
+    }
+
+    /// Beyond the bound a prefix is still better than nothing, but it must stay
+    /// bounded so a pathological paste cannot stall the embedder.
+    func testUnreasonablyLongTextIsStillBounded() {
+        let huge = String(repeating: "c", count: AIService.maxEmbeddingLength * 4)
+        XCTAssertEqual(AIService.textToEmbed(for: huge).count, AIService.maxEmbeddingLength)
+    }
+
+    func testEmptyTextHasNoEmbedding() async {
+        let vector = await AIService.shared.generateEmbedding(for: "   \n  ")
+        XCTAssertNil(vector)
     }
 }

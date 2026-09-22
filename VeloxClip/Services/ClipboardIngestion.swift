@@ -11,6 +11,18 @@ enum ClipboardIngestion {
     /// Two copies of identical content inside this window collapse into one item.
     static let duplicateWindow: TimeInterval = 5.0
 
+    /// Text shorter than this carries too little signal to embed.
+    static let minEmbeddableLength = 3
+    /// Upper bound on what gets an embedding at ingest time. `AIService` must be
+    /// willing to embed at least this much, or items in the gap are only
+    /// partially represented in semantic search.
+    static let maxEmbeddableLength = 2000
+
+    /// True when a text item is worth spending an embedding on.
+    static func isEmbeddable(_ text: String) -> Bool {
+        (minEmbeddableLength...maxEmbeddableLength).contains(text.count)
+    }
+
     /// Pixel ceiling checked BEFORE any decode — a decompression bomb from the
     /// pasteboard would otherwise take the app down on the next poll tick.
     static let maxImagePixels = 100_000_000

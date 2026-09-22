@@ -138,16 +138,14 @@ final class AIService: Sendable {
     }
     
     func generateEmbedding(for text: String) async -> [Double]? {
-        let normalizedText = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !normalizedText.isEmpty else { return nil }
+        let textToEmbed = Self.textToEmbed(for: text)
+        guard !textToEmbed.isEmpty else { return nil }
 
-        let maxLength = 500
-        let textToEmbed = normalizedText.count > maxLength
-            ? String(normalizedText.prefix(maxLength))
-            : normalizedText
-
-        // Check cache
-        if let cached = await embeddingCache.get(textToEmbed) {
+        // Keyed on the FULL text, not the truncated copy. Using the truncation
+        // as the key meant two documents sharing an opening collapsed to one
+        // entry — the second silently received the first one's vector.
+        let key = Self.cacheKey(for: text)
+        if let cached = await embeddingCache.get(key) {
             return cached
         }
 
@@ -156,10 +154,31 @@ final class AIService: Sendable {
             return nil
         }
 
-        // Cache the result
-        await embeddingCache.set(textToEmbed, value: vector)
+        await embeddingCache.set(key, value: vector)
 
         return vector
+    }
+
+    /// Upper bound on what is actually handed to the embedding model.
+    ///
+    /// Must be at least `ClipboardIngestion.maxEmbeddableLength`, or items that
+    /// ingestion embedded are only partially represented when searched. The
+    /// cap still exists so a pathological paste cannot stall the embedder.
+    static let maxEmbeddingLength = ClipboardIngestion.maxEmbeddableLength
+
+    /// The text handed to the model: normalized, and bounded for safety.
+    static func textToEmbed(for text: String) -> String {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return normalized.count > maxEmbeddingLength
+            ? String(normalized.prefix(maxEmbeddingLength))
+            : normalized
+    }
+
+    /// Cache key over the WHOLE normalized text, so documents that differ only
+    /// past the truncation point still get their own entry.
+    static func cacheKey(for text: String) -> String {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return ClipboardItem.hash(of: Data(normalized.utf8))
     }
     
     func clearEmbeddingCache() async {
