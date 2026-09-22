@@ -70,6 +70,48 @@ final class LoadLimitInteractionTests: XCTestCase {
                        "recent history must survive a window crowded with favorites")
     }
 
+    /// Lowering the limit in Settings must shrink the stored table, not only
+    /// the loaded window. The in-memory pass counts `items`, which is bounded
+    /// and can legitimately hold no non-favorites at all when favorites crowd
+    /// it out — so it saw nothing to do and the rows stayed on disk.
+    func testLoweringTheLimitAtRuntimeTrimsRowsOutsideTheWindow() async throws {
+        let db = DatabaseManager(databaseURL: TestSupport.makeDatabaseURL(#function))
+        let settings = AppSettings(dbManager: db, autoLoad: false)
+        await settings.load()
+        settings.historyLimit = 10   // window = 20
+
+        // 25 favorites NEWER than the history, filling the whole window
+        for i in 0..<25 {
+            var fav = ClipboardItem(type: "text", content: "fav \(i)")
+            fav.createdAt = Date(timeIntervalSince1970: TimeInterval(9_000 + i))
+            fav.isFavorite = true
+            fav.favoritedAt = fav.createdAt
+            try await db.insertClipboardItem(fav)
+        }
+        for i in 0..<10 {
+            var item = ClipboardItem(type: "text", content: "old \(i)")
+            item.createdAt = Date(timeIntervalSince1970: TimeInterval(1_000 + i))
+            try await db.insertClipboardItem(item)
+        }
+
+        let store = ClipboardStore(dbManager: db, settings: settings, shouldLoad: true)
+        try await TestSupport.waitUntil {
+            await MainActor.run { !store.items.isEmpty }
+        }
+
+        settings.historyLimit = 2
+
+        try await TestSupport.waitUntil {
+            let rows = try await db.fetchAllClipboardItems()
+            return rows.filter { !$0.isFavorite }.count <= 2
+        }
+        let onDisk = try await db.fetchAllClipboardItems()
+        XCTAssertLessThanOrEqual(onDisk.filter { !$0.isFavorite }.count, 2,
+                                 "lowering the limit must trim the stored table")
+        XCTAssertEqual(onDisk.filter { $0.isFavorite }.count, 25,
+                       "…and never touch favorites")
+    }
+
     /// The window must reflect the user's ACTUAL limit.
     ///
     /// `load()` read `settings.historyLimit` synchronously at construction, but

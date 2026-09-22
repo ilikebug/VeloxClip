@@ -434,10 +434,16 @@ actor DatabaseManager {
     }
 
     /// "Clear history": favorites are a separate collection and survive.
-    func deleteNonFavoriteItems() async throws {
+    /// Returns the ids it deleted so callers prune by fact rather than by their
+    /// own copy of the favorite flag, which can be mid-write and disagree.
+    @discardableResult
+    func deleteNonFavoriteItems() async throws -> [UUID] {
         await ensureInitialized()
         guard let db = db else { throw DatabaseError.connectionFailed }
+        let doomed = clipboardItems.select(id).filter(isFavorite == false)
+        let ids = try db.prepare(doomed).compactMap { UUID(uuidString: $0[id]) }
         try db.run(clipboardItems.filter(isFavorite == false).delete())
+        return ids
     }
 
     /// Total stored non-favorite rows, for the menu-bar dashboard.
@@ -462,27 +468,34 @@ actor DatabaseManager {
         await ensureInitialized()
         guard let db = db else { throw DatabaseError.connectionFailed }
 
-        // Find the cutoff by offset rather than collecting survivor ids: an id
-        // list would bind one variable per kept row (up to 5000 with the
-        // current settings), and every other bulk query here is chunked at 500
-        // precisely to stay under SQLite's bound-variable ceiling.
-        let cutoffQuery = clipboardItems
-            .select(sortKey)
-            .filter(isFavorite == false)
-            .order(sortKey.desc)
-            .limit(1, offset: limit)
-        guard let cutoffRow = try db.pluck(cutoffQuery) else {
-            return []   // fewer non-favorites than the limit: nothing to trim
-        }
-        let cutoff = cutoffRow[sortKey]
-
-        let doomed = clipboardItems
+        // Enumerate the exact rows to KEEP rather than comparing against a
+        // cutoff value. sortKey is COALESCE(lastUsedAt, createdAt), a Double
+        // with no uniqueness guarantee, so a `sortKey <= cutoff` predicate also
+        // swept up every row tied with the cutoff — one tie cost an extra row,
+        // and a restored backup where every row shares a timestamp lost the
+        // whole history. `id` breaks the tie, giving a total order.
+        let survivors = clipboardItems
             .select(id)
-            .filter(isFavorite == false && sortKey <= cutoff)
-        let doomedIDs = try db.prepare(doomed).compactMap { UUID(uuidString: $0[id]) }
+            .filter(isFavorite == false)
+            .order(sortKey.desc, id.desc)
+            .limit(limit)
+        let keepIDs = Set(try db.prepare(survivors).map { $0[id] })
 
-        try db.run(clipboardItems.filter(isFavorite == false && sortKey <= cutoff).delete())
-        return doomedIDs
+        let candidates = clipboardItems.select(id).filter(isFavorite == false)
+        let doomedIDs = try db.prepare(candidates)
+            .map { $0[id] }
+            .filter { !keepIDs.contains($0) }
+        guard !doomedIDs.isEmpty else { return [] }
+
+        // Chunked like every other bulk-id statement here, to stay under
+        // SQLite's bound-variable ceiling at the 5000-row history setting.
+        let chunkSize = 500
+        for start in stride(from: 0, to: doomedIDs.count, by: chunkSize) {
+            let chunk = Array(doomedIDs[start..<min(start + chunkSize, doomedIDs.count)])
+            try db.run(clipboardItems.filter(chunk.contains(id)).delete())
+        }
+
+        return doomedIDs.compactMap(UUID.init(uuidString:))
     }
 
     // List queries skip the `data` blob column — images can be megabytes each

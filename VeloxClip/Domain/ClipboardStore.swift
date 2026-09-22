@@ -19,9 +19,17 @@ class ClipboardStore: ObservableObject {
         self.dbManager = dbManager
         self.settings = settings
 
-        // Shrinking the limit takes effect immediately, not on the next copy
+        // Shrinking the limit takes effect immediately, not on the next copy.
+        // Both passes: the in-memory one trims the loaded window, and the disk
+        // one reaches rows outside it — without the latter, lowering the limit
+        // left the excess rows in the file until the next launch, which is the
+        // exact "invisible rows still on disk" failure the trim exists to stop.
         settings.onHistoryLimitChanged = { [weak self] in
             self?.enforceHistoryLimit()
+            Task { [weak self] in
+                await self?.enforceHistoryLimitOnDisk()
+                await self?.refreshStoredCount()
+            }
         }
 
         if shouldLoad {
@@ -129,6 +137,10 @@ class ClipboardStore: ObservableObject {
     /// still occupying space. This trims against the table itself.
     func enforceHistoryLimitOnDisk() async {
         guard settings.settingsLoaded else { return }
+        // Same reason as clearHistory: the trim spares rows by their ON-DISK
+        // favorite flag, so a star issued during launch must land first or the
+        // row the user just protected is the one that gets deleted.
+        await awaitPendingFavoriteWrites()
         let limit = settings.historyLimit
         guard limit > 0 else { return }
 
@@ -165,15 +177,22 @@ class ClipboardStore: ObservableObject {
     // Called when the user pastes/copies an existing item: move it to the top
     // without rewriting createdAt, so the original copy time is preserved
     func markUsed(_ id: UUID) {
-        guard let index = items.firstIndex(where: { $0.id == id }) else { return }
-
-        var item = items.remove(at: index)
         let usedAt = Date()
-        item.lastUsedAt = usedAt
-        items.insert(item, at: 0)
 
-        if item.isFavorite, let favIndex = favoriteItems.firstIndex(where: { $0.id == id }) {
-            favoriteItems[favIndex] = item
+        // Move to top when the row is in the window. A favorite older than the
+        // window is not in `items` at all, and returning early there dropped
+        // the touch entirely — pasting an old favorite never recorded the use.
+        if let index = items.firstIndex(where: { $0.id == id }) {
+            var item = items.remove(at: index)
+            item.lastUsedAt = usedAt
+            items.insert(item, at: 0)
+            if item.isFavorite, let favIndex = favoriteItems.firstIndex(where: { $0.id == id }) {
+                favoriteItems[favIndex] = item
+            }
+        } else if let favIndex = favoriteItems.firstIndex(where: { $0.id == id }) {
+            favoriteItems[favIndex].lastUsedAt = usedAt
+        } else {
+            return   // unknown to both lists: nothing to record
         }
 
         Task {
@@ -320,9 +339,20 @@ class ClipboardStore: ObservableObject {
     /// Deletes every non-favorite item. Favorites are a separate collection the
     /// user curated; "clear history" must not take them down with it.
     func clearHistory() async {
+        // A star toggled moments ago may not have reached disk; the DELETE
+        // reads the on-disk flag, so wait for those writes first.
+        await awaitPendingFavoriteWrites()
         do {
-            try await dbManager.deleteNonFavoriteItems()
-            items.removeAll { !$0.isFavorite }
+            // Prune by the ids the DELETE actually removed, not by the
+            // in-memory favorite flag. toggleFavorite is optimistic, so the two
+            // flags disagree for a star toggled moments earlier: memory-driven
+            // pruning then either stranded a row (dropped from the UI, still on
+            // disk, back after relaunch — a privacy failure for a feature whose
+            // whole purpose is getting rid of something) or left a ghost.
+            let deleted = Set(try await dbManager.deleteNonFavoriteItems())
+            items.removeAll { deleted.contains($0.id) }
+            favoriteItems.removeAll { deleted.contains($0.id) }
+            await refreshStoredCount()
         } catch {
             print("Failed to clear history: \(error)")
             ErrorHandler.shared.handle(error)
@@ -332,49 +362,73 @@ class ClipboardStore: ObservableObject {
     func toggleFavorite(for item: ClipboardItem) {
         let itemId = item.id
 
-        // Optimistic UI update
-        if let index = items.firstIndex(where: { $0.id == itemId }) {
-            var updatedItem = items[index]
-            updatedItem.isFavorite.toggle()
-            updatedItem.favoritedAt = updatedItem.isFavorite ? Date() : nil
-            items[index] = updatedItem
+        // `items` is a bounded window but `favoriteItems` is not, so a favorite
+        // older than the window legitimately lives only in the latter. Guarding
+        // the whole update on an `items` lookup made the star button dead for
+        // exactly those rows: nothing changed on screen while the write still
+        // landed, so the entry vanished on the next launch.
+        let current = items.first(where: { $0.id == itemId })
+            ?? favoriteItems.first(where: { $0.id == itemId })
+            ?? item
+        var updatedItem = current
+        updatedItem.isFavorite.toggle()
+        updatedItem.favoritedAt = updatedItem.isFavorite ? Date() : nil
 
-            // Update favoriteItems list
-            if updatedItem.isFavorite {
-                if !favoriteItems.contains(where: { $0.id == itemId }) {
-                    favoriteItems.insert(updatedItem, at: 0)
-                }
-            } else {
-                favoriteItems.removeAll(where: { $0.id == itemId })
+        if let index = items.firstIndex(where: { $0.id == itemId }) {
+            items[index] = updatedItem
+        }
+        if updatedItem.isFavorite {
+            if !favoriteItems.contains(where: { $0.id == itemId }) {
+                favoriteItems.insert(updatedItem, at: 0)
             }
+        } else {
+            favoriteItems.removeAll(where: { $0.id == itemId })
         }
 
-        // Persist to database
-        Task {
+        // Persist to database. Tracked so operations that read the on-disk
+        // favorite flag (clearHistory, the launch trim) can wait for the write
+        // to land instead of racing this optimistic update.
+        let write = Task {
             do {
                 try await dbManager.toggleFavorite(id: itemId)
             } catch {
                 print("Failed to toggle favorite: \(error)")
-                // Rollback UI change
+                // Rollback UI change — also unconditionally, for the same reason
                 await MainActor.run {
+                    var reverted = updatedItem
+                    reverted.isFavorite = item.isFavorite
+                    reverted.favoritedAt = item.favoritedAt
                     if let index = self.items.firstIndex(where: { $0.id == itemId }) {
-                        var revertedItem = self.items[index]
-                        revertedItem.isFavorite = item.isFavorite
-                        revertedItem.favoritedAt = item.favoritedAt
-                        self.items[index] = revertedItem
-
-                        // Update favoriteItems list
-                        if revertedItem.isFavorite {
-                            if !self.favoriteItems.contains(where: { $0.id == itemId }) {
-                                self.favoriteItems.insert(revertedItem, at: 0)
-                            }
-                        } else {
-                            self.favoriteItems.removeAll(where: { $0.id == itemId })
+                        self.items[index] = reverted
+                    }
+                    if reverted.isFavorite {
+                        if !self.favoriteItems.contains(where: { $0.id == itemId }) {
+                            self.favoriteItems.insert(reverted, at: 0)
                         }
+                    } else {
+                        self.favoriteItems.removeAll(where: { $0.id == itemId })
                     }
                     ErrorHandler.shared.handle(error)
                 }
             }
+        }
+        pendingFavoriteWrites.insert(write)
+        Task {
+            _ = await write.result
+            pendingFavoriteWrites.remove(write)
+        }
+    }
+
+    /// Favorite writes still in flight. `clearHistory` and the launch trim both
+    /// act on the ON-DISK favorite flag, which an optimistic toggle has not
+    /// reached yet — without waiting, a star toggled a moment earlier is either
+    /// ignored or destroyed.
+    private var pendingFavoriteWrites: Set<Task<Void, Never>> = []
+
+    private func awaitPendingFavoriteWrites() async {
+        let inFlight = pendingFavoriteWrites
+        for task in inFlight {
+            _ = await task.result
         }
     }
 
