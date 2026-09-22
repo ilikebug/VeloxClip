@@ -440,6 +440,30 @@ actor DatabaseManager {
         try db.run(clipboardItems.filter(isFavorite == false).delete())
     }
 
+    /// Deletes non-favorite rows beyond the newest `keeping`, in SQL.
+    ///
+    /// The in-memory trim can only see the rows that were loaded, and the
+    /// initial read is bounded — so anything past that window would otherwise
+    /// stay on disk forever, invisible and taking space.
+    func trimNonFavorites(keeping limit: Int) async throws {
+        guard limit > 0 else { return }
+        await ensureInitialized()
+        guard let db = db else { throw DatabaseError.connectionFailed }
+
+        let survivors = clipboardItems
+            .select(id)
+            .filter(isFavorite == false)
+            .order(sortKey.desc)
+            .limit(limit)
+        let keepIDs = try db.prepare(survivors).map { $0[id] }
+
+        try db.run(
+            clipboardItems
+                .filter(isFavorite == false && !keepIDs.contains(id))
+                .delete()
+        )
+    }
+
     // List queries skip the `data` blob column — images can be megabytes each
     // and the list only needs metadata. Use fetchItemData(id:) to load blobs on demand.
     //

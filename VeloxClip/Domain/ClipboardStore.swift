@@ -118,6 +118,24 @@ class ClipboardStore: ObservableObject {
         }
     }
 
+    /// Trims rows the in-memory list never saw.
+    ///
+    /// `enforceHistoryLimit` counts the loaded array, but `load()` reads a
+    /// bounded window — so lowering the limit, or upgrading from a build that
+    /// stored more, would strand rows on disk forever: invisible in the UI and
+    /// still occupying space. This trims against the table itself.
+    func enforceHistoryLimitOnDisk() async {
+        guard settings.settingsLoaded else { return }
+        let limit = settings.historyLimit
+        guard limit > 0 else { return }
+
+        do {
+            try await dbManager.trimNonFavorites(keeping: limit)
+        } catch {
+            print("Failed to trim stored history: \(error)")
+        }
+    }
+
     // Loads the blob for an item on demand (list queries don't fetch the data column)
     func loadData(for id: UUID) async -> Data? {
         if let item = items.first(where: { $0.id == id }) ?? favoriteItems.first(where: { $0.id == id }),
@@ -386,6 +404,10 @@ class ClipboardStore: ObservableObject {
                     self.favoriteItems = self.items.filter { $0.isFavorite }
                         .sorted { ($0.favoritedAt ?? $0.createdAt) > ($1.favoritedAt ?? $1.createdAt) }
                 }
+                // The loaded window may be smaller than what is stored (a lowered
+                // limit, or an upgrade from a build that kept more), so trim the
+                // table itself — the in-memory pass can only see what it loaded.
+                await self.enforceHistoryLimitOnDisk()
             } catch {
                 print("Failed to load items: \(error)")
                 Task { @MainActor in
