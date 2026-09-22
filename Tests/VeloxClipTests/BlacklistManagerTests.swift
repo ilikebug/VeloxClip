@@ -62,6 +62,18 @@ final class BlacklistManagerTests: XCTestCase {
         XCTAssertFalse(manager.blockedBundleIDs.contains("com.1password.1password"))
     }
 
+    /// The privacy list is the one screen whose job is to let the user verify
+    /// what is blocked, so it must show ids as the system reports them.
+    func testBlockedListPreservesOriginalCasingForDisplay() {
+        let manager = BlacklistManager(userAdded: ["com.Example.Vault"], userRemoved: [])
+        XCTAssertTrue(manager.blockedBundleIDs.contains("com.Example.Vault"),
+                      "a user-added id keeps its casing")
+        XCTAssertTrue(manager.blockedBundleIDs.contains("com.apple.Passwords"),
+                      "…and so does a built-in default")
+        // …while matching stays case-insensitive
+        XCTAssertTrue(manager.shouldIgnore(bundleID: "COM.EXAMPLE.VAULT"))
+    }
+
     func testBlockedListIsTheEffectiveSetSortedForDisplay() {
         let manager = BlacklistManager(userAdded: ["com.aaa.app"], userRemoved: ["com.apple.keychainaccess"])
         let blocked = manager.blockedBundleIDs

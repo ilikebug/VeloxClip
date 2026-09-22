@@ -12,6 +12,8 @@
 "settings.privacy.add" = "Add App";
 "settings.privacy.remove" = "Stop blocking this app";
 "settings.privacy.empty" = "Nothing is blocked. Every copy will be recorded.";
+"settings.privacy.noBundleID.title" = "This app can't be blocked";
+"settings.privacy.noBundleID.message" = "VeloxClip identifies apps by their bundle identifier, and the app you selected doesn't have one. Unsigned or hand-built apps sometimes lack it.";
 "settings.section.pasteStack" = "Paste Stack";
 "settings.section.shortcuts" = "Shortcuts";
 "settings.section.advanced" = "Advanced";

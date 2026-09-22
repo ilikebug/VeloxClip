@@ -20,6 +20,8 @@ final class BlacklistManager {
 
     private var userAdded: Set<String>
     private var userRemoved: Set<String>
+    /// The additions as the user's system reported them, for display.
+    private var userAddedOriginal: [String]
 
     /// Bundle IDs are case-insensitive on macOS; compare in one case so the
     /// blacklist cannot be bypassed by capitalisation.
@@ -30,18 +32,35 @@ final class BlacklistManager {
     init(userAdded: [String] = [], userRemoved: [String] = []) {
         self.userAdded = Set(userAdded.map(Self.normalize))
         self.userRemoved = Set(userRemoved.map(Self.normalize))
+        self.userAddedOriginal = userAdded
     }
 
     /// Re-reads the user's edits. Called when settings load or change.
     func apply(userAdded: [String], userRemoved: [String]) {
         self.userAdded = Set(userAdded.map(Self.normalize))
         self.userRemoved = Set(userRemoved.map(Self.normalize))
+        self.userAddedOriginal = userAdded
     }
 
     /// Defaults plus the user's additions, minus anything the user removed.
     /// Removal wins, so one pair of lists expresses both directions.
+    ///
+    /// Returns the ids in their ORIGINAL casing — this list is shown in
+    /// Settings, and `com.apple.Passwords` rendered as `com.apple.passwords`
+    /// looks wrong in the one screen whose job is to let the user verify what
+    /// is blocked. Matching stays case-insensitive.
     var blockedBundleIDs: [String] {
-        Self.normalizedDefaults.union(userAdded).subtracting(userRemoved).sorted()
+        var byNormalized: [String: String] = [:]
+        for id in Self.defaultBundleIDs {
+            byNormalized[Self.normalize(id)] = id
+        }
+        for id in userAddedOriginal {
+            byNormalized[Self.normalize(id)] = id
+        }
+        for normalized in userRemoved {
+            byNormalized.removeValue(forKey: normalized)
+        }
+        return byNormalized.values.sorted { $0.lowercased() < $1.lowercased() }
     }
 
     func shouldIgnore(bundleID: String?) -> Bool {

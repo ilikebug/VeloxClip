@@ -440,6 +440,16 @@ actor DatabaseManager {
         try db.run(clipboardItems.filter(isFavorite == false).delete())
     }
 
+    /// Total stored non-favorite rows, for the menu-bar dashboard.
+    ///
+    /// `ClipboardStore.items` is a bounded window, so counting it would report
+    /// the window size rather than what is actually kept.
+    func countStoredItems() async throws -> Int {
+        await ensureInitialized()
+        guard let db = db else { throw DatabaseError.connectionFailed }
+        return try db.scalar(clipboardItems.count)
+    }
+
     /// Deletes non-favorite rows beyond the newest `keeping`, returning the ids
     /// it removed so callers can prune their in-memory copy.
     ///

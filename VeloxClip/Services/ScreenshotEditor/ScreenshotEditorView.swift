@@ -569,6 +569,13 @@ struct FloatingTextInput: View {
                         .frame(width: 180)
                         .focused($isTextFieldFocused)
                         .onSubmit(onSubmit)
+                        // Commit on focus loss too. Return was the ONLY way to
+                        // commit, so typing a caption and then clicking Done —
+                        // or anywhere else — silently discarded it, even though
+                        // the live preview above still showed the text.
+                        .onChange(of: isTextFieldFocused) { _, focused in
+                            if !focused, !editingText.isEmpty { onSubmit() }
+                        }
                         .onAppear {
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                 isTextFieldFocused = true

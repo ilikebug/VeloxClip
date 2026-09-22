@@ -3,7 +3,18 @@ import SwiftUI
 
 @MainActor
 class EditorState: ObservableObject {
-    @Published var currentTool: EditorTool = .pen
+    @Published var currentTool: EditorTool = .pen {
+        didSet {
+            // Abandon any stroke in progress. Without this, `isDrawing` stayed
+            // true forever: the canvas kept rendering a phantom preview, and
+            // the text tool — whose floating input is gated on isDrawing —
+            // went dead until the editor window was reopened. The partial
+            // stroke is discarded rather than committed, because committing it
+            // under the NEW tool would export a rectangle as, say, an arrow.
+            guard oldValue != currentTool else { return }
+            cancelDrawing()
+        }
+    }
     @Published var currentColor: Color = .red
     @Published var lineWidth: CGFloat = 3.0
     @Published var opacity: Double = 1.0
@@ -41,6 +52,10 @@ class EditorState: ObservableObject {
     }
     
     func undo() {
+        // Abandon any stroke in progress FIRST, before the empty-stack guard:
+        // undoing mid-drag must drop the half-finished preview even when there
+        // is nothing on the stack to restore.
+        cancelDrawing()
         guard !undoStack.isEmpty else { return }
         let currentState = elements
         redoStack.append(currentState)
@@ -48,10 +63,22 @@ class EditorState: ObservableObject {
     }
     
     func redo() {
+        cancelDrawing()
         guard !redoStack.isEmpty else { return }
         let currentState = elements
         undoStack.append(currentState)
         elements = redoStack.removeLast()
+    }
+
+    /// Drops the in-progress stroke without committing it.
+    func cancelDrawing() {
+        isDrawing = false
+        currentPath = nil
+        penPoints.removeAll()
+        startPoint = .zero
+        endPoint = .zero
+        textInput = ""
+        textPosition = nil
     }
     
     func canUndo() -> Bool {

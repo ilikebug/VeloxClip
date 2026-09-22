@@ -310,15 +310,27 @@ private struct PrivacySection: View {
         panel.directoryURL = URL(fileURLWithPath: "/Applications")
         panel.prompt = L10n.string("settings.privacy.add")
 
-        guard panel.runModal() == .OK,
-              let url = panel.url,
-              let bundleID = Bundle(url: url)?.bundleIdentifier else { return }
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        // An app with no bundle identifier cannot be blocked — matching is by
+        // identifier. Say so: silently doing nothing in a privacy feature is
+        // exactly the failure this feature exists to prevent.
+        guard let bundleID = Bundle(url: url)?.bundleIdentifier else {
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = L10n.string("settings.privacy.noBundleID.title")
+            alert.informativeText = L10n.string("settings.privacy.noBundleID.message")
+            alert.runModal()
+            return
+        }
+
+        let matches: (String) -> Bool = { $0.caseInsensitiveCompare(bundleID) == .orderedSame }
 
         // Re-adding a default the user previously removed is an un-remove,
         // not a duplicate entry.
-        settings.blacklistUserRemoved.removeAll { $0.caseInsensitiveCompare(bundleID) == .orderedSame }
-        if !settings.blacklistUserAdded.contains(where: { $0.caseInsensitiveCompare(bundleID) == .orderedSame }),
-           !BlacklistManager.defaultBundleIDs.contains(where: { $0.caseInsensitiveCompare(bundleID) == .orderedSame }) {
+        settings.blacklistUserRemoved.removeAll(where: matches)
+        if !settings.blacklistUserAdded.contains(where: matches),
+           !BlacklistManager.defaultBundleIDs.contains(where: matches) {
             settings.blacklistUserAdded.append(bundleID)
         }
     }

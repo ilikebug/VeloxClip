@@ -5,6 +5,9 @@ import Combine
 class ClipboardStore: ObservableObject {
     @Published var items: [ClipboardItem] = []
     @Published var favoriteItems: [ClipboardItem] = []
+    /// Rows actually stored, which is not `items.count`: the initial read is
+    /// bounded, so counting the array would report the window size instead.
+    @Published private(set) var storedItemCount: Int = 0
     private let dbManager: DatabaseManager
     private let settings: AppSettings
 
@@ -142,6 +145,12 @@ class ClipboardStore: ObservableObject {
         } catch {
             print("Failed to trim stored history: \(error)")
         }
+    }
+
+    /// Re-reads the stored row count. Cheap (a COUNT), so callers can refresh
+    /// it after anything that adds or removes rows.
+    func refreshStoredCount() async {
+        storedItemCount = (try? await dbManager.countStoredItems()) ?? items.count
     }
 
     // Loads the blob for an item on demand (list queries don't fetch the data column)
@@ -422,6 +431,7 @@ class ClipboardStore: ObservableObject {
                 // limit, or an upgrade from a build that kept more), so trim the
                 // table itself — the in-memory pass can only see what it loaded.
                 await self.enforceHistoryLimitOnDisk()
+                await self.refreshStoredCount()
             } catch {
                 print("Failed to load items: \(error)")
                 Task { @MainActor in

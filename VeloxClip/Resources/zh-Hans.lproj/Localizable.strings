@@ -12,6 +12,8 @@
 "settings.privacy.add" = "添加应用";
 "settings.privacy.remove" = "取消屏蔽该应用";
 "settings.privacy.empty" = "当前没有屏蔽任何应用，所有复制都会被记录。";
+"settings.privacy.noBundleID.title" = "无法屏蔽该应用";
+"settings.privacy.noBundleID.message" = "VeloxClip 通过 bundle identifier 识别应用，而你选择的应用没有。未签名或自行构建的应用有时会缺少它。";
 "settings.section.pasteStack" = "Paste Stack";
 "settings.section.shortcuts" = "快捷键";
 "settings.section.advanced" = "高级";

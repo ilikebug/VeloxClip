@@ -25,12 +25,14 @@ struct MenuBarDashboard: View {
         .background(c.window)
         .onAppear {
             store.loadFavorites()
+            // The count is stored, not derived from the bounded window
+            Task { await store.refreshStoredCount() }
         }
     }
 
     private var presentation: MenuBarDashboardPresentation {
         MenuBarDashboardPresentation(
-            historyCount: store.items.count,
+            historyCount: max(store.storedItemCount, store.items.count),
             favoriteCount: store.favoriteItems.count,
             stagedCount: stack.staged.count,
             queueCount: stack.queue.count,
