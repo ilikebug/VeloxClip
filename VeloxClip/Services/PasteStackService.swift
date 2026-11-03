@@ -232,7 +232,7 @@ final class PasteStackService: ObservableObject {
         // machine instead of its own.
         keyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
             let isCommandV = event.keyCode == 0x09
-                && event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command
+                && event.modifierFlags.isCommandOnly
                 && !event.isARepeat
             guard isCommandV else { return }
             Task { @MainActor in

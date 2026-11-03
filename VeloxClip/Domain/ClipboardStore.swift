@@ -40,18 +40,21 @@ class ClipboardStore: ObservableObject {
     func addItem(_ item: ClipboardItem) {
         // Content-based Deduplication: Check if an item with the same content/data already exists.
         // Blobs are compared via dataHash so this never touches multi-megabyte Data values.
-        if let existingIndex = items.firstIndex(where: {
+        let isSameContent: (ClipboardItem) -> Bool = {
             $0.type == item.type && (
                 ($0.content != nil && $0.content == item.content) ||
                 ($0.dataHash != nil && $0.dataHash == item.dataHash)
             )
-        }) {
+        }
+        // `items` is a bounded window: a favorite older than it lives only in
+        // favoriteItems, and re-copying it must reuse it, not insert a duplicate.
+        if let existing = items.first(where: isSameContent) ?? favoriteItems.first(where: isSameContent) {
             // Move existing item to top, keeping the original copy time
-            var existingItem = items[existingIndex]
+            var existingItem = existing
             existingItem.lastUsedAt = Date()
 
             // UI Update: Move to start of array
-            self.items.remove(at: existingIndex)
+            self.items.removeAll { $0.id == existingItem.id }
             self.items.insert(existingItem, at: 0)
 
             // Sync favorites list if needed

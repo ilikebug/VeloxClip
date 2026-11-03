@@ -72,7 +72,7 @@ class OverlayWindow: NSWindow {
     // (copy selected preview text, paste into the search field, …) never resolve
     // through the main menu — route them down the responder chain manually
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command {
+        if event.modifierFlags.isCommandOnly {
             let action: Selector?
             switch event.charactersIgnoringModifiers?.lowercased() {
             case "c": action = #selector(NSText.copy(_:))

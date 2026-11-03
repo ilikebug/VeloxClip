@@ -154,15 +154,18 @@ enum AnnotationRenderer {
     private static func applyMosaicEffect(to context: CGContext, source: NSImage, rect: CGRect) {
         // rect is top-down (same space the user drew in) — pixelatedPatch handles cropping
         guard let pixelatedImage = pixelatedPatch(of: source, forPointRect: rect) else { return }
+        // The patch covers only the in-image part of rect (a drag can run past the
+        // edge); drawing it into the full rect stretched it off its source pixels
+        let drawRect = rect.intersection(CGRect(origin: .zero, size: source.size))
 
         context.saveGState()
         context.interpolationQuality = .none
         // The export context is flipped to top-down; CGContext.draw renders images
         // bottom-up, so mirror around the rect's center to keep the patch upright
-        context.translateBy(x: 0, y: rect.midY)
+        context.translateBy(x: 0, y: drawRect.midY)
         context.scaleBy(x: 1.0, y: -1.0)
-        context.translateBy(x: 0, y: -rect.midY)
-        context.draw(pixelatedImage, in: rect)
+        context.translateBy(x: 0, y: -drawRect.midY)
+        context.draw(pixelatedImage, in: drawRect)
         context.restoreGState()
     }
 }

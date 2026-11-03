@@ -97,3 +97,12 @@ enum ShortcutParser {
         return parts.joined(separator: "+")
     }
 }
+
+extension NSEvent.ModifierFlags {
+    /// Command is the only chord modifier held. Caps Lock and the fn/numeric-pad
+    /// bits are ignored: an exact match against `.deviceIndependentFlagsMask`
+    /// failed whenever Caps Lock was on.
+    var isCommandOnly: Bool {
+        intersection([.command, .shift, .option, .control]) == .command
+    }
+}

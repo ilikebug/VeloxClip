@@ -14,6 +14,22 @@ struct MainFocusRoutingPolicy {
     }
 }
 
+struct SearchSelectionPolicy {
+    /// The selection after a search publish: the current row while it is still
+    /// visible, else the first visible one. The type filter stacks on top of
+    /// the ranked results, so falling back to `ranked.first` could select a row
+    /// that isn't on screen — and Enter would paste it.
+    static func selection(current: ClipboardItem?,
+                          ranked: [ClipboardItem],
+                          filter: ClipboardTypeFilter) -> ClipboardItem? {
+        let visible = ranked.filter { filter.matches($0) }
+        if let current, visible.contains(where: { $0.id == current.id }) {
+            return current
+        }
+        return visible.first
+    }
+}
+
 enum ViewMode {
     case favorites
     case history
@@ -90,9 +106,10 @@ struct MainView: View {
         }
         search.search(query: searchText, in: baseItems) { ranked in
             // Keep the selection valid as results narrow
-            if selectedItem == nil || !ranked.contains(where: { $0.id == selectedItem?.id }) {
-                selectedItem = ranked.first
-                scrollTarget = ranked.first?.id
+            let next = SearchSelectionPolicy.selection(current: selectedItem, ranked: ranked, filter: typeFilter)
+            if next?.id != selectedItem?.id {
+                selectedItem = next
+                scrollTarget = next?.id
             }
         }
     }
