@@ -490,7 +490,12 @@ struct ScreenshotEditorView: View {
 
         if let pixelatedCGImage = AnnotationRenderer.pixelatedPatch(of: image, forPointRect: imageRect) {
             let patchSize = CGSize(width: pixelatedCGImage.width, height: pixelatedCGImage.height)
-            context.draw(Image(nsImage: NSImage(cgImage: pixelatedCGImage, size: patchSize)).resizable().interpolation(.none), in: rect)
+            // The patch covers only the on-image part of rect (a drag can run past
+            // the edge); drawing it into the full rect stretched it off its pixels
+            let displayedImage = CGRect(x: imageOrigin.x, y: imageOrigin.y,
+                                        width: image.size.width * scaleX, height: image.size.height * scaleY)
+            let drawRect = rect.intersection(displayedImage)
+            context.draw(Image(nsImage: NSImage(cgImage: pixelatedCGImage, size: patchSize)).resizable().interpolation(.none), in: drawRect)
         }
     }
 
