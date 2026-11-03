@@ -227,12 +227,11 @@ struct JSONPreviewView: View {
             }
             
             do {
+                // Parse to validate and to feed tree mode; the text views re-indent
+                // the source instead of re-serializing, which rewrote numbers and slashes
                 let jsonObject = try JSONSerialization.jsonObject(with: data)
-                let formattedData = try JSONSerialization.data(withJSONObject: jsonObject, options: [.prettyPrinted, .sortedKeys])
-                let minifiedData = try JSONSerialization.data(withJSONObject: jsonObject, options: [])
-                
-                let formatted = String(data: formattedData, encoding: .utf8) ?? ""
-                let minified = String(data: minifiedData, encoding: .utf8) ?? ""
+                let formatted = JSONTextFormatting.pretty(input)
+                let minified = JSONTextFormatting.minified(input)
                 
                 let lines = formatted.components(separatedBy: .newlines)
 

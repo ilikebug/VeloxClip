@@ -84,6 +84,14 @@ enum ShortcutParser {
         return Parsed(keyCode: UInt32(code), modifiers: modifiers)
     }
 
+    /// Whether the recorder may commit this combination as a global hotkey.
+    /// F-keys stand alone; any other key needs ⌘ or ⌃. Shift or Option alone
+    /// is how people type — a global "shift+a" swallowed every capital A, and
+    /// "alt+e" broke typing é, in every app.
+    static func isRecordable(modifiers: NSEvent.ModifierFlags, keyCode: UInt16) -> Bool {
+        KeyCodeTable.isFunctionKey(keyCode) || modifiers.contains(.command) || modifiers.contains(.control)
+    }
+
     /// Recorder side: nil when the key has no name, so the caller keeps waiting
     /// instead of committing a key-less "cmd+shift".
     static func string(modifiers: NSEvent.ModifierFlags, keyCode: UInt16) -> String? {

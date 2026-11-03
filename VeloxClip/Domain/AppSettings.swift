@@ -42,45 +42,53 @@ class AppSettings: ObservableObject {
     // flag, or every launch re-accuses the user (F2 -9878 was the live case).
     @Published var globalShortcut: String {
         didSet {
-            if !isInitializing {
-                Task {
-                    await persistSetting(key: "globalShortcut", value: globalShortcut)
-                }
+            applyShortcut(globalShortcut, oldValue: oldValue, slot: .windowToggle, key: "globalShortcut") {
+                self.globalShortcut = $0
             }
-            ShortcutManager.shared.update(globalShortcut, for: .windowToggle, reportErrors: !isInitializing)
         }
     }
 
     @Published var screenshotShortcut: String {
         didSet {
-            if !isInitializing {
-                Task {
-                    await persistSetting(key: "screenshotShortcut", value: screenshotShortcut)
-                }
+            applyShortcut(screenshotShortcut, oldValue: oldValue, slot: .screenshot, key: "screenshotShortcut") {
+                self.screenshotShortcut = $0
             }
-            ShortcutManager.shared.update(screenshotShortcut, for: .screenshot, reportErrors: !isInitializing)
         }
     }
 
     @Published var pasteImageShortcut: String {
         didSet {
-            if !isInitializing {
-                Task {
-                    await persistSetting(key: "pasteImageShortcut", value: pasteImageShortcut)
-                }
+            applyShortcut(pasteImageShortcut, oldValue: oldValue, slot: .pasteImage, key: "pasteImageShortcut") {
+                self.pasteImageShortcut = $0
             }
-            ShortcutManager.shared.update(pasteImageShortcut, for: .pasteImage, reportErrors: !isInitializing)
         }
     }
 
     @Published var textCaptureShortcut: String {
         didSet {
-            if !isInitializing {
-                Task {
-                    await persistSetting(key: "textCaptureShortcut", value: textCaptureShortcut)
-                }
+            applyShortcut(textCaptureShortcut, oldValue: oldValue, slot: .textCapture, key: "textCaptureShortcut") {
+                self.textCaptureShortcut = $0
             }
-            ShortcutManager.shared.update(textCaptureShortcut, for: .textCapture, reportErrors: !isInitializing)
+        }
+    }
+
+    private var isRevertingShortcut = false
+
+    /// Registers first and persists only what actually registered. Persisting
+    /// first saved a combination the system refused: Settings showed it, the
+    /// old hotkey stayed live, and the next launch could hand it to another slot.
+    private func applyShortcut(_ value: String, oldValue: String, slot: ShortcutManager.Slot,
+                               key: String, revert: (String) -> Void) {
+        guard !isRevertingShortcut else { return }
+        let registered = ShortcutManager.shared.update(value, for: slot, reportErrors: !isInitializing)
+        guard !isInitializing else { return }
+        if registered {
+            Task { await persistSetting(key: key, value: value) }
+        } else {
+            // The old hotkey is still live — put the setting back to match it
+            isRevertingShortcut = true
+            revert(oldValue)
+            isRevertingShortcut = false
         }
     }
 

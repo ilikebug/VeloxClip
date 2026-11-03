@@ -122,8 +122,11 @@ struct URLPreviewView: View {
     }
     
     private func validateURL() {
-        // Only http(s) gets the Open button / QR — ContentDetection also routes file:// here
-        guard let url = URL(string: urlString), WebURL.isOpenable(url) else {
+        // Only http(s) gets the Open button / QR — ContentDetection also routes file:// here.
+        // Trim like detection does: `echo https://x.com | pbcopy` ends in "\n",
+        // which URL(string:) rejects, so a detected URL showed as invalid.
+        let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: trimmed), WebURL.isOpenable(url) else {
             urlInfo = URLInfo(url: URL(string: "about:blank")!, title: nil, description: nil, isValid: false)
             return
         }

@@ -346,6 +346,17 @@ class EditorState: ObservableObject {
     }
 
     private func eraserHits(_ element: DrawingElement, at point: CGPoint, radius: CGFloat) -> Bool {
+        // A text element's path is a single point, which the stroked-path test
+        // below can never hit — test the laid-out text box instead, centered on
+        // startPoint exactly as AnnotationRenderer draws it
+        if element.type == .text {
+            guard let text = element.text, let fontSize = element.fontSize else { return false }
+            let size = NSAttributedString(string: text, attributes: [.font: NSFont.systemFont(ofSize: fontSize)]).size()
+            let box = CGRect(x: element.startPoint.x - size.width / 2, y: element.startPoint.y - size.height / 2,
+                             width: size.width, height: size.height)
+            return box.insetBy(dx: -radius, dy: -radius).contains(point)
+        }
+
         // Check bounding box first for optimization
         let boundingBox = element.path.boundingBox
         let expandedBox = boundingBox.insetBy(dx: -radius, dy: -radius)

@@ -151,19 +151,16 @@ struct ImagePreviewView: View {
                 return (nil, nil) as (NSImage?, ImageInfo?)
             }
             
-            let size = imageRep.size
+            // Pixels, not points: rep.size halved a Retina screenshot under a "px" label
+            let size = NSSize(width: imageRep.pixelsWide, height: imageRep.pixelsHigh)
             let fileSize = imageData.count
             var format = "Unknown"
-            
-            if let bitmapRep = imageRep as? NSBitmapImageRep {
-                format = bitmapRep.bitmapFormat.contains(.alphaFirst) ? "PNG" : "JPEG"
-            }
-            
-            if format == "Unknown" {
-                if imageData.starts(with: [0x89, 0x50, 0x4E, 0x47]) { format = "PNG" }
-                else if imageData.starts(with: [0xFF, 0xD8, 0xFF]) { format = "JPEG" }
-                else if imageData.starts(with: [0x52, 0x49, 0x46, 0x46]) { format = "WebP" }
-            }
+
+            // The file signature is the only reliable answer: the old guess from
+            // bitmapFormat's alpha layout labelled every stored PNG as JPEG
+            if imageData.starts(with: [0x89, 0x50, 0x4E, 0x47]) { format = "PNG" }
+            else if imageData.starts(with: [0xFF, 0xD8, 0xFF]) { format = "JPEG" }
+            else if imageData.starts(with: [0x52, 0x49, 0x46, 0x46]) { format = "WebP" }
             
             let info = ImageInfo(size: size, fileSize: fileSize, format: format)
             return (nsImage, info)

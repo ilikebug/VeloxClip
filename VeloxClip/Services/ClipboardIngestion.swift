@@ -75,16 +75,18 @@ enum ClipboardIngestion {
         return tags
     }
 
-    /// The most recent item that is the same copy repeated inside `duplicateWindow`, if any.
+    /// The newest item, if this copy merely repeats it inside `duplicateWindow`.
+    /// Only the top row counts: matching deeper (A, B, A within 5s) returned
+    /// early and skipped addItem, so the re-copied A stayed below B.
     static func recentDuplicate(in items: [ClipboardItem],
                                 type: String,
                                 content: String?,
                                 dataHash: String?,
                                 now: Date) -> ClipboardItem? {
-        items.prefix(10).first { recent in
-            recent.type == type && recent.content == content && recent.dataHash == dataHash &&
-            now.timeIntervalSince(recent.createdAt) < duplicateWindow
-        }
+        guard let recent = items.first,
+              recent.type == type, recent.content == content, recent.dataHash == dataHash,
+              now.timeIntervalSince(recent.createdAt) < duplicateWindow else { return nil }
+        return recent
     }
 
     /// Header-only pixel check (no decode) on the RAW pasteboard bytes.
