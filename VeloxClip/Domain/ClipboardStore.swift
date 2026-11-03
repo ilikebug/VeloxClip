@@ -57,12 +57,12 @@ class ClipboardStore: ObservableObject {
             self.items.removeAll { $0.id == existingItem.id }
             self.items.insert(existingItem, at: 0)
 
-            // Sync favorites list if needed
-            if existingItem.isFavorite {
-                if let favIndex = favoriteItems.firstIndex(where: { $0.id == existingItem.id }) {
-                    favoriteItems.remove(at: favIndex)
-                    favoriteItems.insert(existingItem, at: 0)
-                }
+            // Sync favorites list in place: it is ordered by favoritedAt (as
+            // loadFavorites and markUsed keep it), so moving the row to the top
+            // only made it jump back the next time the overlay opened
+            if existingItem.isFavorite,
+               let favIndex = favoriteItems.firstIndex(where: { $0.id == existingItem.id }) {
+                favoriteItems[favIndex] = existingItem
             }
 
             // Persist update — only lastUsedAt changed

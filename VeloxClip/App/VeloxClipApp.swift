@@ -62,7 +62,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Register all global shortcuts. The App layer owns the mapping from
         // shortcut to behaviour; ShortcutManager only knows how to register keys.
-        registerShortcuts()
+        // After load, once: registering the defaults first and then swapping in
+        // stored values slot by slot collided whenever a key had moved between
+        // slots, leaving the live hotkeys out of step with Settings.
+        Task { @MainActor in
+            await AppSettings.shared.waitUntilLoaded()
+            self.registerShortcuts()
+        }
         WindowManager.shared.startTrackingTargetApps()
 
         // Only now may this process read the pasteboard or write the database

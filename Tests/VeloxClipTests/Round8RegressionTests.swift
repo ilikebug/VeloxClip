@@ -44,6 +44,12 @@ final class Round8RegressionTests: XCTestCase {
         XCTAssertEqual(JSONTextFormatting.minified(source), #"{"k":"a  b","n":1.50}"#)
     }
 
+    func testLeadingByteOrderMarkIsDropped() {
+        let source = "\u{FEFF}{\"a\":1}"
+        XCTAssertEqual(JSONTextFormatting.minified(source), #"{"a":1}"#)
+        XCTAssertFalse(JSONTextFormatting.pretty(source).hasPrefix("\u{FEFF}"))
+    }
+
     func testFormattingKeepsNonASCIIText() {
         let source = #"{"名字":"张三 😀"}"#
         XCTAssertEqual(JSONTextFormatting.minified(source), source)
@@ -119,11 +125,46 @@ final class Round8RegressionTests: XCTestCase {
         XCTAssertFalse(ShortcutParser.isRecordable(modifiers: [], keyCode: keyA))
     }
 
+    /// Keys that type no character are fine with Shift or Option alone —
+    /// ⌥Space is a common launcher hotkey.
+    func testShiftOrOptionOnNonCharacterKeysIsRecordable() {
+        XCTAssertTrue(ShortcutParser.isRecordable(modifiers: [.option], keyCode: 49))  // space
+        XCTAssertTrue(ShortcutParser.isRecordable(modifiers: [.shift], keyCode: 36))   // return
+        XCTAssertFalse(ShortcutParser.isRecordable(modifiers: [.option], keyCode: 14)) // e — types é
+        XCTAssertFalse(ShortcutParser.isRecordable(modifiers: [], keyCode: 49), "plain Space is typing")
+    }
+
     func testCommandControlAndFunctionKeysAreRecordable() {
         let keyA: UInt16 = 0
         XCTAssertTrue(ShortcutParser.isRecordable(modifiers: [.command, .shift], keyCode: keyA))
         XCTAssertTrue(ShortcutParser.isRecordable(modifiers: [.control, .option], keyCode: keyA))
         XCTAssertTrue(ShortcutParser.isRecordable(modifiers: [], keyCode: 122)) // F1
+    }
+
+    // MARK: - Re-copying a favorite reordered the Favorites list
+
+    /// The Favorites list is ordered by favoritedAt; moving a reused favorite
+    /// to the top only made it jump back on the next overlay open.
+    func testRecopyingAFavoriteKeepsTheFavoritesOrder() async throws {
+        let db = DatabaseManager(databaseURL: TestSupport.makeDatabaseURL(#function))
+        let settings = AppSettings(dbManager: db, autoLoad: false)
+        await settings.load()
+        let store = ClipboardStore(dbManager: db, settings: settings, shouldLoad: false)
+
+        var first = ClipboardItem(type: "text", content: "first favorite")
+        first.isFavorite = true
+        first.favoritedAt = Date(timeIntervalSince1970: 200)
+        var second = ClipboardItem(type: "text", content: "second favorite")
+        second.isFavorite = true
+        second.favoritedAt = Date(timeIntervalSince1970: 100)
+        store.items = []
+        store.favoriteItems = [first, second]
+
+        store.addItem(ClipboardItem(type: "text", content: "second favorite"))
+
+        XCTAssertEqual(store.favoriteItems.map(\.id), [first.id, second.id])
+        XCTAssertNotNil(store.favoriteItems[1].lastUsedAt, "the row is still updated in place")
+        XCTAssertEqual(store.items.first?.id, second.id, "history still moves it to the top")
     }
 
     // MARK: - A refused shortcut was persisted anyway

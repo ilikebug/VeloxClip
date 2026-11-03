@@ -10,7 +10,9 @@ enum JSONTextFormatting {
     static func minified(_ json: String) -> String { format(json, pretty: false) }
 
     private static func format(_ json: String, pretty: Bool) -> String {
-        let bytes = Array(json.utf8)
+        // JSONSerialization accepts a leading BOM; it must not reach the copied text
+        var bytes = Array(json.utf8)
+        if bytes.starts(with: [0xEF, 0xBB, 0xBF]) { bytes.removeFirst(3) }
         var out: [UInt8] = []
         out.reserveCapacity(pretty ? bytes.count * 2 : bytes.count)
         var depth = 0
