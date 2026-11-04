@@ -128,10 +128,12 @@ struct TablePreviewView: View {
         guard !lines.isEmpty else { return ParsedTable(headers: [], rows: [], keys: [], filteredRows: []) }
         // A Markdown table's "|---|:--:|" rule is layout, not a data row. It is
         // always the line under the header; a later "| - | - |" is data.
-        if sep == "|", lines.count > 1, isMarkdownRule(lines[1]) { lines.remove(at: 1) }
-        // Only a fenced table ("| a | b |") has border pipes; in "a|b|c" data a
-        // leading "|" is an empty first field
-        let fenced = sep == "|" && lines[0].trimmingCharacters(in: .whitespaces).hasPrefix("|")
+        let hasRule = sep == "|" && lines.count > 1 && isMarkdownRule(lines[1])
+        if hasRule { lines.remove(at: 1) }
+        // Border pipes exist only in Markdown, where each row may or may not
+        // have them; in raw "a|b|c" data a leading "|" is an empty first field
+        let header = lines[0].trimmingCharacters(in: .whitespaces)
+        let fenced = hasRule || (sep == "|" && header.hasPrefix("|") && header.hasSuffix("|"))
         let headers = Self.parseLine(lines[0], delimiter: sep, fenced: fenced)
         let rows = lines.dropFirst().map { Self.parseLine($0, delimiter: sep, fenced: fenced) }
         // Precomputed search key per row

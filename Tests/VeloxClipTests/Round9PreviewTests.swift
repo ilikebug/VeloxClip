@@ -130,6 +130,16 @@ final class Round9PreviewTests: XCTestCase {
         XCTAssertEqual(TablePreviewView.parsedTable("a|b|c\n|y|z", delimiter: "|", query: "").rows, [["", "y", "z"]])
     }
 
+    /// Markdown lets each row keep or drop its outer pipes.
+    func testMarkdownRowsWithAndWithoutBorderPipes() {
+        let trailingOnly = TablePreviewView.parsedTable("a | b |\n--|--|\n1 | 2 |", delimiter: "|", query: "")
+        XCTAssertEqual(trailingOnly.headers, ["a", "b"])
+        XCTAssertEqual(trailingOnly.rows, [["1", "2"]])
+        let mixed = TablePreviewView.parsedTable("a | b\n|---|---|\n| 1 | 2 |", delimiter: "|", query: "")
+        XCTAssertEqual(mixed.headers, ["a", "b"])
+        XCTAssertEqual(mixed.rows, [["1", "2"]])
+    }
+
     /// Full-width digits match `\d`, which made the zone offset force-unwrap trap.
     func testFullWidthDigitsDoNotCrashTheParser() {
         XCTAssertNil(DateTimePreviewPresentation.date(from: "2026-06-12T10:00+０５:３０"))

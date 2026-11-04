@@ -95,6 +95,7 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
 
     private var window: OverlayWindow?
     private var lastActiveApp: NSRunningApplication?
+    private var openedOverOwnWindow = false
     // Number of selectAndPaste calls mid-flight. Hiding the overlay during that
     // window (didResignActive fires when the target app activates) must NOT
     // start a staged paste stack — its pre-write would clobber the pasteboard
@@ -153,9 +154,9 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
         let wasVisible = window?.isVisible ?? false
         hideOverlay()
         guard wasVisible, NSApp.isActive else { return }
-        // Another VeloxClip window (Settings, the screenshot editor) takes key
-        // back on its own; activating the last app would bury it
-        guard !NSApp.windows.contains(where: { $0 !== window && $0.isVisible && $0.canBecomeMain }) else { return }
+        // Opened from a VeloxClip window (Settings, the screenshot editor): it
+        // takes key back on its own; activating the last app would bury it
+        guard !openedOverOwnWindow else { return }
         if let app = lastActiveApp, !app.isTerminated {
             app.activate()
         } else {
@@ -184,6 +185,10 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
     }
 
     private func showWindow() {
+        // Whether the user was working in a VeloxClip window. Only that, not any
+        // open one: a Settings window left behind other apps must not keep Esc
+        // from handing focus back. The MenuBarExtra panel cannot become main.
+        openedOverOwnWindow = NSApp.isActive && NSApp.keyWindow?.canBecomeMain == true
         // Record the non-VeloxClip frontmost app so we can return focus to it later.
         // MenuBarExtra(.window) makes VeloxClip frontmost before its buttons run.
         rememberPotentialTargetApp(NSWorkspace.shared.frontmostApplication)

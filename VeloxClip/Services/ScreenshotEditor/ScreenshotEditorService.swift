@@ -137,7 +137,9 @@ class ScreenshotEditorService: NSObject, NSWindowDelegate {
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         // A sheet already up (Save panel, an earlier discard prompt) owns the
-        // decision; queueing another one surfaced it after the first resolved
+        // decision; queueing another one surfaced it after the first resolved,
+        // stale. The editor is brought forward with that sheet showing instead,
+        // and the request is dropped — the user repeats it once it is answered.
         guard window.attachedSheet == nil else { return }
 
         let alert = NSAlert()
