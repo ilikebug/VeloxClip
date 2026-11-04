@@ -27,8 +27,15 @@ struct CommandPaletteView: View {
     }
 
     private var filteredCommands: [Command] {
-        guard !filter.trimmingCharacters(in: .whitespaces).isEmpty else { return allCommands }
-        return allCommands.filter { $0.title.localizedCaseInsensitiveContains(filter) }
+        Self.filter(allCommands, by: filter)
+    }
+
+    /// The emptiness check trimmed but the match did not, so "delete " (or a
+    /// pasted " copy") matched nothing.
+    static func filter(_ commands: [Command], by filter: String) -> [Command] {
+        let query = filter.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return commands }
+        return commands.filter { $0.title.localizedCaseInsensitiveContains(query) }
     }
 
     /// Parsed color for a color item (from its hex `content`); nil otherwise.

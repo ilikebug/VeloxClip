@@ -169,31 +169,14 @@ struct TextSummaryView: View {
 
     private func generateSummary() {
         // Local extractive summary — no network/LLM dependency
-        summary = generateSimpleSummary()
+        summary = TextSummaryPresentation.summary(for: text)
     }
-    
-    private func generateSimpleSummary() -> String {
-        let sentences = text.components(separatedBy: CharacterSet(charactersIn: ".!?")).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-        let summaryLength = min(3, sentences.count)
-        return sentences.prefix(summaryLength).joined(separator: ". ") + "."
-    }
-    
+
     private func extractKeywordsAsync() async {
         // Simple keyword extraction - find most common words (async to avoid blocking UI)
         await Task.detached(priority: .userInitiated) {
-            let words = text.lowercased()
-                .components(separatedBy: CharacterSet.alphanumerics.inverted)
-                .filter { $0.count > 3 }
-            
-            var wordCounts: [String: Int] = [:]
-            for word in words {
-                wordCounts[word, default: 0] += 1
-            }
-            
-            let extractedKeywords = Array(wordCounts.sorted { $0.value > $1.value }
-                .prefix(10)
-                .map { $0.key })
-            
+            let extractedKeywords = TextSummaryPresentation.keywords(in: text)
+
             await MainActor.run {
                 keywords = extractedKeywords
             }
