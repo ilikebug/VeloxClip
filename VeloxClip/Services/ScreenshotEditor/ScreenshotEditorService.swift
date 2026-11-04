@@ -16,6 +16,13 @@ class ScreenshotEditorService: NSObject, NSWindowDelegate {
 
     // Show editor window with image
     func showEditor(with image: NSImage) {
+        // Replacing an editor that holds unsaved annotations goes through the
+        // same discard confirmation as closing it — it used to drop them silently
+        if editorWindow != nil, editorState?.hasUnsavedChanges == true {
+            requestClose { [weak self] in self?.showEditor(with: image) }
+            return
+        }
+
         // Close existing window if any
         closeEditor()
 
@@ -115,13 +122,20 @@ class ScreenshotEditorService: NSObject, NSWindowDelegate {
         }
     }
 
-    // Close with confirmation when there are unsaved annotations
-    func requestClose() {
+    // Close with confirmation when there are unsaved annotations;
+    // `then` runs once the editor is actually closed
+    func requestClose(then next: (@MainActor () -> Void)? = nil) {
         guard let window = editorWindow else { return }
-        guard let state = editorState, !state.elements.isEmpty else {
+        guard let state = editorState, state.hasUnsavedChanges else {
             closeEditor()
+            next?()
             return
         }
+
+        // A request from the overlay can find the editor behind other windows —
+        // a sheet on it would go unseen
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
 
         let alert = NSAlert()
         alert.messageText = "Discard annotations?"
@@ -133,6 +147,7 @@ class ScreenshotEditorService: NSObject, NSWindowDelegate {
             if response == .alertFirstButtonReturn {
                 Task { @MainActor in
                     self?.closeEditor()
+                    next?()
                 }
             }
         }
@@ -157,7 +172,7 @@ class ScreenshotEditorService: NSObject, NSWindowDelegate {
     // MARK: - NSWindowDelegate
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
-        guard let state = editorState, !state.elements.isEmpty else { return true }
+        guard let state = editorState, state.hasUnsavedChanges else { return true }
         requestClose() // shows the confirmation sheet; closes on confirm
         return false
     }
@@ -180,10 +195,16 @@ class ScreenshotEditorService: NSObject, NSWindowDelegate {
         savePanel.nameFieldStringValue = "Screenshot \(timestamp)"
         savePanel.canCreateDirectories = true
 
+        // Snapshot what this image was rendered from: only a written file
+        // clears the "unsaved" prompt, and only for these annotations
+        let state = editorState
+        let renderedIDs = state?.elements.map(\.id) ?? []
         let handleResponse: (NSApplication.ModalResponse) -> Void = { response in
             guard response == .OK, let url = savePanel.url else { return }
             Task { @MainActor in
-                Self.write(image, to: url)
+                if Self.write(image, to: url) {
+                    state?.markSaved(renderedIDs)
+                }
             }
         }
 
@@ -194,11 +215,11 @@ class ScreenshotEditorService: NSObject, NSWindowDelegate {
         }
     }
 
-    private static func write(_ image: NSImage, to url: URL) {
+    private static func write(_ image: NSImage, to url: URL) -> Bool {
         guard let tiffData = image.tiffRepresentation,
               let bitmapImage = NSBitmapImageRep(data: tiffData) else {
             print("❌ Failed to encode edited image")
-            return
+            return false
         }
 
         // Honor the extension the user picked in the save panel
@@ -208,15 +229,17 @@ class ScreenshotEditorService: NSObject, NSWindowDelegate {
 
         guard let data = bitmapImage.representation(using: fileType, properties: properties) else {
             print("❌ Failed to encode edited image as \(isJPEG ? "JPEG" : "PNG")")
-            return
+            return false
         }
 
         do {
             try data.write(to: url)
             print("✅ Image saved to: \(url.path)")
+            return true
         } catch {
             print("❌ Failed to save image: \(error)")
             ErrorHandler.shared.handle(error)
+            return false
         }
     }
 

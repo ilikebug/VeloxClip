@@ -39,7 +39,26 @@ class EditorState: ObservableObject {
     @Published var textInput: String = ""
     @Published var textPosition: CGPoint?
     @Published var fontSize: CGFloat = 16.0  // Default font size
-    
+
+    /// Opacity the current tool draws with. The live preview and the committed
+    /// element both use it — they disagreed for highlights, which changed
+    /// opacity on mouse-up. Highlights draw at half the chosen opacity.
+    var drawingOpacity: Double {
+        currentTool == .highlight ? opacity * 0.5 : opacity
+    }
+
+    // Element ids as of the last successful save. Closing prompts only when
+    // the canvas differs from what was written — it used to prompt after a save.
+    private var savedElementIDs: [UUID] = []
+
+    var hasUnsavedChanges: Bool {
+        elements.map(\.id) != savedElementIDs
+    }
+
+    func markSaved(_ ids: [UUID]) {
+        savedElementIDs = ids
+    }
+
     // Save state snapshot for undo
     func saveState() {
         undoStack.append(elements)
@@ -199,7 +218,7 @@ class EditorState: ObservableObject {
             path: path,
             color: currentColor,
             lineWidth: lineWidth,
-            opacity: currentTool == .highlight ? 0.5 : opacity,
+            opacity: drawingOpacity,
             startPoint: startPoint,
             endPoint: endPoint,
             text: nil,
@@ -362,6 +381,12 @@ class EditorState: ObservableObject {
         let expandedBox = boundingBox.insetBy(dx: -radius, dy: -radius)
         if !expandedBox.contains(point) {
             return false
+        }
+
+        // A highlight is a filled rectangle — the box test above already covers
+        // its inside; the stroked-path test below only hit its outline
+        if element.type == .highlight {
+            return true
         }
 
         // For mosaic/rect/circle, check if point is inside

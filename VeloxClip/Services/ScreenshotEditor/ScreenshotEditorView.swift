@@ -140,13 +140,13 @@ struct ScreenshotEditorView: View {
                                         if let transformedCGPath = currentPath.copy(using: &transform) {
                                             let transformedPath = Path(transformedCGPath)
                                             if editorState.currentTool == .highlight {
-                                                context.fill(transformedPath, with: .color(editorState.currentColor.opacity(editorState.opacity * 0.3)))
+                                                context.fill(transformedPath, with: .color(editorState.currentColor.opacity(editorState.drawingOpacity * 0.3)))
                                             } else if editorState.currentTool == .arrow {
-                                                context.fill(transformedPath, with: .color(editorState.currentColor.opacity(editorState.opacity)))
+                                                context.fill(transformedPath, with: .color(editorState.currentColor.opacity(editorState.drawingOpacity)))
                                             }
                                             context.stroke(
                                                 transformedPath,
-                                                with: .color(editorState.currentColor.opacity(editorState.opacity)),
+                                                with: .color(editorState.currentColor.opacity(editorState.drawingOpacity)),
                                                 lineWidth: editorState.lineWidth * scaleX
                                             )
                                         }
@@ -224,18 +224,7 @@ struct ScreenshotEditorView: View {
                                 let clampedY = max(0, min(image.size.height, newY))
                                 editorState.textPosition = CGPoint(x: clampedX, y: clampedY)
                             },
-                            onSubmit: {
-                                if !editingText.isEmpty {
-                                    editorState.textInput = editingText
-                                    editorState.finishDrawing()
-                                    editingText = ""
-                                } else {
-                                    editorState.textInput = ""
-                                    editorState.textPosition = nil
-                                    editorState.isDrawing = false
-                                    editingText = ""
-                                }
-                            }
+                            onSubmit: commitTextInput
                         )
                     }
                 }
@@ -335,6 +324,7 @@ struct ScreenshotEditorView: View {
 
                         // Action Buttons
                         Button(L10n.string("screenshot.save", language: settings.appLanguage)) {
+                            commitPendingText()
                             let editedImage = renderEditedImage()
                             onSave(editedImage)
                             // We don't call onCancel() here to let the user finish the save dialog
@@ -342,6 +332,7 @@ struct ScreenshotEditorView: View {
                         .dsButton(.secondary)
 
                         Button(L10n.string("screenshot.done", language: settings.appLanguage)) {
+                            commitPendingText()
                             let editedImage = renderEditedImage()
                             onDone(editedImage)
                         }
@@ -472,6 +463,28 @@ struct ScreenshotEditorView: View {
     }
 
     // MARK: - Helpers
+
+    private func commitTextInput() {
+        if !editingText.isEmpty {
+            editorState.textInput = editingText
+            editorState.finishDrawing()
+            editingText = ""
+        } else {
+            editorState.textInput = ""
+            editorState.textPosition = nil
+            editorState.isDrawing = false
+            editingText = ""
+        }
+    }
+
+    // Save/Done render editorState.elements, but a caption not yet committed
+    // with Return lives only in editingText. Clicking a button does not take
+    // focus from the text field, so the focus-loss commit never ran and the
+    // caption was dropped from the output.
+    private func commitPendingText() {
+        guard editorState.currentTool == .text, editorState.isDrawing, !editingText.isEmpty else { return }
+        commitTextInput()
+    }
 
     private func renderEditedImage() -> NSImage {
         // Compositing lives in AnnotationRenderer: it is pure, and the Retina
