@@ -3,9 +3,9 @@ import SQLite
 @testable import VeloxClip
 
 final class DatabaseManagerTests: XCTestCase {
-    /// The list sort is COALESCE(lastUsedAt, createdAt) DESC, which a plain
-    /// index on createdAt cannot satisfy — every launch was a full scan plus a
-    /// filesort. Assert the planner actually uses the expression index.
+    /// The list sort is ifnull(lastUsedAt, createdAt) DESC (SQLite.swift's `??`),
+    /// which a plain index on createdAt cannot satisfy — every launch was a full
+    /// scan plus a filesort. Assert the planner actually uses the expression index.
     func testListQueryIsIndexedRatherThanFilesorted() async throws {
         let url = TestSupport.makeDatabaseURL(#function)
         let db = DatabaseManager(databaseURL: url)
@@ -15,13 +15,13 @@ final class DatabaseManagerTests: XCTestCase {
         var plan: [String] = []
         for row in try connection.prepare("""
             EXPLAIN QUERY PLAN
-            SELECT id FROM clipboard_items ORDER BY COALESCE(lastUsedAt, createdAt) DESC
+            SELECT id FROM clipboard_items ORDER BY ifnull(lastUsedAt, createdAt) DESC
             """) {
             plan.append(row.compactMap { $0 as? String }.joined(separator: " "))
         }
         let detail = plan.joined(separator: " | ")
 
-        XCTAssertTrue(detail.contains("idx_items_recency"),
+        XCTAssertTrue(detail.contains("idx_items_sort_recency"),
                       "the recency index must serve the list ordering — got: \(detail)")
         XCTAssertFalse(detail.uppercased().contains("TEMP B-TREE"),
                        "ordering must not fall back to a filesort — got: \(detail)")

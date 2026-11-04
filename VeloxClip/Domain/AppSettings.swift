@@ -34,53 +34,68 @@ class AppSettings: ObservableObject {
         }
     }
 
-    // The hotkey registration deliberately runs even while isInitializing —
-    // that is how values read back from the database take effect. Only the DB
-    // write is guarded. But a failure during load is NOT the user's doing: the
-    // stored shortcut was already accepted once, and whatever owns it now took
-    // it while the app was closed. Reporting is therefore tied to the same
-    // flag, or every launch re-accuses the user (F2 -9878 was the live case).
+    // Values read back from the database take effect when the App registers
+    // all hotkeys after load (VeloxClipApp.registerShortcuts), silently: a
+    // failure then is NOT the user's doing — the stored shortcut was already
+    // accepted once, and whatever owns it now took it while the app was closed
+    // (F2 -9878 was the live case). Changes made in Settings register here and
+    // report failures, because the user just picked that combination.
     @Published var globalShortcut: String {
         didSet {
-            if !isInitializing {
-                Task {
-                    await persistSetting(key: "globalShortcut", value: globalShortcut)
-                }
+            applyShortcut(globalShortcut, oldValue: oldValue, slot: .windowToggle, key: "globalShortcut") {
+                self.globalShortcut = $0
             }
-            ShortcutManager.shared.update(globalShortcut, for: .windowToggle, reportErrors: !isInitializing)
         }
     }
 
     @Published var screenshotShortcut: String {
         didSet {
-            if !isInitializing {
-                Task {
-                    await persistSetting(key: "screenshotShortcut", value: screenshotShortcut)
-                }
+            applyShortcut(screenshotShortcut, oldValue: oldValue, slot: .screenshot, key: "screenshotShortcut") {
+                self.screenshotShortcut = $0
             }
-            ShortcutManager.shared.update(screenshotShortcut, for: .screenshot, reportErrors: !isInitializing)
         }
     }
 
     @Published var pasteImageShortcut: String {
         didSet {
-            if !isInitializing {
-                Task {
-                    await persistSetting(key: "pasteImageShortcut", value: pasteImageShortcut)
-                }
+            applyShortcut(pasteImageShortcut, oldValue: oldValue, slot: .pasteImage, key: "pasteImageShortcut") {
+                self.pasteImageShortcut = $0
             }
-            ShortcutManager.shared.update(pasteImageShortcut, for: .pasteImage, reportErrors: !isInitializing)
         }
     }
 
     @Published var textCaptureShortcut: String {
         didSet {
-            if !isInitializing {
-                Task {
-                    await persistSetting(key: "textCaptureShortcut", value: textCaptureShortcut)
-                }
+            applyShortcut(textCaptureShortcut, oldValue: oldValue, slot: .textCapture, key: "textCaptureShortcut") {
+                self.textCaptureShortcut = $0
             }
-            ShortcutManager.shared.update(textCaptureShortcut, for: .textCapture, reportErrors: !isInitializing)
+        }
+    }
+
+    private var isRevertingShortcut = false
+
+    /// Registers first and persists only what actually registered. Persisting
+    /// first saved a combination the system refused: Settings showed it, the
+    /// old hotkey stayed live, and the next launch could hand it to another slot.
+    ///
+    /// Values read back during load are not registered here: the App registers
+    /// all four once, after load. Registering them one at a time while the other
+    /// slots still held their defaults made a moved key (F1 from Screenshot to
+    /// Overlay) collide with the default it replaced, so the live hotkeys no
+    /// longer matched Settings after a relaunch.
+    private func applyShortcut(_ value: String, oldValue: String, slot: ShortcutManager.Slot,
+                               key: String, revert: (String) -> Void) {
+        // Re-recording the current value: re-registering it fails with -9878
+        // and raised a false "already in use" alert
+        guard !isRevertingShortcut, !isInitializing, value != oldValue else { return }
+        let registered = ShortcutManager.shared.update(value, for: slot)
+        if registered {
+            Task { await persistSetting(key: key, value: value) }
+        } else {
+            // The old hotkey is still live — put the setting back to match it
+            isRevertingShortcut = true
+            revert(oldValue)
+            isRevertingShortcut = false
         }
     }
 

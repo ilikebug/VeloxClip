@@ -57,10 +57,10 @@ struct CommandPaletteView: View {
         .shadow(color: DesignSystem.panelShadow(scheme), radius: 25, y: 18)
         .onAppear { fieldFocused = true }
         .onChange(of: filter) { _, _ in
-            // Keep selection valid as the list shrinks/grows
-            if selectedIndex >= filteredCommands.count {
-                selectedIndex = max(0, filteredCommands.count - 1)
-            }
+            // A new filter is a new list: start at the top match. Only clamping
+            // the old index re-targeted it at an unrelated command (index 4
+            // "Add to Paste Queue" + typing "d" landed on Delete).
+            selectedIndex = 0
         }
         .onKeyPress(.upArrow) {
             if !filteredCommands.isEmpty {

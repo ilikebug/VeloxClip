@@ -38,11 +38,46 @@ struct TablePreviewPresentation {
 }
 
 struct DateTimePreviewPresentation {
+    private static let formats = [
+        "yyyy-MM-dd HH:mm:ss",
+        "yyyy-MM-dd'T'HH:mm:ssZ",
+        "yyyy-MM-dd'T'HH:mm:ss.SSSZ",
+        "yyyy-MM-dd",
+        "MM/dd/yyyy",
+        "dd/MM/yyyy",
+        // Two-digit years, after the four-digit forms so "12/06/2026" still wins there
+        "MM/dd/yy",
+        "dd/MM/yy",
+        "EEE, dd MMM yyyy HH:mm:ss Z",
+        "dd MMM yyyy HH:mm:ss"
+    ]
+
+    /// The date a copied string denotes, trying the known text formats and then
+    /// a numeric Unix epoch.
+    static func date(from string: String) -> Date? {
+        // Detection trims newlines; parsing must too, or `date +%s | pbcopy`
+        // ("1730000000\n") was classified as a date but never converted
+        let source = string.trimmingCharacters(in: .whitespacesAndNewlines)
+        let calendar = Calendar(identifier: .gregorian)
+        for format in formats {
+            let formatter = DateFormatter()
+            formatter.dateFormat = format
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            // DateFormatter is lenient about separators and digit counts:
+            // "yyyy-MM-dd" read "12/06/26" as the year 12. No clipboard date is
+            // from the first century, so treat that as a miss and keep looking.
+            if let date = formatter.date(from: source), calendar.component(.year, from: date) >= 100 {
+                return date
+            }
+        }
+        return unixDate(from: source)
+    }
+
     /// Numeric timestamps: values above 1e11 are milliseconds (13-digit epochs,
     /// which `ContentDetectionService` routes here), otherwise seconds. 1e11 s is
     /// year 5138, so no real seconds value crosses it.
     static func unixDate(from string: String) -> Date? {
-        guard let value = Double(string.trimmingCharacters(in: .whitespaces)) else { return nil }
+        guard let value = Double(string.trimmingCharacters(in: .whitespacesAndNewlines)) else { return nil }
         return Date(timeIntervalSince1970: value >= 1e11 ? value / 1000 : value)
     }
 
@@ -53,7 +88,7 @@ struct DateTimePreviewPresentation {
     /// the one the user copied. When the source IS a numeric epoch, echo it
     /// unchanged; only a formatted date has to be converted.
     static func unixTimestampString(for source: String, parsedDate: Date? = nil) -> String? {
-        let trimmed = source.trimmingCharacters(in: .whitespaces)
+        let trimmed = source.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.allSatisfy(\.isNumber), !trimmed.isEmpty, Double(trimmed) != nil {
             return trimmed
         }

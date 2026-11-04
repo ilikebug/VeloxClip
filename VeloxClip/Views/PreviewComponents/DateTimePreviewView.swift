@@ -93,41 +93,12 @@ struct DateTimePreviewView: View {
     }
     
     private func parseDate() {
-        // Try multiple date formats
-        let formatters: [DateFormatter] = [
-            createFormatter(format: "yyyy-MM-dd HH:mm:ss"),
-            createFormatter(format: "yyyy-MM-dd'T'HH:mm:ssZ"),
-            createFormatter(format: "yyyy-MM-dd'T'HH:mm:ss.SSSZ"),
-            createFormatter(format: "yyyy-MM-dd"),
-            createFormatter(format: "MM/dd/yyyy"),
-            createFormatter(format: "dd/MM/yyyy"),
-            createFormatter(format: "EEE, dd MMM yyyy HH:mm:ss Z"),
-            createFormatter(format: "dd MMM yyyy HH:mm:ss")
-        ]
-        
-        for formatter in formatters {
-            if let date = formatter.date(from: dateString) {
-                parsedDate = date
-                generateFormats(date: date)
-                return
-            }
-        }
-        
-        // Try Unix timestamp (seconds or milliseconds)
-        if let date = DateTimePreviewPresentation.unixDate(from: dateString) {
+        if let date = DateTimePreviewPresentation.date(from: dateString) {
             parsedDate = date
             generateFormats(date: date)
             return
         }
-        
         parsedDate = nil
-    }
-    
-    private func createFormatter(format: String) -> DateFormatter {
-        let formatter = DateFormatter()
-        formatter.dateFormat = format
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        return formatter
     }
     
     /// Local zone, not the default UTC: every other row in the panel renders

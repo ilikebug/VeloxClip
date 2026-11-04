@@ -59,10 +59,12 @@ class ShortcutManager {
     /// parseability still tore down a working hotkey when the OS refused the
     /// new combination (already owned by another app, or by another slot),
     /// leaving the user with neither.
-    func update(_ shortcut: String, for slot: Slot, reportErrors: Bool = true) {
+    /// Returns false when `shortcut` did not become the live hotkey.
+    @discardableResult
+    func update(_ shortcut: String, for slot: Slot, reportErrors: Bool = true) -> Bool {
         guard let parsed = ShortcutParser.parse(shortcut) else {
             print("Ignoring unparseable shortcut \"\(shortcut)\" for hotkey \(slot); keeping the current one")
-            return
+            return false
         }
 
         installEventHandlerIfNeeded()
@@ -80,12 +82,13 @@ class ShortcutManager {
             if reportErrors {
                 ErrorHandler.shared.handle(ShortcutError.registrationFailed(shortcut: shortcut, status: status))
             }
-            return
+            return false
         }
 
         // Only now is the old one safe to drop.
         if let old = hotKeyRefs[slot] { UnregisterEventHotKey(old) }
         hotKeyRefs[slot] = replacement
+        return true
     }
 
     /// True when `slot` currently has a live registration.

@@ -367,7 +367,16 @@ struct PreviewView: View {
                     .font(.system(size: 11))
                     .foregroundColor(c.text2)
                 Spacer()
-                Button(action: { isEditingTags.toggle(); isTagInputFocused = isEditingTags }) {
+                Button(action: {
+                    // In edit mode this is the ✓ button: it must commit what was
+                    // typed, exactly like ⏎ — it used to just close the field
+                    if isEditingTags {
+                        commitTagInput(for: item)
+                    } else {
+                        isEditingTags = true
+                        isTagInputFocused = true
+                    }
+                }) {
                     Image(systemName: isEditingTags ? "checkmark.circle.fill" : "plus.circle")
                         .foregroundColor(isEditingTags ? c.accent : c.text2)
                 }
@@ -432,19 +441,23 @@ struct PreviewView: View {
                 isTagInputFocused = false
             }
             .onSubmit {
-                // A whitespace-only tag renders as a blank pill that carries no
-                // label and, outside edit mode, no × to remove it.
-                let candidate = newTagText.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !candidate.isEmpty {
-                    store.addTag(candidate, to: item)
-                    newTagText = ""
-                }
-                // Committing (or ⏎ on an empty field) CLOSES the input — a new one
-                // only opens via the + button. Without this the field stays focused,
-                // `editingText` stays true, and detail-mode keys (←/Esc/⏎) keep
-                // falling through to an empty tag field instead of navigating.
-                isEditingTags = false
-                isTagInputFocused = false
+                commitTagInput(for: item)
             }
+    }
+
+    private func commitTagInput(for item: ClipboardItem) {
+        // A whitespace-only tag renders as a blank pill that carries no
+        // label and, outside edit mode, no × to remove it.
+        let candidate = newTagText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !candidate.isEmpty {
+            store.addTag(candidate, to: item)
+        }
+        newTagText = ""
+        // Committing (or ⏎ on an empty field) CLOSES the input — a new one
+        // only opens via the + button. Without this the field stays focused,
+        // `editingText` stays true, and detail-mode keys (←/Esc/⏎) keep
+        // falling through to an empty tag field instead of navigating.
+        isEditingTags = false
+        isTagInputFocused = false
     }
 }

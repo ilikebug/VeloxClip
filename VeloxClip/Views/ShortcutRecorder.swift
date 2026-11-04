@@ -124,11 +124,8 @@ class ShortcutRecorderView: NSView {
                 let modifiers = event.modifierFlags
                 let keyCode = event.keyCode
                 
-                // Allow function keys (F1-F12) without modifiers, or require at least one modifier for other keys
-                let isFunctionKey = KeyCodeTable.isFunctionKey(keyCode)
-                let hasModifier = modifiers.contains(.command) || modifiers.contains(.shift) || modifiers.contains(.option) || modifiers.contains(.control)
-                
-                guard isFunctionKey || hasModifier else {
+                // Function keys (F1-F12) may stand alone; other keys need ⌘ or ⌃
+                guard ShortcutParser.isRecordable(modifiers: modifiers, keyCode: keyCode) else {
                     // If ESC pressed without modifiers, cancel
                     if keyCode == 53 { // ESC
                         self.cancelRecording()

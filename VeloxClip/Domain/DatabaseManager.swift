@@ -245,16 +245,21 @@ actor DatabaseManager {
         // A plain index on createdAt cannot satisfy an ORDER BY over
         // COALESCE(lastUsedAt, createdAt), so every launch was a full scan
         // plus a filesort. These are expression indices on the real sort keys.
+        // SQLite matches expression indexes literally and SQLite.swift's `??`
+        // emits ifnull(), so the indexes must use ifnull() — not COALESCE().
         try db.run("""
-            CREATE INDEX IF NOT EXISTS idx_items_recency
-            ON clipboard_items(COALESCE(lastUsedAt, createdAt) DESC)
+            CREATE INDEX IF NOT EXISTS idx_items_sort_recency
+            ON clipboard_items(ifnull(lastUsedAt, createdAt) DESC)
             """)
         try db.run("""
-            CREATE INDEX IF NOT EXISTS idx_items_fav_recency
-            ON clipboard_items(isFavorite, COALESCE(favoritedAt, createdAt) DESC)
+            CREATE INDEX IF NOT EXISTS idx_items_sort_fav_recency
+            ON clipboard_items(isFavorite, ifnull(favoritedAt, createdAt) DESC)
             """)
-        // Superseded by idx_items_recency; drop it so we don't pay to maintain it.
+        // Superseded indexes: the createdAt one, and the COALESCE ones no query
+        // could use. Drop them so we don't pay to maintain them.
         try db.run("DROP INDEX IF EXISTS index_clipboard_items_on_createdAt")
+        try db.run("DROP INDEX IF EXISTS idx_items_recency")
+        try db.run("DROP INDEX IF EXISTS idx_items_fav_recency")
     }
 
     private func migrateClipboardItemsTableIfNeeded() throws {

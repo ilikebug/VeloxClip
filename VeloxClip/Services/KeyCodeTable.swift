@@ -84,6 +84,22 @@ enum ShortcutParser {
         return Parsed(keyCode: UInt32(code), modifiers: modifiers)
     }
 
+    /// Whether the recorder may commit this combination as a global hotkey.
+    /// F-keys stand alone and ⌘/⌃ make anything a chord. Shift or Option alone
+    /// is only allowed on keys that don't type a character (⌥Space, ⇧Return):
+    /// on a character key it is how people type — a global "shift+a" swallowed
+    /// every capital A, and "alt+e" broke typing é, in every app.
+    static func isRecordable(modifiers: NSEvent.ModifierFlags, keyCode: UInt16) -> Bool {
+        if KeyCodeTable.isFunctionKey(keyCode) || modifiers.contains(.command) || modifiers.contains(.control) {
+            return true
+        }
+        guard modifiers.contains(.shift) || modifiers.contains(.option),
+              let name = KeyCodeTable.name(for: keyCode) else { return false }
+        // Character keys are named by their character ("a", "1", "/");
+        // the others by a word ("space", "return", "left")
+        return name.count > 1
+    }
+
     /// Recorder side: nil when the key has no name, so the caller keeps waiting
     /// instead of committing a key-less "cmd+shift".
     static func string(modifiers: NSEvent.ModifierFlags, keyCode: UInt16) -> String? {
@@ -95,5 +111,14 @@ enum ShortcutParser {
         if modifiers.contains(.control) { parts.append("ctrl") }
         parts.append(keyName)
         return parts.joined(separator: "+")
+    }
+}
+
+extension NSEvent.ModifierFlags {
+    /// Command is the only chord modifier held. Caps Lock and the fn/numeric-pad
+    /// bits are ignored: an exact match against `.deviceIndependentFlagsMask`
+    /// failed whenever Caps Lock was on.
+    var isCommandOnly: Bool {
+        intersection([.command, .shift, .option, .control]) == .command
     }
 }

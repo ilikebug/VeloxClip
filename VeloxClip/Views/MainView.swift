@@ -14,6 +14,22 @@ struct MainFocusRoutingPolicy {
     }
 }
 
+struct SearchSelectionPolicy {
+    /// The selection after a search publish: the current row while it is still
+    /// visible, else the first visible one. The type filter stacks on top of
+    /// the ranked results, so falling back to `ranked.first` could select a row
+    /// that isn't on screen — and Enter would paste it.
+    static func selection(current: ClipboardItem?,
+                          ranked: [ClipboardItem],
+                          filter: ClipboardTypeFilter) -> ClipboardItem? {
+        let visible = ranked.filter { filter.matches($0) }
+        if let current, visible.contains(where: { $0.id == current.id }) {
+            return current
+        }
+        return visible.first
+    }
+}
+
 enum ViewMode {
     case favorites
     case history
@@ -90,9 +106,10 @@ struct MainView: View {
         }
         search.search(query: searchText, in: baseItems) { ranked in
             // Keep the selection valid as results narrow
-            if selectedItem == nil || !ranked.contains(where: { $0.id == selectedItem?.id }) {
-                selectedItem = ranked.first
-                scrollTarget = ranked.first?.id
+            let next = SearchSelectionPolicy.selection(current: selectedItem, ranked: ranked, filter: typeFilter)
+            if next?.id != selectedItem?.id {
+                selectedItem = next
+                scrollTarget = next?.id
             }
         }
     }
@@ -183,25 +200,14 @@ struct MainView: View {
                 restoreSearchFocusSoon()
             }
         }
-        .onChange(of: store.items) { _, newItems in
-            // Deleting an item must not leave a ghost row in active search results.
-            // The view model holds a snapshot it never re-derives, so without this
-            // a deleted row stayed visible, stayed selectable, and pasting it wrote
-            // the deleted clip back to the system pasteboard.
-            let validIDs = Set(newItems.map(\.id)).union(store.favoriteItems.map(\.id))
-            search.prune(validIDs: validIDs)
-            // …nor a ghost selection — ⏎ would try to paste an item that no longer
-            // exists (for an image that meant clearing the clipboard and pasting nothing).
-            // Validate against what is actually on screen: in the Favorites tab the
-            // rendered list is favoriteItems, and a favorite outside the bounded
-            // window is a normal steady state, not a deleted row.
-            let visibleIDs = Set(displayItems.map(\.id))
-            if let selected = selectedItem, !visibleIDs.contains(selected.id) {
-                selectedItem = displayItems.first
-            }
-            if let detail = detailItem, !validIDs.contains(detail.id) {
-                withAnimation(.easeInOut(duration: 0.18)) { detailItem = nil }
-            }
+        .onChange(of: store.items) { _, _ in
+            dropRemovedRows()
+        }
+        .onChange(of: store.favoriteItems) { _, _ in
+            // Deleting a favorite outside the bounded window changes only
+            // favoriteItems — `items` never held it, so the handler above never
+            // fired and ⏎ pasted the deleted clip.
+            dropRemovedRows()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { notification in
             // Only react to the overlay window itself — other windows (Settings,
@@ -467,6 +473,27 @@ struct MainView: View {
         // Paste dismisses the overlay itself; everything else just closes the palette.
         if cmd.kind != .paste {
             showCommandPalette = false
+        }
+    }
+
+    private func dropRemovedRows() {
+        // Deleting an item must not leave a ghost row in active search results.
+        // The view model holds a snapshot it never re-derives, so without this
+        // a deleted row stayed visible, stayed selectable, and pasting it wrote
+        // the deleted clip back to the system pasteboard.
+        let validIDs = Set(store.items.map(\.id)).union(store.favoriteItems.map(\.id))
+        search.prune(validIDs: validIDs)
+        // …nor a ghost selection — ⏎ would try to paste an item that no longer
+        // exists (for an image that meant clearing the clipboard and pasting nothing).
+        // Validate against what is actually on screen: in the Favorites tab the
+        // rendered list is favoriteItems, and a favorite outside the bounded
+        // window is a normal steady state, not a deleted row.
+        let visibleIDs = Set(displayItems.map(\.id))
+        if let selected = selectedItem, !visibleIDs.contains(selected.id) {
+            selectedItem = displayItems.first
+        }
+        if let detail = detailItem, !validIDs.contains(detail.id) {
+            withAnimation(.easeInOut(duration: 0.18)) { detailItem = nil }
         }
     }
 
