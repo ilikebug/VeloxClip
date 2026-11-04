@@ -7,6 +7,13 @@ class PreviewViewModel: ObservableObject {
     @Published var isContentLoading = false
     
     private var detectionTask: Task<Void, Never>?
+    private let pasteboard: PasteboardService
+    private let store: ClipboardStore
+
+    init(pasteboard: PasteboardService = .shared, store: ClipboardStore = .shared) {
+        self.pasteboard = pasteboard
+        self.store = store
+    }
     
     func updateItem(_ item: ClipboardItem?) {
         detectionTask?.cancel()
@@ -28,11 +35,12 @@ class PreviewViewModel: ObservableObject {
     }
     
     func copyTransformedText(_ text: String) {
-        PasteboardService.shared.write(text: text)
+        pasteboard.write(text: text)
     }
     
     func copyToClipboard(_ item: ClipboardItem) {
-        PasteboardService.shared.write(item: item)
-        ClipboardStore.shared.markUsed(item.id)
+        // A failed write (undecodable image) must not count as a use
+        guard pasteboard.write(item: item) else { return }
+        store.markUsed(item.id)
     }
 }

@@ -91,6 +91,8 @@ class ClipboardStore: ObservableObject {
                 if item.data != nil, let index = self.items.firstIndex(where: { $0.id == itemId }) {
                     self.items[index].data = nil
                 }
+                // The menu-bar count otherwise lagged until the next load or delete
+                await refreshStoredCount()
             } catch {
                 print("Failed to add item to database: \(error)")
                 // Rollback UI change if database insert failed
@@ -131,6 +133,7 @@ class ClipboardStore: ObservableObject {
         Task {
             do {
                 try await dbManager.deleteClipboardItems(ids: idsToRemove)
+                await refreshStoredCount()
             } catch {
                 // The rows left the UI but are still on disk: they would come
                 // back on the next launch, which for the feature whose job is
