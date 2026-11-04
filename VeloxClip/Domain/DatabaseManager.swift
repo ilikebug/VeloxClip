@@ -255,6 +255,14 @@ actor DatabaseManager {
             CREATE INDEX IF NOT EXISTS idx_items_sort_fav_recency
             ON clipboard_items(isFavorite, ifnull(favoritedAt, createdAt) DESC)
             """)
+        // The trim and the non-favorite top-up filter on isFavorite = 0 and
+        // order by recency with an id tie-break. Neither index above serves
+        // that: the planner picks the favorites one for the equality and then
+        // sorts every non-favorite row in a temp B-tree.
+        try db.run("""
+            CREATE INDEX IF NOT EXISTS idx_items_trim
+            ON clipboard_items(isFavorite, ifnull(lastUsedAt, createdAt) DESC, id DESC)
+            """)
         // Superseded indexes: the createdAt one, and the COALESCE ones no query
         // could use. Drop them so we don't pay to maintain them.
         try db.run("DROP INDEX IF EXISTS index_clipboard_items_on_createdAt")
@@ -557,11 +565,25 @@ actor DatabaseManager {
         await ensureInitialized()
         guard let db = db else { throw DatabaseError.connectionFailed }
 
-        var query = clipboardItems.select(listColumns).order(sortKey.desc)
-        if let limit, limit > 0 {
-            query = query.limit(limit)
+        let query = clipboardItems.select(listColumns).order(sortKey.desc)
+        guard let limit, limit > 0 else {
+            return try db.prepare(query).compactMap(clipboardItem(from:))
         }
-        return try db.prepare(query).compactMap(clipboardItem(from:))
+        var rows = try db.prepare(query.limit(limit)).compactMap(clipboardItem(from:))
+
+        // Favorites still take slots in the window, so enough recently used
+        // ones pushed every ordinary row out of it. Top up with the newest
+        // non-favorites the window missed.
+        let loadedIDs = Set(rows.map(\.id))
+        let regular = clipboardItems.select(listColumns)
+            .filter(isFavorite == false)
+            .order(sortKey.desc, id.desc)
+            .limit(limit)
+        let missed = try db.prepare(regular).compactMap(clipboardItem(from:))
+            .filter { !loadedIDs.contains($0.id) }
+        guard !missed.isEmpty else { return rows }
+        rows += missed
+        return rows.sorted { ($0.lastUsedAt ?? $0.createdAt) > ($1.lastUsedAt ?? $1.createdAt) }
     }
 
     func fetchItemData(id itemID: UUID) async throws -> Data? {
