@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 // Entry point: a file item stores one path per line — a multi-file copy
 // stays ONE history item (paste reproduces the whole group), the preview
@@ -201,7 +202,7 @@ struct SingleFilePreview: View {
             if let info = fileInfo {
                 // File icon and name
                 HStack(spacing: 16) {
-                    Image(systemName: fileIcon(for: info.type))
+                    Image(systemName: Self.fileIcon(for: info.type))
                         .font(.system(size: 40))
                         .foregroundColor(.blue)
                     
@@ -342,7 +343,15 @@ struct SingleFilePreview: View {
         )
     }
     
-    private func fileIcon(for type: String) -> String {
+    static func fileIcon(for type: String) -> String {
+        // `type` is a UTI: "public.jpeg", "com.apple.quicktime-movie" and
+        // "public.mp3" never contain "image"/"video"/"audio", so photos, films
+        // and songs all got the generic icon. Ask the type tree first.
+        if let uti = UTType(type) {
+            if uti.conforms(to: .image) { return "photo" }
+            if uti.conforms(to: .movie) { return "video" }
+            if uti.conforms(to: .audio) { return "music.note" }
+        }
         if type.contains("image") {
             return "photo"
         } else if type.contains("video") {

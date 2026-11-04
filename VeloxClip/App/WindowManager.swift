@@ -65,7 +65,7 @@ class OverlayWindow: NSWindow {
 
     // Esc fallback: works even when focus is not in the search field
     override func cancelOperation(_ sender: Any?) {
-        WindowManager.shared.hideOverlay()
+        WindowManager.shared.dismissOverlay()
     }
 
     // Menu-bar apps may lack an Edit menu, so standard editing key equivalents
@@ -95,6 +95,7 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
 
     private var window: OverlayWindow?
     private var lastActiveApp: NSRunningApplication?
+    private var openedOverOwnWindow = false
     // Number of selectAndPaste calls mid-flight. Hiding the overlay during that
     // window (didResignActive fires when the target app activates) must NOT
     // start a staged paste stack — its pre-write would clobber the pasteboard
@@ -138,9 +139,28 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
 
     func toggleWindow() {
         if let window = window, window.isVisible {
-            hideOverlay()
+            dismissOverlay()
         } else {
             showWindow()
+        }
+    }
+
+    /// Explicit close (Esc, ✕, the toggle shortcut). Ordering the window out
+    /// leaves VeloxClip active with no window, so keystrokes went nowhere —
+    /// hand focus back the way selectAndPaste does. Not part of hideOverlay:
+    /// that also runs when another app has just taken focus, or when a
+    /// VeloxClip window (Settings) became key, and must not steal it back.
+    func dismissOverlay() {
+        let wasVisible = window?.isVisible ?? false
+        hideOverlay()
+        guard wasVisible, NSApp.isActive else { return }
+        // Opened from a VeloxClip window (Settings, the screenshot editor): it
+        // takes key back on its own; activating the last app would bury it
+        guard !openedOverOwnWindow else { return }
+        if let app = lastActiveApp, !app.isTerminated {
+            app.activate()
+        } else {
+            NSApp.hide(nil)
         }
     }
 
@@ -165,6 +185,10 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
     }
 
     private func showWindow() {
+        // Whether the user was working in a VeloxClip window. Only that, not any
+        // open one: a Settings window left behind other apps must not keep Esc
+        // from handing focus back. The MenuBarExtra panel cannot become main.
+        openedOverOwnWindow = NSApp.isActive && NSApp.keyWindow?.canBecomeMain == true
         // Record the non-VeloxClip frontmost app so we can return focus to it later.
         // MenuBarExtra(.window) makes VeloxClip frontmost before its buttons run.
         rememberPotentialTargetApp(NSWorkspace.shared.frontmostApplication)
@@ -288,12 +312,14 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
             // Row deleted since it was selected → nothing to paste. Still dismiss
             // the overlay (and arm any staged stack) so ⏎ doesn't look dead, but
             // leave the clipboard and the target app alone.
-            guard fullItem.hasPasteablePayload else {
+            // A blob that will not decode fails the write the same way: don't
+            // move it to the top, and don't paste whatever the clipboard held.
+            guard fullItem.hasPasteablePayload,
+                  PasteboardService.shared.write(item: fullItem) else {
                 self.window?.orderOut(nil)
                 await PasteStackService.shared.startIfStaged()
                 return
             }
-            PasteboardService.shared.write(item: fullItem)
 
             // Move the item to the top of history without rewriting its copy time
             ClipboardStore.shared.markUsed(item.id)

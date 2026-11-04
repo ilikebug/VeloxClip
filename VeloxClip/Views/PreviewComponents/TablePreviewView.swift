@@ -107,36 +107,70 @@ struct TablePreviewView: View {
         let rows = parsedData
         let keys = searchKeys
         filteredRows = await Task.detached(priority: .userInitiated) {
-            zip(rows, keys).filter { $0.1.contains(query) }.map(\.0)
+            Self.matchingRows(rows, keys: keys, query: query)
         }.value
+    }
+
+    nonisolated static func matchingRows(_ rows: [[String]], keys: [String], query: String) -> [[String]] {
+        zip(rows, keys).filter { $0.1.contains(query) }.map(\.0)
+    }
+
+    struct ParsedTable: Sendable {
+        var headers: [String]
+        var rows: [[String]]
+        var keys: [String]
+        var filteredRows: [[String]]
+    }
+
+    nonisolated static func parsedTable(_ source: String, delimiter sep: String, query: String) -> ParsedTable {
+        var lines = source.components(separatedBy: .newlines)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        guard !lines.isEmpty else { return ParsedTable(headers: [], rows: [], keys: [], filteredRows: []) }
+        // A Markdown table's "|---|:--:|" rule is layout, not a data row. It is
+        // always the line under the header; a later "| - | - |" is data.
+        let hasRule = sep == "|" && lines.count > 1 && isMarkdownRule(lines[1])
+        if hasRule { lines.remove(at: 1) }
+        // Border pipes exist only in Markdown, where each row may or may not
+        // have them; in raw "a|b|c" data a leading "|" is an empty first field
+        let header = lines[0].trimmingCharacters(in: .whitespaces)
+        let fenced = hasRule || (sep == "|" && header.hasPrefix("|") && header.hasSuffix("|"))
+        let headers = Self.parseLine(lines[0], delimiter: sep, fenced: fenced)
+        let rows = lines.dropFirst().map { Self.parseLine($0, delimiter: sep, fenced: fenced) }
+        // Precomputed search key per row
+        let keys = rows.map { $0.joined(separator: " ").lowercased() }
+        // Re-parsing (a delimiter change) used to reset the rows to unfiltered
+        // while the search field still held its query.
+        let filtered = query.isEmpty ? rows : matchingRows(rows, keys: keys, query: query.lowercased())
+        return ParsedTable(headers: headers, rows: rows, keys: keys, filteredRows: filtered)
+    }
+
+    nonisolated static func isMarkdownRule(_ line: String) -> Bool {
+        let cells = parseLine(line, delimiter: "|", fenced: true)
+        return cells.contains { !$0.isEmpty }
+            && cells.allSatisfy { $0.isEmpty || $0.range(of: #"^:?-+:?$"#, options: .regularExpression) != nil }
     }
 
     private func parseDataAsync() async {
         let source = content
         let sep = delimiter
-        let parsed = await Task.detached(priority: .userInitiated) { () -> (headers: [String], rows: [[String]], keys: [String]) in
-            let lines = source.components(separatedBy: .newlines)
-                .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-            guard !lines.isEmpty else { return ([], [], []) }
-            let headers = Self.parseLine(lines[0], delimiter: sep)
-            let rows = lines.dropFirst().map { Self.parseLine($0, delimiter: sep) }
-            // Precomputed search key per row
-            let keys = rows.map { $0.joined(separator: " ").lowercased() }
-            return (headers, rows, keys)
+        let query = searchText
+        let parsed = await Task.detached(priority: .userInitiated) {
+            Self.parsedTable(source, delimiter: sep, query: query)
         }.value
 
         headers = parsed.headers
         parsedData = parsed.rows
         searchKeys = parsed.keys
-        filteredRows = parsed.rows
+        filteredRows = parsed.filteredRows
     }
     
     private var filteredData: [[String]] { filteredRows }
     
     private func detectDelimiter() {
-        let lines = content.components(separatedBy: .newlines).prefix(5)
-        guard let firstLine = lines.first else { return }
-        
+        // Only the first line is consulted; splitting the whole document to
+        // get it ran on the main thread for every table selection.
+        let firstLine = String(content.prefix { !$0.isNewline })
+
         let commaCount = firstLine.components(separatedBy: ",").count
         let tabCount = firstLine.components(separatedBy: "\t").count
         let pipeCount = firstLine.components(separatedBy: "|").count
@@ -151,8 +185,16 @@ struct TablePreviewView: View {
     }
     
 
-    nonisolated static func parseLine(_ line: String, delimiter: String) -> [String] {
+    nonisolated static func parseLine(_ line: String, delimiter: String, fenced: Bool = false) -> [String] {
         // Simple CSV parsing (doesn't handle quoted fields with commas)
+        var line = line
+        // Markdown rows are fenced, "| a | b |": the outer pipes are borders,
+        // not an empty first and last column.
+        if fenced {
+            line = line.trimmingCharacters(in: .whitespaces)
+            if line.hasPrefix("|") { line.removeFirst() }
+            if line.hasSuffix("|") { line.removeLast() }
+        }
         return line.components(separatedBy: delimiter)
             .map { $0.trimmingCharacters(in: .whitespaces) }
     }

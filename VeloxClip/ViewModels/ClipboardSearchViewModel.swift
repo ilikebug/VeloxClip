@@ -141,13 +141,17 @@ final class ClipboardSearchViewModel: ObservableObject {
 
     /// Highest score first. Near-ties fall back to favorites, then to the same
     /// recency rule the history list uses (`lastUsedAt ?? createdAt`).
+    ///
+    /// A near-tie is a shared 0.001 bucket, not "within 0.001 of each other":
+    /// that relation is not transitive (0.9 ~ 0.9008 ~ 0.9016, yet 0.9 < 0.9016),
+    /// which is not a valid sort order and made the result depend on input order.
     nonisolated static func rank(_ itemScores: [UUID: Double], baseItems: [ClipboardItem]) -> [ClipboardItem] {
         let matchIDs = Set(itemScores.keys)
         return baseItems
             .filter { matchIDs.contains($0.id) }
-            .map { ($0, itemScores[$0.id] ?? 0) }
+            .map { ($0, ((itemScores[$0.id] ?? 0) * 1000).rounded(.down)) }
             .sorted { lhs, rhs in
-                if abs(lhs.1 - rhs.1) < 0.001 {
+                if lhs.1 == rhs.1 {
                     if lhs.0.isFavorite != rhs.0.isFavorite {
                         return lhs.0.isFavorite
                     }

@@ -18,8 +18,12 @@ struct CodePreviewView: View {
     static let keywordRegexes: [String: NSRegularExpression] = {
         var regexes: [String: NSRegularExpression] = [:]
         for (lang, keywords) in languageKeywords {
-            let pattern = "\\b(\(keywords.joined(separator: "|")))\\b"
-            if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
+            // Lookarounds, not `\b`: `\b` needs a word character beside it, so
+            // `#include`, `<html` and `@media` could never match.
+            let pattern = "(?<!\\w)(\(keywords.joined(separator: "|")))(?!\\w)"
+            // Detection is case-insensitive; lowercase SQL is still SQL
+            let options: NSRegularExpression.Options = lang == "SQL" ? [.caseInsensitive] : []
+            if let regex = try? NSRegularExpression(pattern: pattern, options: options) {
                 regexes[lang] = regex
             }
         }
@@ -49,13 +53,15 @@ struct CodePreviewView: View {
     ]
     
     // Pre-compiled regexes for performance
-    static let stringRegex = try? NSRegularExpression(pattern: #""[^"]*"|'[^']*'"#, options: [])
+    // Backslash escapes stay inside the literal
+    static let stringRegex = try? NSRegularExpression(pattern: #""(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'"#, options: [])
     static let numberRegex = try? NSRegularExpression(pattern: #"\b\d+\.?\d*\b"#, options: [])
-    static let commentRegexes = [
-        try? NSRegularExpression(pattern: #"//.*"#, options: []),
-        try? NSRegularExpression(pattern: #"/\*[\s\S]*?\*/"#, options: []),
-        try? NSRegularExpression(pattern: #"#.*"#, options: [])
-    ].compactMap { $0 }
+    static let slashCommentRegex = try? NSRegularExpression(pattern: #"//.*"#, options: [])
+    static let blockCommentRegex = try? NSRegularExpression(pattern: #"/\*[\s\S]*?\*/"#, options: [])
+    static let hashCommentRegex = try? NSRegularExpression(pattern: #"#.*"#, options: [])
+    // `#` is a directive in C, `#if` in Swift and a colour in CSS; `//` is
+    // integer division in Python and part of an unquoted URL in a shell.
+    static let hashCommentLanguages: Set<String> = ["Python", "Shell", "YAML"]
     
     var body: some View {
         GeometryReader { geo in
@@ -114,8 +120,9 @@ struct CodePreviewView: View {
         .padding(.bottom, 4)
     }
 
-    private func codeLines(for codeString: String) -> [String] {
-        codeString.components(separatedBy: .newlines)
+    static func codeLines(for codeString: String) -> [String] {
+        // `.newlines` splits CRLF into two breaks, i.e. a blank line after every line
+        codeString.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: .newlines)
     }
 
     private var availableLanguages: [String] {
@@ -129,7 +136,7 @@ struct CodePreviewView: View {
 
     private func codeScrollView(availableWidth: CGFloat) -> some View {
         let c = DSColors(scheme: scheme)
-        let lines = codeLines(for: code)
+        let lines = Self.codeLines(for: code)
         // Calculate a fixed width for the line number column based on total lines
         let maxLineNumberWidth: CGFloat = CGFloat(String(lines.count).count) * 9 + 16
 
@@ -192,7 +199,9 @@ struct CodePreviewView: View {
         let lower = code.lowercased()
         var bestMatch: (lang: String, score: Int) = ("Plain Text", 0)
 
-        for (lang, keywords) in languageKeywords {
+        // Sorted, not Dictionary order: that is reseeded every launch, so a
+        // JavaScript/TypeScript tie went either way. Ties go to the first name.
+        for (lang, keywords) in languageKeywords.sorted(by: { $0.key < $1.key }) {
             let score = keywords.filter { lower.contains($0.lowercased()) }.count
             if score > bestMatch.score { bestMatch = (lang, score) }
         }
@@ -229,13 +238,13 @@ struct CodePreviewView: View {
         if let cached = Self.globalHighlightCache[cacheKey] {
             return Text(cached)
         } else {
-            let highlighted = highlightSyntax(line: line, language: language)
+            let highlighted = Self.highlightSyntax(line: line, language: language, fontSize: fontSize)
             Self.globalHighlightCache[cacheKey] = highlighted
             return Text(highlighted)
         }
     }
     
-    private func highlightSyntax(line: String, language: String) -> AttributedString {
+    static func highlightSyntax(line: String, language: String, fontSize: CGFloat) -> AttributedString {
         var attr = AttributedString(line)
         let nsLine = line as NSString
         let fullRange = NSRange(location: 0, length: nsLine.length)
@@ -260,8 +269,9 @@ struct CodePreviewView: View {
         }
         
         // 2. Strings
+        var stringRanges: [NSRange] = []
         Self.stringRegex?.enumerateMatches(in: line, range: fullRange) { match, _, _ in
-            if let m = match { style(m.range, color: .green) }
+            if let m = match { style(m.range, color: .green); stringRanges.append(m.range) }
         }
         
         // 3. Numbers
@@ -269,10 +279,21 @@ struct CodePreviewView: View {
             if let m = match { style(m.range, color: .orange) }
         }
         
-        // 4. Comments
-        for regex in Self.commentRegexes {
-            regex.enumerateMatches(in: line, range: fullRange) { match, _, _ in
-                if let m = match { style(m.range, color: .gray, italic: true) }
+        // 4. Comments, unless the marker sits inside a string ("https://x.com")
+        let lineComment = Self.hashCommentLanguages.contains(language) ? Self.hashCommentRegex : Self.slashCommentRegex
+        // A marker inside a string is skipped by searching again after that
+        // string: the greedy `//.*` match would otherwise swallow a real
+        // comment later on the line ("https://x.com" // link)
+        for regex in [lineComment, Self.blockCommentRegex].compactMap({ $0 }) {
+            var start = 0
+            while start < fullRange.length,
+                  let m = regex.firstMatch(in: line, range: NSRange(location: start, length: fullRange.length - start)) {
+                if let string = stringRanges.first(where: { $0.location < m.range.location && m.range.location < NSMaxRange($0) }) {
+                    start = NSMaxRange(string)
+                    continue
+                }
+                style(m.range, color: .gray, italic: true)
+                start = max(NSMaxRange(m.range), start + 1)
             }
         }
         
@@ -280,19 +301,24 @@ struct CodePreviewView: View {
     }
     
     private func formatCode() {
-        let lines = code.components(separatedBy: .newlines)
+        PasteboardService.shared.write(text: Self.formatted(code))
+    }
+
+    static func formatted(_ code: String) -> String {
+        let lines = codeLines(for: code)
         var formatted: [String] = []
         var indent = 0
         
         for line in lines {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             if trimmed.isEmpty { formatted.append(""); continue }
-            if trimmed.hasSuffix("}") || trimmed.hasSuffix("]") { indent = max(0, indent - 1) }
+            // A leading closer dedents, so `} else {` and `},` keep their level
+            if trimmed.hasPrefix("}") || trimmed.hasPrefix("]") { indent = max(0, indent - 1) }
             formatted.append(String(repeating: "    ", count: indent) + trimmed)
             if trimmed.hasSuffix("{") || trimmed.hasSuffix("[") { indent += 1 }
         }
         
-        PasteboardService.shared.write(text: formatted.joined(separator: "\n"))
+        return formatted.joined(separator: "\n")
     }
 }
 

@@ -1,4 +1,5 @@
 import Foundation
+import NaturalLanguage
 
 struct TablePreviewPresentation {
     static var formatLabel: String { formatLabel() }
@@ -54,7 +55,7 @@ struct DateTimePreviewPresentation {
 
     /// The date a copied string denotes, trying the known text formats and then
     /// a numeric Unix epoch.
-    static func date(from string: String) -> Date? {
+    static func date(from string: String, now: Date = Date()) -> Date? {
         // Detection trims newlines; parsing must too, or `date +%s | pbcopy`
         // ("1730000000\n") was classified as a date but never converted
         let source = string.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -70,7 +71,51 @@ struct DateTimePreviewPresentation {
                 return date
             }
         }
-        return unixDate(from: source)
+        return isoLikeDate(from: source) ?? timeToday(from: source, now: now) ?? unixDate(from: source)
+    }
+
+    // The same shapes `ContentDetectionService.isDateTime` accepts. The format
+    // list above has no entry for a missing zone, missing seconds or a "/"
+    // separator, so "2026-06-12 10:00" and "2026-06-12T10:00:00" were routed
+    // here as dates and then shown as plain text.
+    // ASCII digits only: `\d` also matches full-width digits ("０５"), which
+    // Int(_:) cannot parse — the zone offset force-unwrap trapped on them.
+    private static let isoLikePattern = try! NSRegularExpression(
+        pattern: #"^([0-9]{4})[-/]([0-9]{1,2})[-/]([0-9]{1,2})(?:[ T]([0-9]{1,2}):([0-9]{2})(?::([0-9]{2}))?(\.[0-9]+)?(Z|[+-][0-9]{2}:?[0-9]{2})?)?$"#)
+    private static let timePattern = try! NSRegularExpression(pattern: #"^([0-9]{1,2}):([0-9]{2})(?::([0-9]{2}))?$"#)
+
+    private static func captures(_ regex: NSRegularExpression, in source: String) -> [String?]? {
+        guard let match = regex.firstMatch(in: source, range: NSRange(source.startIndex..., in: source)) else { return nil }
+        return (1..<match.numberOfRanges).map { Range(match.range(at: $0), in: source).map { String(source[$0]) } }
+    }
+
+    /// Date with optional time, fraction and zone; no zone means local time.
+    private static func isoLikeDate(from source: String) -> Date? {
+        guard let g = captures(isoLikePattern, in: source) else { return nil }
+        var calendar = Calendar(identifier: .gregorian)
+        if let zone = g[7] {
+            var offset = 0
+            if zone != "Z" {
+                let digits = zone.filter(\.isNumber)
+                offset = (Int(digits.prefix(2))! * 3_600 + Int(digits.suffix(2))! * 60) * (zone.hasPrefix("-") ? -1 : 1)
+            }
+            guard let tz = TimeZone(secondsFromGMT: offset) else { return nil }
+            calendar.timeZone = tz
+        }
+        let components = DateComponents(year: Int(g[0]!), month: Int(g[1]!), day: Int(g[2]!),
+                                        hour: g[3].flatMap(Int.init) ?? 0, minute: g[4].flatMap(Int.init) ?? 0,
+                                        second: g[5].flatMap(Int.init) ?? 0)
+        guard components.isValidDate(in: calendar), let date = calendar.date(from: components) else { return nil }
+        return date.addingTimeInterval(g[6].flatMap { Double("0" + $0) } ?? 0)
+    }
+
+    /// A bare "14:30" / "14:30:05" is that time today.
+    private static func timeToday(from source: String, now: Date) -> Date? {
+        guard let g = captures(timePattern, in: source),
+              let hour = Int(g[0]!), let minute = Int(g[1]!), hour < 24, minute < 60 else { return nil }
+        let second = g[2].flatMap(Int.init) ?? 0
+        guard second < 60 else { return nil }
+        return Calendar.current.date(bySettingHour: hour, minute: minute, second: second, of: now)
     }
 
     /// Numeric timestamps: values above 1e11 are milliseconds (13-digit epochs,
@@ -119,16 +164,20 @@ struct DateTimePreviewPresentation {
 
     static func relativeTime(secondsAgo seconds: TimeInterval,
                              language: AppLanguage = L10n.currentLanguage) -> String {
+        // A future date (a deadline, an expiry) fell into the first branch
+        // and read "-86400 seconds ago"; bucket its magnitude and say "in".
+        let suffix = seconds < 0 ? "FromNow" : "Ago"
+        let seconds = abs(seconds)
         if seconds < 60 {
-            return L10n.format("preview.datetime.secondsAgo", Int(seconds), language: language)
+            return L10n.format("preview.datetime.seconds" + suffix, Int(seconds), language: language)
         } else if seconds < 3_600 {
-            return L10n.format("preview.datetime.minutesAgo", Int(seconds / 60), language: language)
+            return L10n.format("preview.datetime.minutes" + suffix, Int(seconds / 60), language: language)
         } else if seconds < 86_400 {
-            return L10n.format("preview.datetime.hoursAgo", Int(seconds / 3_600), language: language)
+            return L10n.format("preview.datetime.hours" + suffix, Int(seconds / 3_600), language: language)
         } else if seconds < 604_800 {
-            return L10n.format("preview.datetime.daysAgo", Int(seconds / 86_400), language: language)
+            return L10n.format("preview.datetime.days" + suffix, Int(seconds / 86_400), language: language)
         } else {
-            return L10n.format("preview.datetime.weeksAgo", Int(seconds / 604_800), language: language)
+            return L10n.format("preview.datetime.weeks" + suffix, Int(seconds / 604_800), language: language)
         }
     }
 }
@@ -206,6 +255,39 @@ struct TextSummaryPresentation {
     static func paragraphs(in text: String) -> [String] {
         text.components(separatedBy: "\n\n")
             .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+    }
+
+    /// The first three sentences, as written. Splitting on ASCII ".!?" never
+    /// split Chinese ("。！？"), so the "summary" was the whole text plus ".".
+    static func summary(for text: String) -> String {
+        let tokenizer = NLTokenizer(unit: .sentence)
+        tokenizer.string = text
+        var end = text.startIndex
+        var count = 0
+        tokenizer.enumerateTokens(in: text.startIndex..<text.endIndex) { range, _ in
+            end = range.upperBound
+            count += 1
+            return count < 3
+        }
+        return text[..<end].trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// The ten most frequent words. Splitting on non-alphanumerics left a run of
+    /// Chinese as one "word", so the keywords were whole sentences; a word
+    /// tokenizer segments it. Latin words still need four letters, CJK two.
+    static func keywords(in text: String) -> [String] {
+        let lowered = text.lowercased()
+        let tokenizer = NLTokenizer(unit: .word)
+        tokenizer.string = lowered
+        var wordCounts: [String: Int] = [:]
+        tokenizer.enumerateTokens(in: lowered.startIndex..<lowered.endIndex) { range, _ in
+            let word = String(lowered[range])
+            if word.count > 3 || (word.count >= 2 && !word.allSatisfy(\.isASCII)) {
+                wordCounts[word, default: 0] += 1
+            }
+            return true
+        }
+        return Array(wordCounts.sorted { $0.value > $1.value }.prefix(10).map(\.key))
     }
 
     static var wordsLabel: String { wordsLabel() }

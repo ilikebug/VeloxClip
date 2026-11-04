@@ -63,6 +63,11 @@
 "preview.datetime.hoursAgo" = "%ld hours ago";
 "preview.datetime.daysAgo" = "%ld days ago";
 "preview.datetime.weeksAgo" = "%ld weeks ago";
+"preview.datetime.secondsFromNow" = "in %ld seconds";
+"preview.datetime.minutesFromNow" = "in %ld minutes";
+"preview.datetime.hoursFromNow" = "in %ld hours";
+"preview.datetime.daysFromNow" = "in %ld days";
+"preview.datetime.weeksFromNow" = "in %ld weeks";
 
 "preview.file.missing" = "Missing";
 "preview.file.details" = "File Details";
