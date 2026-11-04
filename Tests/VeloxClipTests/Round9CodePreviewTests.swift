@@ -68,6 +68,15 @@ final class Round9CodePreviewTests: XCTestCase {
         XCTAssertEqual(colors(of: "# note", in: "a = 1 # note", language: "Python"), [.gray])
     }
 
+    /// The greedy match that started inside the string had already consumed
+    /// the real comment after it.
+    func testCommentAfterAStringWithAMarkerIsStillAComment() {
+        let swift = #"let u = "https://x.com" // link"#
+        XCTAssertEqual(colors(of: "// link", in: swift, language: "Swift"), [.gray])
+        XCTAssertEqual(colors(of: #""https://x.com""#, in: swift, language: "Swift"), [.green])
+        XCTAssertEqual(colors(of: "# colour", in: ##"c = "#fff"  # colour"##, language: "Python"), [.gray])
+    }
+
     /// `#` only starts a comment in Python, Shell and YAML; `//` is integer
     /// division in Python and an unquoted URL in a shell command.
     func testCommentSyntaxFollowsTheLanguage() {

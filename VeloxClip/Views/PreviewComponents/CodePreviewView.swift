@@ -281,11 +281,19 @@ struct CodePreviewView: View {
         
         // 4. Comments, unless the marker sits inside a string ("https://x.com")
         let lineComment = Self.hashCommentLanguages.contains(language) ? Self.hashCommentRegex : Self.slashCommentRegex
+        // A marker inside a string is skipped by searching again after that
+        // string: the greedy `//.*` match would otherwise swallow a real
+        // comment later on the line ("https://x.com" // link)
         for regex in [lineComment, Self.blockCommentRegex].compactMap({ $0 }) {
-            regex.enumerateMatches(in: line, range: fullRange) { match, _, _ in
-                guard let m = match,
-                      !stringRanges.contains(where: { $0.location < m.range.location && m.range.location < NSMaxRange($0) }) else { return }
+            var start = 0
+            while start < fullRange.length,
+                  let m = regex.firstMatch(in: line, range: NSRange(location: start, length: fullRange.length - start)) {
+                if let string = stringRanges.first(where: { $0.location < m.range.location && m.range.location < NSMaxRange($0) }) {
+                    start = NSMaxRange(string)
+                    continue
+                }
                 style(m.range, color: .gray, italic: true)
+                start = max(NSMaxRange(m.range), start + 1)
             }
         }
         

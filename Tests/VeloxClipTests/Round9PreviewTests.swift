@@ -119,6 +119,24 @@ final class Round9PreviewTests: XCTestCase {
         XCTAssertEqual(TablePreviewView.parsedTable("a\tb\tc\n\t2\t3", delimiter: "\t", query: "").rows, [["", "2", "3"]])
     }
 
+    /// Only the line under the header is the rule; a "-" placeholder row is data.
+    func testDashPlaceholderRowIsKept() {
+        let source = "| a | b |\n|---|---|\n| 1 | 2 |\n| - | - |"
+        XCTAssertEqual(TablePreviewView.parsedTable(source, delimiter: "|", query: "").rows, [["1", "2"], ["-", "-"]])
+    }
+
+    /// Unfenced pipe data: a leading "|" is an empty first field, not a border.
+    func testUnfencedLeadingPipeIsAnEmptyField() {
+        XCTAssertEqual(TablePreviewView.parsedTable("a|b|c\n|y|z", delimiter: "|", query: "").rows, [["", "y", "z"]])
+    }
+
+    /// Full-width digits match `\d`, which made the zone offset force-unwrap trap.
+    func testFullWidthDigitsDoNotCrashTheParser() {
+        XCTAssertNil(DateTimePreviewPresentation.date(from: "2026-06-12T10:00+０５:３０"))
+        XCTAssertNil(DateTimePreviewPresentation.date(from: "２０２６-０６-１２ １０:００"))
+        XCTAssertNil(DateTimePreviewPresentation.date(from: "2026-06-12 １０:００"))
+    }
+
     // MARK: - Re-parsing dropped the active search
 
     func testReparseKeepsTheActiveSearch() {

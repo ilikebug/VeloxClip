@@ -123,13 +123,17 @@ struct TablePreviewView: View {
     }
 
     nonisolated static func parsedTable(_ source: String, delimiter sep: String, query: String) -> ParsedTable {
-        let lines = source.components(separatedBy: .newlines)
+        var lines = source.components(separatedBy: .newlines)
             .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-            // A Markdown table's "|---|:--:|" rule is layout, not a data row
-            .filter { sep != "|" || !isMarkdownRule($0) }
         guard !lines.isEmpty else { return ParsedTable(headers: [], rows: [], keys: [], filteredRows: []) }
-        let headers = Self.parseLine(lines[0], delimiter: sep)
-        let rows = lines.dropFirst().map { Self.parseLine($0, delimiter: sep) }
+        // A Markdown table's "|---|:--:|" rule is layout, not a data row. It is
+        // always the line under the header; a later "| - | - |" is data.
+        if sep == "|", lines.count > 1, isMarkdownRule(lines[1]) { lines.remove(at: 1) }
+        // Only a fenced table ("| a | b |") has border pipes; in "a|b|c" data a
+        // leading "|" is an empty first field
+        let fenced = sep == "|" && lines[0].trimmingCharacters(in: .whitespaces).hasPrefix("|")
+        let headers = Self.parseLine(lines[0], delimiter: sep, fenced: fenced)
+        let rows = lines.dropFirst().map { Self.parseLine($0, delimiter: sep, fenced: fenced) }
         // Precomputed search key per row
         let keys = rows.map { $0.joined(separator: " ").lowercased() }
         // Re-parsing (a delimiter change) used to reset the rows to unfiltered
@@ -139,7 +143,7 @@ struct TablePreviewView: View {
     }
 
     nonisolated static func isMarkdownRule(_ line: String) -> Bool {
-        let cells = parseLine(line, delimiter: "|")
+        let cells = parseLine(line, delimiter: "|", fenced: true)
         return cells.contains { !$0.isEmpty }
             && cells.allSatisfy { $0.isEmpty || $0.range(of: #"^:?-+:?$"#, options: .regularExpression) != nil }
     }
@@ -179,12 +183,12 @@ struct TablePreviewView: View {
     }
     
 
-    nonisolated static func parseLine(_ line: String, delimiter: String) -> [String] {
+    nonisolated static func parseLine(_ line: String, delimiter: String, fenced: Bool = false) -> [String] {
         // Simple CSV parsing (doesn't handle quoted fields with commas)
         var line = line
         // Markdown rows are fenced, "| a | b |": the outer pipes are borders,
         // not an empty first and last column.
-        if delimiter == "|" {
+        if fenced {
             line = line.trimmingCharacters(in: .whitespaces)
             if line.hasPrefix("|") { line.removeFirst() }
             if line.hasSuffix("|") { line.removeLast() }

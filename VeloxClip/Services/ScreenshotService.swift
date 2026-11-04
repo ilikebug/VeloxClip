@@ -16,6 +16,9 @@ class ScreenshotService {
     // Capture area screenshot using macOS built-in tool
     // This will trigger the system screenshot UI and copy to clipboard
     func captureArea() {
+        // One interactive selection at a time: a second process replaced
+        // captureProcess, and its exit ended the first selection's wait
+        guard captureProcess?.isRunning != true else { return }
         // The press that raises the permission dialog must not also start a
         // capture — its mouse grab would make the dialog unclickable. Every
         // later press runs regardless of the (stale until relaunch) preflight.

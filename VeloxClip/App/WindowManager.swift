@@ -153,6 +153,9 @@ class WindowManager: NSObject, ObservableObject, NSWindowDelegate {
         let wasVisible = window?.isVisible ?? false
         hideOverlay()
         guard wasVisible, NSApp.isActive else { return }
+        // Another VeloxClip window (Settings, the screenshot editor) takes key
+        // back on its own; activating the last app would bury it
+        guard !NSApp.windows.contains(where: { $0 !== window && $0.isVisible && $0.canBecomeMain }) else { return }
         if let app = lastActiveApp, !app.isTerminated {
             app.activate()
         } else {

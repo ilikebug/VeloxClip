@@ -78,9 +78,11 @@ struct DateTimePreviewPresentation {
     // list above has no entry for a missing zone, missing seconds or a "/"
     // separator, so "2026-06-12 10:00" and "2026-06-12T10:00:00" were routed
     // here as dates and then shown as plain text.
+    // ASCII digits only: `\d` also matches full-width digits ("０５"), which
+    // Int(_:) cannot parse — the zone offset force-unwrap trapped on them.
     private static let isoLikePattern = try! NSRegularExpression(
-        pattern: #"^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?(\.\d+)?(Z|[+-]\d{2}:?\d{2})?)?$"#)
-    private static let timePattern = try! NSRegularExpression(pattern: #"^(\d{1,2}):(\d{2})(?::(\d{2}))?$"#)
+        pattern: #"^([0-9]{4})[-/]([0-9]{1,2})[-/]([0-9]{1,2})(?:[ T]([0-9]{1,2}):([0-9]{2})(?::([0-9]{2}))?(\.[0-9]+)?(Z|[+-][0-9]{2}:?[0-9]{2})?)?$"#)
+    private static let timePattern = try! NSRegularExpression(pattern: #"^([0-9]{1,2}):([0-9]{2})(?::([0-9]{2}))?$"#)
 
     private static func captures(_ regex: NSRegularExpression, in source: String) -> [String?]? {
         guard let match = regex.firstMatch(in: source, range: NSRange(source.startIndex..., in: source)) else { return nil }
