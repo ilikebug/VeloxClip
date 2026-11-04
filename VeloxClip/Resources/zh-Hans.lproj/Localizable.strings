@@ -63,6 +63,11 @@
 "preview.datetime.hoursAgo" = "%ld 小时前";
 "preview.datetime.daysAgo" = "%ld 天前";
 "preview.datetime.weeksAgo" = "%ld 周前";
+"preview.datetime.secondsFromNow" = "%ld 秒后";
+"preview.datetime.minutesFromNow" = "%ld 分钟后";
+"preview.datetime.hoursFromNow" = "%ld 小时后";
+"preview.datetime.daysFromNow" = "%ld 天后";
+"preview.datetime.weeksFromNow" = "%ld 周后";
 
 "preview.file.missing" = "缺失";
 "preview.file.details" = "文件详情";

@@ -38,9 +38,11 @@ enum ColorPreviewFormats {
                             value: "\(rgb.r) \(rgb.g) \(rgb.b) \(String(format: "%.2f", rgb.a))"))
         }
 
+        // Rounded, not truncated: #0A84FF has lightness 51.96%, which Int()
+        // showed as 51. A hue that rounds up to 360 is 0.
         let hsl = toHSL(rgb)
         rows.append(Row(name: "HSL",
-                        value: "\(Int(hsl.h)) \(Int(hsl.s * 100)) \(Int(hsl.l * 100))"))
+                        value: "\(Int(hsl.h.rounded()) % 360) \(Int((hsl.s * 100).rounded())) \(Int((hsl.l * 100).rounded()))"))
 
         return rows
     }

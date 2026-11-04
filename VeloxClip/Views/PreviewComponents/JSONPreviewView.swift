@@ -205,13 +205,19 @@ struct JSONPreviewView: View {
             // main thread rather than inside body.
             if cached.isValid {
                 let formatted = cached.formatted
-                self.formattedLines = await Task.detached(priority: .userInitiated) {
-                    formatted.components(separatedBy: .newlines)
+                // Split and re-parse off the main thread. `Any` can't be a
+                // detached task's result, so hand it over the way the uncached
+                // path does; parsing here on the main actor froze the overlay
+                // on re-selecting a large cached document.
+                await Task.detached(priority: .userInitiated) {
+                    let lines = formatted.components(separatedBy: .newlines)
+                    let object = input.data(using: .utf8)
+                        .flatMap { try? JSONSerialization.jsonObject(with: $0) }
+                    await MainActor.run {
+                        self.formattedLines = lines
+                        self.jsonObject = object
+                    }
                 }.value
-                // JSONSerialization returns `Any`, which can't cross an actor
-                // boundary; parse here rather than in body.
-                self.jsonObject = input.data(using: .utf8)
-                    .flatMap { try? JSONSerialization.jsonObject(with: $0) }
             }
             return
         }
